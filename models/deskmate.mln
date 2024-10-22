@@ -1,0 +1,7 @@
+~mate(X,X) & ~fr(X,X).
+mate(X,Y) -> mate(Y,X).
+\exists_{=1} Y: (mate(X,Y)).
+\exists_{=1} X: (mate(X,Y)).
+1 mate(X,Y) -> fr(X,Y)
+
+students = 6

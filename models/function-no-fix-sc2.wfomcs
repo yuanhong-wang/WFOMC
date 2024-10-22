@@ -1,0 +1,4 @@
+\forall X: (~func(X, X)) &
+\forall X: (\exists_{=1} Y: (func(X, Y)))
+
+domain = 5
