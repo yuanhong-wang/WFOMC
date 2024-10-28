@@ -12,7 +12,7 @@ import math
 
 class WFOMCProblem(object):
     """
-    A weighted first-order model counting/sampling problem.
+    A weighted first-order model counting problem.
     """
 
     def __init__(self, sentence: SC2,
