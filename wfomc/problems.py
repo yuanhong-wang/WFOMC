@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from counting_fo2.fol.sc2 import SC2, to_sc2
-from counting_fo2.fol.syntax import AtomicFormula, Const, Pred, top, AUXILIARY_PRED_NAME, \
+from wfomc.fol.sc2 import SC2, to_sc2
+from wfomc.fol.syntax import Const, Pred, top, AUXILIARY_PRED_NAME, \
     Formula, QuantifiedFormula, Universal, Equivalence
-from counting_fo2.fol.utils import new_predicate
-from counting_fo2.network.constraint import CardinalityConstraint
-from counting_fo2.utils.polynomial import Rational
+from wfomc.fol.utils import new_predicate
+from wfomc.network.constraint import CardinalityConstraint
+from wfomc.utils.polynomial import Rational
 from fractions import Fraction
 import math
 

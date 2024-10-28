@@ -3,15 +3,15 @@ from __future__ import annotations
 from fractions import Fraction
 
 from lark import Lark
-from counting_fo2.fol.sc2 import SC2, to_sc2
-from counting_fo2.fol.syntax import Const, Formula, Pred
-from counting_fo2.network.constraint import CardinalityConstraint
-from counting_fo2.parser.cardinality_constraints_parser import CCTransfomer
+from wfomc.fol.sc2 import SC2, to_sc2
+from wfomc.fol.syntax import Const, Formula, Pred
+from wfomc.network.constraint import CardinalityConstraint
+from wfomc.parser.cardinality_constraints_parser import CCTransfomer
 
-from counting_fo2.parser.fol_parser import FOLTransformer
-from counting_fo2.parser.wfomcs_grammar import grammar
-from counting_fo2.problems import WFOMCSProblem
-from counting_fo2.utils import Rational
+from wfomc.parser.fol_parser import FOLTransformer
+from wfomc.parser.wfomcs_grammar import grammar
+from wfomc.problems import WFOMCSProblem
+from wfomc.utils import Rational
 
 
 class WFOMSTransformer(FOLTransformer, CCTransfomer):

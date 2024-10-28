@@ -1,13 +1,13 @@
 from __future__ import annotations
 from logzero import logger
-from counting_fo2.fol.sc2 import SC2
-from counting_fo2.fol.utils import new_predicate, convert_counting_formula
+from wfomc.fol.sc2 import SC2
+from wfomc.fol.utils import new_predicate, convert_counting_formula
 
-from counting_fo2.network.constraint import CardinalityConstraint
-from counting_fo2.fol.syntax import *
-from counting_fo2.problems import WFOMCSProblem
-from counting_fo2.fol.syntax import AUXILIARY_PRED_NAME, SKOLEM_PRED_NAME
-from counting_fo2.utils.third_typing import RingElement, Rational
+from wfomc.network.constraint import CardinalityConstraint
+from wfomc.fol.syntax import *
+from wfomc.problems import WFOMCSProblem
+from wfomc.fol.syntax import AUXILIARY_PRED_NAME, SKOLEM_PRED_NAME
+from wfomc.utils.third_typing import RingElement, Rational
 
 
 class WFOMCContext(object):

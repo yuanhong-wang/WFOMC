@@ -5,10 +5,10 @@ from typing import Callable
 from logzero import logger
 from dataclasses import dataclass
 
-from counting_fo2.fol.syntax import Pred
-from counting_fo2.utils import Rational
-from counting_fo2.utils.polynomial import coeff_dict, create_vars, Symbol, expand
-from counting_fo2.utils.third_typing import RingElement
+from wfomc.fol.syntax import Pred
+from wfomc.utils import Rational
+from wfomc.utils.polynomial import coeff_dict, create_vars, Symbol, expand
+from wfomc.utils.third_typing import RingElement
 
 
 class Constraint(ABC):

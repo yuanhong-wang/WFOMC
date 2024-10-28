@@ -9,11 +9,11 @@ from typing import Callable, Dict, FrozenSet, Generator, List, Tuple
 from logzero import logger
 from sympy import Poly
 from copy import deepcopy
-from counting_fo2.cell_graph.utils import conditional_on
+from wfomc.cell_graph.utils import conditional_on
 
-from counting_fo2.fol.syntax import AtomicFormula, Const, Pred, QFFormula, a, b, c
-from counting_fo2.utils import Rational, RingElement
-from counting_fo2.utils.multinomial import MultinomialCoefficients
+from wfomc.fol.syntax import AtomicFormula, Const, Pred, QFFormula, a, b, c
+from wfomc.utils import Rational, RingElement
+from wfomc.utils.multinomial import MultinomialCoefficients
 
 from .components import Cell, TwoTable
 

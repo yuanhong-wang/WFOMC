@@ -1,4 +1,4 @@
-from counting_fo2.problems import WFOMCSProblem, MLN_to_WFOMC
+from wfomc.problems import WFOMCSProblem, MLN_to_WFOMC
 from .wfomcs_parser import parse as wfomcs_parse
 from .mln_parser import parse as mln_parse
 

@@ -5,14 +5,14 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(
-    name='counting_fo2',
+    name='wfomc',
     version='0.1',
-    url='https://github.com/MengQiaolan/counting_fo2',
+    url='https://github.com/yuanhong-wang/WFOMC',
     author='Lucien Wang',
     author_email='lucienwang@buaa.edu.cn',
     license='MIT',
 
-    packages=find_packages(include=['counting_fo2', 'counting_fo2.*']),
+    packages=find_packages(include=['wfomc', 'wfomc.*']),
     install_requires=["symengine",
                       "sympy",
                       "lark",

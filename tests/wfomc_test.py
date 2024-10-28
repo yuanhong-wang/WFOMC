@@ -4,12 +4,13 @@ import logzero
 
 from pathlib import Path
 
-from counting_fo2.parser import parse_input
-from counting_fo2.wfomc import Algo, wfomc
+from wfomc.parser import parse_input
+from wfomc import wfomc
+from wfomc.algo import Algo
 
 current_path = Path(__file__).parent.absolute()
 model_files = (current_path.parent / 'models').glob('*')
-algos = [Algo.STANDARD, Algo.FASTER, Algo.FASTERv2]
+algos = [Algo.STANDARD, Algo.FAST, Algo.FASTv2]
 logzero.loglevel(logging.ERROR)
 
 

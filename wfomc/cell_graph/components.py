@@ -7,12 +7,12 @@ from typing import FrozenSet, List, Tuple
 from dataclasses import dataclass, field
 from logzero import logger
 from sympy import Poly
-from counting_fo2.cell_graph.utils import conditional_on
+from wfomc.cell_graph.utils import conditional_on
 
-from counting_fo2.fol.syntax import AtomicFormula, Pred, Term, a, b, X
-from counting_fo2.fol.utils import get_predicates
-from counting_fo2.utils import Rational
-from counting_fo2.utils.third_typing import RingElement
+from wfomc.fol.syntax import AtomicFormula, Pred, Term, a, b, X
+from wfomc.fol.utils import get_predicates
+from wfomc.utils import Rational
+from wfomc.utils.third_typing import RingElement
 
 
 @dataclass(frozen=True)

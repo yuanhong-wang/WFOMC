@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import List, Set, FrozenSet
 
-from counting_fo2.fol.syntax import QuantifiedFormula, Const, Pred, Var
-from counting_fo2.fol.utils import pad_vars
+from wfomc.fol.syntax import QuantifiedFormula, Const, Pred, Var
+from wfomc.fol.utils import pad_vars
 
 
 class MLN(object):

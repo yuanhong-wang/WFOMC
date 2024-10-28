@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from counting_fo2.fol.syntax import AtomicFormula
-from counting_fo2.utils.third_typing import RingElement
+from wfomc.fol.syntax import AtomicFormula
+from wfomc.utils.third_typing import RingElement
 
 
 def conditional_on(models: dict[frozenset[AtomicFormula], RingElement],

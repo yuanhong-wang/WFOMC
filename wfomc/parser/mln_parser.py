@@ -1,16 +1,16 @@
 from lark import Lark
-from counting_fo2.network.mln import MLN
-from counting_fo2.fol.syntax import Const, Pred
-from counting_fo2.network.constraint import CardinalityConstraint
-from counting_fo2.parser.cardinality_constraints_parser import CCTransfomer
-from counting_fo2.parser.mln_grammar import grammar
-from counting_fo2.utils import Rational
+from wfomc.network.mln import MLN
+from wfomc.fol.syntax import Const, Pred
+from wfomc.network.constraint import CardinalityConstraint
+from wfomc.parser.cardinality_constraints_parser import CCTransfomer
+from wfomc.parser.mln_grammar import grammar
+from wfomc.utils import Rational
 
 
-from counting_fo2.parser.fol_parser import FOLTransformer
-from counting_fo2.problems import MLNProblem
+from wfomc.parser.fol_parser import FOLTransformer
+from wfomc.problems import MLNProblem
 
-from counting_fo2.fol.syntax import *
+from wfomc.fol.syntax import *
 
 class MLNTransformer(FOLTransformer, CCTransfomer):
 

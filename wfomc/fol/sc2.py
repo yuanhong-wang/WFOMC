@@ -4,7 +4,7 @@ from functools import reduce
 from logzero import logger
 from typing import Callable, Union
 
-from counting_fo2.fol.utils import new_predicate, new_scott_predicate
+from wfomc.fol.utils import new_predicate, new_scott_predicate
 from .syntax import *
 from .syntax import FOLSyntaxError
 
