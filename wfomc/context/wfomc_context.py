@@ -3,7 +3,8 @@ from logzero import logger
 from wfomc.fol.sc2 import SC2
 from wfomc.fol.utils import new_predicate, convert_counting_formula
 
-from wfomc.network.constraint import CardinalityConstraint
+from wfomc.network.constraint import CardinalityConstraint, PartitionConstraint, \
+    unary_evidence_to_ccs, unary_evidence_to_pc
 from wfomc.fol.syntax import *
 from wfomc.problems import WFOMCProblem
 from wfomc.fol.syntax import AUXILIARY_PRED_NAME, SKOLEM_PRED_NAME
@@ -15,12 +16,15 @@ class WFOMCContext(object):
     Context for WFOMC algorithm
     """
 
-    def __init__(self, problem: WFOMCProblem):
+    def __init__(self, problem: WFOMCProblem,
+                 use_partition_constraint: bool = False):
         self.domain: set[Const] = problem.domain
         self.sentence: SC2 = problem.sentence
         self.weights: dict[Pred, tuple[Rational, Rational]] = problem.weights
         self.cardinality_constraint: CardinalityConstraint = problem.cardinality_constraint
         self.repeat_factor = 1
+        self.unary_evidence = problem.unary_evidence
+        self.use_partition_constraint = use_partition_constraint
 
         logger.info('sentence: \n%s', self.sentence)
         logger.info('domain: \n%s', self.domain)
@@ -28,15 +32,23 @@ class WFOMCContext(object):
         for pred, w in self.weights.items():
             logger.info('%s: %s', pred, w)
         logger.info('cardinality constraint: %s', self.cardinality_constraint)
+        logger.info('unary evidence: %s', self.unary_evidence)
 
         self.formula: QFFormula
+        # for handling unary evidence
+        self.partition_constraint: PartitionConstraint = None
         self._build()
         logger.info('Skolemized formula for WFOMC: \n%s', self.formula)
         logger.info('weights for WFOMC: \n%s', self.weights)
+        logger.info('repeat factor: %d', self.repeat_factor)
+        logger.info('partition constraint: %s', self.partition_constraint)
 
     def contain_cardinality_constraint(self) -> bool:
         return self.cardinality_constraint is not None and \
             not self.cardinality_constraint.empty()
+
+    def contain_partition_constraint(self) -> bool:
+        return self.partition_constraint is not None
 
     def contain_existential_quantifier(self) -> bool:
         return self.sentence.contain_existential_quantifier()
@@ -96,6 +108,27 @@ class WFOMCContext(object):
         self.formula = self.sentence.uni_formula
         while(not isinstance(self.formula, QFFormula)):
             self.formula = self.formula.quantified_formula
+
+        if self.unary_evidence:
+            if self.use_partition_constraint:
+                logger.info('Use partition constraint to encode unary evidence')
+                evi_formula, partition = unary_evidence_to_pc(self.unary_evidence)
+                logger.info('formula to encode unary evidence: %s', evi_formula)
+                logger.info('partition constraint: %s', partition)
+                self.formula = self.formula & evi_formula
+                self.partition_constraint = partition
+            else:
+                logger.info('Use cardinality constraint to encode unary evidence')
+                evi_formula, ccs, repeat_factor = unary_evidence_to_ccs(
+                    self.unary_evidence, self.domain
+                )
+                logger.info('formula to encode unary evidence: %s', evi_formula)
+                logger.info('cardinality constraints: %s', ccs)
+                self.formula = self.formula & evi_formula
+                if not self.contain_cardinality_constraint():
+                    self.cardinality_constraint = CardinalityConstraint()
+                self.cardinality_constraint.extend_simple_constraints(ccs)
+                self.repeat_factor *= repeat_factor
 
         self.ext_formulas = self.sentence.ext_formulas
         if self.sentence.contain_counting_quantifier():

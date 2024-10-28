@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from wfomc.fol.sc2 import SC2, to_sc2
-from wfomc.fol.syntax import Const, Pred, top, AUXILIARY_PRED_NAME, \
+from wfomc.fol.syntax import AtomicFormula, Const, Pred, top, AUXILIARY_PRED_NAME, \
     Formula, QuantifiedFormula, Universal, Equivalence
 from wfomc.fol.utils import new_predicate
 from wfomc.network.constraint import CardinalityConstraint
@@ -18,11 +18,20 @@ class WFOMCProblem(object):
     def __init__(self, sentence: SC2,
                  domain: set[Const],
                  weights: dict[Pred, tuple[Rational, Rational]],
-                 cardinality_constraint: CardinalityConstraint = None):
+                 cardinality_constraint: CardinalityConstraint = None,
+                 unary_evidence: set[AtomicFormula] = None):
         self.domain: set[Const] = domain
         self.sentence: SC2 = sentence
         self.weights: dict[Pred, tuple[Rational, Rational]] = weights
         self.cardinality_constraint: CardinalityConstraint = cardinality_constraint
+        self.unary_evidence = unary_evidence
+        if self.unary_evidence is not None:
+            # check if the evidence is unary and consistent with the domain
+            for atom in self.unary_evidence:
+                if len(atom.args) != 1:
+                    raise ValueError('Evidence must be unary.')
+                if atom.args[0] not in self.domain:
+                    raise ValueError(f'Evidence must be consistent with the domain: {atom.args[0]} not in {self.domain}.')
 
     def __str__(self) -> str:
         s = ''
@@ -35,6 +44,9 @@ class WFOMCProblem(object):
         if self.cardinality_constraint is not None:
             s += 'Cardinality Constraint: \n'
             s += '\t' + str(self.cardinality_constraint) + '\n'
+        if self.unary_evidence is not None:
+            s += 'Unary Evidence: \n'
+            s += '\t' + str(self.unary_evidence) + '\n'
         return s
 
     def __repr__(self) -> str:

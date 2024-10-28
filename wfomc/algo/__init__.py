@@ -1,12 +1,13 @@
 from enum import Enum
 
 from .StandardWFOMC import standard_wfomc
-from .FastWFOMC import fast_wfomc
+from .FastWFOMC import fast_wfomc, fast_wfomc_with_pc
 from .IncrementalWFOMC import incremental_wfomc
 
 __all__ = [
     "standard_wfomc",
     "fast_wfomc",
+    "fast_wfomc_with_pc",
     "incremental_wfomc",
 ]
 

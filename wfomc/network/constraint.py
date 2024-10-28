@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from abc import ABC
+from collections import defaultdict
+from functools import reduce
 from typing import Callable
 from logzero import logger
 from dataclasses import dataclass
 
-from wfomc.fol.syntax import Pred
+from wfomc.fol.syntax import AUXILIARY_PRED_NAME, AtomicFormula, Const, Pred, X, top
+from wfomc.fol.utils import exactly_one_qf, new_predicate
 from wfomc.utils import Rational
+from wfomc.utils.multinomial import MultinomialCoefficients
 from wfomc.utils.polynomial import coeff_dict, create_vars, Symbol, expand
 from wfomc.utils.third_typing import RingElement
 
@@ -108,3 +112,71 @@ class CardinalityConstraint(Constraint):
 
     def __repr__(self):
         return str(self)
+
+
+class PartitionConstraint(Constraint):
+    def __init__(self, partition: list[tuple[Pred, int]]) -> None:
+        self.partition: list[tuple[Pred, int]] = partition
+
+    def __str__(self) -> str:
+        return 'Partition({})'.format(self.partition)
+
+
+def unary_evidence_to_ccs(evidence: set[AtomicFormula], domain: set[Const]):
+    """
+    Convert unary evidence to cardinality constraints
+    """
+    assert(all(len(atom.args) == 1 for atom in evidence)), \
+        "Only support unary evidence for now"
+    element2lits = defaultdict(list)
+    for atom in evidence:
+        element2lits[atom.args[0]].append(atom.substitute({atom.args[0]: X}))
+    evi_size = defaultdict(int)
+    for _, lits in element2lits.items():
+        evi_size[frozenset(lits)] += 1
+    formula = top
+    aux_preds = []
+    ccs = list()
+    for lits, size in evi_size.items():
+        aux_pred = new_predicate(1, AUXILIARY_PRED_NAME)
+        aux_preds.append(aux_pred)
+        aux_atom = aux_pred(X)
+        formula = formula & (
+            aux_atom.implies(reduce(lambda x, y: x & y, lits))
+        )
+        ccs.append((aux_pred, '=', size))
+    ns = tuple(n for _, _, n in ccs)
+    n_sum = sum(ns)
+    repeat_factor = (
+        MultinomialCoefficients.coef((n_sum, len(domain) - n_sum))
+        * MultinomialCoefficients.coef(ns)
+    )
+    formula = formula & exactly_one_qf(aux_preds)
+    return formula, ccs, repeat_factor
+
+
+def unary_evidence_to_pc(evidence: set[AtomicFormula]):
+    """
+    Convert unary evidence to partition constraint
+    """
+    assert(all(len(atom.args) == 1 for atom in evidence)), \
+        "Only support unary evidence for now"
+    element2lits = defaultdict(list)
+    for atom in evidence:
+        element2lits[atom.args[0]].append(atom.substitute({atom.args[0]: X}))
+    evi_size = defaultdict(int)
+    for _, lits in element2lits.items():
+        evi_size[frozenset(lits)] += 1
+    formula = top
+    aux_preds = []
+    partition = list()
+    for lits, size in evi_size.items():
+        aux_pred = new_predicate(1, AUXILIARY_PRED_NAME)
+        aux_preds.append(aux_pred)
+        aux_atom = aux_pred(X)
+        formula = formula & (
+            aux_atom.implies(reduce(lambda x, y: x & y, lits))
+        )
+        partition.append((aux_pred, size))
+    formula = formula & exactly_one_qf(aux_preds)
+    return formula, PartitionConstraint(partition)

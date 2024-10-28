@@ -7,6 +7,7 @@ import logzero
 
 from logzero import logger
 from contexttimer import Timer
+from wfomc.algo.FastWFOMC import fast_wfomc_with_pc
 
 from wfomc.problems import WFOMCProblem
 from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc
@@ -17,17 +18,28 @@ from wfomc.parser import parse_input
 from wfomc.fol.syntax import Pred
 
 
-def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
+def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
+          use_partition_constraint: bool = False) -> Rational:
+    if not problem.unary_evidence:
+        logger.info('No unary evidence is found, use_partition_constraint is ignored')
+        use_partition_constraint = False
+    if use_partition_constraint:
+        logger.info("Use partition constraint to handle unary evidence, "
+                    "only support the algorithm of fast WFOMC")
+        algo = Algo.FASTv2
     # both standard and fast WFOMCs need precomputation
     if algo == Algo.STANDARD or algo == Algo.FAST or \
             algo == algo.FASTv2:
         MultinomialCoefficients.setup(len(problem.domain))
 
-    context = WFOMCContext(problem)
+    context = WFOMCContext(problem, use_partition_constraint)
     leq_pred = Pred('LEQ', 2)
     if leq_pred in context.formula.preds():
         logger.info('Linear order axiom with the predicate LEQ is found')
         logger.info('Invoke incremental WFOMC')
+        if use_partition_constraint:
+            logger.info("Partition constraint is not supported for the "
+                        "incremental WFOMC, ignore the flag")
         algo = Algo.INCREMENTAL
     else:
         leq_pred = None
@@ -42,9 +54,19 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
                 context.formula, context.domain, context.get_weight
             )
         elif algo == Algo.FASTv2:
-            res = fast_wfomc(
-                context.formula, context.domain, context.get_weight, True
-            )
+            if use_partition_constraint:
+                res = fast_wfomc_with_pc(
+                    context.formula, context.domain,
+                    context.get_weight,
+                    context.partition_constraint,
+                )
+            else:
+                res = fast_wfomc(
+                    context.formula,
+                    context.domain,
+                    context.get_weight,
+                    True
+                )
         elif algo == Algo.INCREMENTAL:
             res = incremental_wfomc(
                 context.formula, context.domain,
