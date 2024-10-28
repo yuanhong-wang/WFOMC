@@ -5,7 +5,7 @@ from wfomc.fol.utils import new_predicate, convert_counting_formula
 
 from wfomc.network.constraint import CardinalityConstraint
 from wfomc.fol.syntax import *
-from wfomc.problems import WFOMCSProblem
+from wfomc.problems import WFOMCProblem
 from wfomc.fol.syntax import AUXILIARY_PRED_NAME, SKOLEM_PRED_NAME
 from wfomc.utils.third_typing import RingElement, Rational
 
@@ -15,7 +15,7 @@ class WFOMCContext(object):
     Context for WFOMC algorithm
     """
 
-    def __init__(self, problem: WFOMCSProblem):
+    def __init__(self, problem: WFOMCProblem):
         self.domain: set[Const] = problem.domain
         self.sentence: SC2 = problem.sentence
         self.weights: dict[Pred, tuple[Rational, Rational]] = problem.weights

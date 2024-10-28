@@ -10,7 +10,7 @@ from fractions import Fraction
 import math
 
 
-class WFOMCSProblem(object):
+class WFOMCProblem(object):
     """
     A weighted first-order model counting/sampling problem.
     """
@@ -74,4 +74,4 @@ def MLN_to_WFOMC(mln: MLNProblem):
         sentence = to_sc2(sentence)
     except:
         raise ValueError('Sentence must be a valid SC2 formula.')
-    return WFOMCSProblem(sentence, mln.domain, weightings, mln.cardinality_constraint)
+    return WFOMCProblem(sentence, mln.domain, weightings, mln.cardinality_constraint)

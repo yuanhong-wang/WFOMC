@@ -10,7 +10,7 @@ from wfomc.parser.cardinality_constraints_parser import CCTransfomer
 
 from wfomc.parser.fol_parser import FOLTransformer
 from wfomc.parser.wfomcs_grammar import grammar
-from wfomc.problems import WFOMCSProblem
+from wfomc.problems import WFOMCProblem
 from wfomc.utils import Rational
 
 
@@ -103,7 +103,7 @@ def parse(text: str) -> \
         (sentence.pred_by_name(pred), weights)
         for pred, weights in weightings.items()
     )
-    return WFOMCSProblem(
+    return WFOMCProblem(
         sentence,
         domain,
         pred_weightings,

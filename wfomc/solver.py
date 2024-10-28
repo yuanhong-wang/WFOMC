@@ -8,7 +8,7 @@ import logzero
 from logzero import logger
 from contexttimer import Timer
 
-from wfomc.problems import WFOMCSProblem
+from wfomc.problems import WFOMCProblem
 from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc
 
 from wfomc.utils import MultinomialCoefficients, Rational, round_rational
@@ -17,7 +17,7 @@ from wfomc.parser import parse_input
 from wfomc.fol.syntax import Pred
 
 
-def wfomc(problem: WFOMCSProblem, algo: Algo = Algo.STANDARD) -> Rational:
+def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
     # both standard and fast WFOMCs need precomputation
     if algo == Algo.STANDARD or algo == Algo.FAST or \
             algo == algo.FASTv2:
@@ -66,10 +66,6 @@ def parse_args():
                         default='./check-points')
     parser.add_argument('--algo', '-a', type=Algo,
                         choices=list(Algo), default=Algo.FASTv2)
-    parser.add_argument('--domain_recursive',
-                        action='store_true', default=False,
-                        help='use domain recursive algorithm '
-                             '(only for existential quantified MLN)')
     parser.add_argument('--debug', action='store_true', default=False)
     args = parser.parse_args()
     return args
