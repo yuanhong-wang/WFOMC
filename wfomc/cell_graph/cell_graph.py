@@ -20,7 +20,7 @@ from .components import Cell, TwoTable
 
 class CellGraph(object):
     """
-    Cell graph that handles cells (i.e., 1-types, in the sampling paper) and the wmc between them.
+    Cell graph that handles cells and the wmc between them.
     """
 
     def __init__(self, formula: QFFormula,
