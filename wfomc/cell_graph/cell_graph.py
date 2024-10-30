@@ -613,8 +613,11 @@ class OptimizedCellGraphWithPC(CellGraph):
         if len(non_self_loop) == 0:
             i1_ind = set()
         else:
-            in_partition_ind = set(nx.maximal_independent_set(g.subgraph(non_self_loop & in_partition_cells)))
-            i1_ind = set(nx.maximal_independent_set(g.subgraph(non_self_loop), nodes=in_partition_ind))
+            if len(non_self_loop & in_partition_cells) != 0:
+                in_partition_ind = set(nx.maximal_independent_set(g.subgraph(non_self_loop & in_partition_cells)))
+                i1_ind = set(nx.maximal_independent_set(g.subgraph(non_self_loop), nodes=in_partition_ind))
+            else:
+                i1_ind = set(nx.maximal_independent_set(g.subgraph(non_self_loop)))
         g_ind = set(nx.maximal_independent_set(g, nodes=i1_ind))
         i2_ind = g_ind.difference(i1_ind)
         non_ind = g.nodes - i1_ind - i2_ind
