@@ -27,7 +27,7 @@ class IsomorphicGraphCache(object):
         for _ in range(domain_size):
             self.cache.append({})
             self.cache_hit_count.append(0)
-    
+
     def get(self, level: int, color_kind: tuple[int], color_count: tuple[int], can_label):
         if color_kind not in self.cache[level]:
             self.cache[level][color_kind] = {}
@@ -39,7 +39,7 @@ class IsomorphicGraphCache(object):
             return None
         self.cache_hit_count[level] += 1
         return self.cache[level][color_kind][color_count][can_label]
-    
+
     def set(self, level: int, color_kind: tuple[int], color_count: tuple[int], can_label, value):
         if color_kind not in self.cache[level]:
             self.cache[level][color_kind] = {}
@@ -154,7 +154,7 @@ def edgeWeight_To_edgeColor():
     EDGE_COLOR_NUM = 0
     EDGE_WEIGHT2COLOR_MAP = {1:0}
     COLOR_ADJ_MAT = []
-    
+
     for lst in ORI_WEIGHT_ADJ_MAT:
         tmp_list = []
         for w in lst:
@@ -163,11 +163,11 @@ def edgeWeight_To_edgeColor():
                 EDGE_WEIGHT2COLOR_MAP[w] = EDGE_COLOR_NUM
             tmp_list.append(EDGE_WEIGHT2COLOR_MAP[w])
         COLOR_ADJ_MAT.append(tmp_list)
-    
+
     global LAYERS_NUM_FOR_CONVERT, EXT_CELLS_NUM
     LAYERS_NUM_FOR_CONVERT = math.ceil(math.log2(EDGE_COLOR_NUM+1))
     EXT_CELLS_NUM = CELLS_NUM * LAYERS_NUM_FOR_CONVERT
-    
+
 def cellWeight_To_vertexColor(cell_weights):
     vertex_colors = []
     for w in cell_weights:
@@ -182,7 +182,7 @@ def calculate_adjacency_dict():
     adjacency_dict = {}
     for i in range(EXT_CELLS_NUM):
         adjacency_dict[i] = []
-    
+
     c2layers = {}
     for k in range(EDGE_COLOR_NUM+1):
         bi = bin(k)
@@ -190,14 +190,14 @@ def calculate_adjacency_dict():
         bi = bi[::-1]
         layers = [i for i in range(len(bi)) if bi[i] == '1']
         c2layers[k] = layers
-    
+
     for i in range(CELLS_NUM):
         for j in range(CELLS_NUM):
             layers = c2layers[COLOR_ADJ_MAT[i][j]]
             for l in layers:
                 adjacency_dict[l*CELLS_NUM+i].append(l*CELLS_NUM+j)
-    
-    # The vertical threads (each corresponding to one vertex of the original graph) 
+
+    # The vertical threads (each corresponding to one vertex of the original graph)
     # can be connected using either paths or cliques.
     for i in range(CELLS_NUM):
         clique = [i + j*CELLS_NUM for j in range(LAYERS_NUM_FOR_CONVERT)]
@@ -211,24 +211,24 @@ def calculate_adjacency_dict():
 
 def create_graph():
     global GRAPH
-    GRAPH = pynauty.Graph(EXT_CELLS_NUM, 
-                          directed=False, 
+    GRAPH = pynauty.Graph(EXT_CELLS_NUM,
+                          directed=False,
                           adjacency_dict=ADJACENCY_DICT)
 
 def adjust_vertex_coloring(colored_vertices):
     '''
     Adjust the color no. of vertices to make the color no. start from 0 and be continuous.
-    
+
     Args:
         colored_vertices: list[int]
             The color no. of vertices.
-            
+
         Returns:
             new_colored_vertices: list[int]
                 The adjusted color no. of vertices.
             num_color: int
-                The number of colors. 
-    
+                The number of colors.
+
     Example:
         colored_vertices = [7, 5, 7, 3, 5, 7]
         new_colored_vertices, num_color = adjust_vertex_coloring(colored_vertices)
@@ -248,17 +248,17 @@ def adjust_vertex_coloring(colored_vertices):
 def extend_vertex_coloring(colored_vertices, no_color):
     '''
     Extend the vertex set to convert colored edge
-    
+
     Args:
         colored_vertices: list[int]
             The color no. of vertices.
         no_color: int
             The number of colors.
-    
+
     Returns:
         vertex_coloring: list[set[int]]
             The color set of vertices.
-    
+
     Example:
         colored_vertices = [0, 1, 0, 2, 1, 0]
         no_color = 3
@@ -269,14 +269,14 @@ def extend_vertex_coloring(colored_vertices, no_color):
     ext_colored_vertices = []
     for i in range(LAYERS_NUM_FOR_CONVERT):
         ext_colored_vertices += [x + no_color * i for x in colored_vertices]
-    
+
     # Get color set of vertices
     no_color *= LAYERS_NUM_FOR_CONVERT
     vertex_coloring = [ set() for _ in range(no_color)]
     for i in range(len(ext_colored_vertices)):
         c = ext_colored_vertices[i]
         vertex_coloring[c].add(i)
-    
+
     return vertex_coloring
 
 def update_graph(colored_vertices):
@@ -302,13 +302,13 @@ def get_gcd(cell_weights, cell_factor_tuple_list):
     return gcd, cell_weights, cell_factor_tuple_list
 
 # if all weights are integers, we can use this function to speed up by using cardinalities of fasctors
-def dfs_wfomc(cell_weights, domain_size, cell_factor_tuple_list):  
+def dfs_wfomc(cell_weights, domain_size, cell_factor_tuple_list):
     res = 0
     for l in range(CELLS_NUM):
         w_l = cell_weights[l]
         new_cell_weights = [cell_weights[i] * ORI_WEIGHT_ADJ_MAT[l][i] for i in range(CELLS_NUM)]
         if domain_size - 1 == 1:
-            value = sum(new_cell_weights)   
+            value = sum(new_cell_weights)
         else:
             new_cell_factor_tuple_list = []
             for i in range(CELLS_NUM):
@@ -327,7 +327,7 @@ def dfs_wfomc(cell_weights, domain_size, cell_factor_tuple_list):
                     can_label = CACHE_FOR_NAUTY[tuple(adjust_vertex_colors)]
             else:
                 can_label = tuple(original_vertex_colors)
-            
+
             value = IG_CACHE.get(domain_size-1, vertex_color_kind, vertex_color_count, can_label)
             if value is None:
                 value = dfs_wfomc(new_cell_weights, domain_size - 1, new_cell_factor_tuple_list)
@@ -344,11 +344,11 @@ def dfs_wfomc_real(cell_weights, domain_size, node: TreeNode = None):
         if PRINT_TREE:
             node.cell_to_children[l] = TreeNode(new_cell_weights, node.depth+1)
         if domain_size - 1 == 1:
-            value = sum(new_cell_weights)   
+            value = sum(new_cell_weights)
         else:
             original_vertex_colors, vertex_color_kind, vertex_color_count = cellWeight_To_vertexColor(new_cell_weights) # convert cell weights to vertex colors
             if ENABLE_ISOMORPHISM:
-                adjust_vertex_colors, no_color = adjust_vertex_coloring(original_vertex_colors) # # adjust the color no. of vertices to make them start from 0 and be continuous 
+                adjust_vertex_colors, no_color = adjust_vertex_coloring(original_vertex_colors) # # adjust the color no. of vertices to make them start from 0 and be continuous
                 if tuple(adjust_vertex_colors) not in CACHE_FOR_NAUTY:
                     can_label = pynauty.certificate(update_graph(extend_vertex_coloring(adjust_vertex_colors, no_color)))
                     CACHE_FOR_NAUTY[tuple(adjust_vertex_colors)] = can_label
@@ -356,7 +356,7 @@ def dfs_wfomc_real(cell_weights, domain_size, node: TreeNode = None):
                     can_label = CACHE_FOR_NAUTY[tuple(adjust_vertex_colors)]
             else:
                 can_label = tuple(original_vertex_colors)
-                
+
             value = IG_CACHE.get(domain_size-1, vertex_color_kind, vertex_color_count, can_label)
             if value is None:
                 value = dfs_wfomc_real(new_cell_weights, domain_size - 1, node.cell_to_children[l] if PRINT_TREE else None)
@@ -375,13 +375,13 @@ def get_cache_size():
     return total_size
 
 def clean_global_variables():
-    
+
     global PRINT_TREE, ROOT, IG_CACHE, ORI_WEIGHT_ADJ_MAT, \
         LAYERS_NUM_FOR_CONVERT, EDGE_COLOR_NUM, EDGE_WEIGHT2COLOR_MAP, \
             COLOR_ADJ_MAT, VERTEX_COLOR_NO, CELLS_NUM, EXT_CELLS_NUM, \
                 VERTEX_WEIGHT2COLOR_MAP, ADJACENCY_DICT, CACHE_FOR_NAUTY, \
                     ENABLE_ISOMORPHISM, FACTOR2INDEX_MAP, ZERO_FACTOR_INDEX, FACTOR_ADJ_MAT
-    
+
     PRINT_TREE = False
     ROOT = TreeNode([], 0)
     IG_CACHE = IsomorphicGraphCache()
@@ -413,9 +413,9 @@ def recursive_wfomc(formula: QFFormula,
     ):
         cell_weights = cell_graph.get_all_weights()[0]
         edge_weights = cell_graph.get_all_weights()[1]
-        
+
         clean_global_variables()
-        
+
         IG_CACHE.init(domain_size)
         global ORI_WEIGHT_ADJ_MAT, CELLS_NUM
         # not change in the same problem
@@ -424,11 +424,11 @@ def recursive_wfomc(formula: QFFormula,
         edgeWeight_To_edgeColor()
         calculate_adjacency_dict()
         create_graph()
-        
+
         # disable isomorphism
         # global ENABLE_ISOMORPHISM
         # ENABLE_ISOMORPHISM = False
-        
+
         if not real_version:
             prime_init_factors(cell_weights, edge_weights)
             cell_factor_tuple_list = get_init_factor_set(cell_weights, edge_weights)
@@ -438,7 +438,6 @@ def recursive_wfomc(formula: QFFormula,
             ROOT.cell_weights = cell_weights
             res_ = dfs_wfomc_real(cell_weights, domain_size, ROOT)
             if PRINT_TREE:
-                print_tree(ROOT) 
+                print_tree(ROOT)
         res = res + weight * res_
-        print(weight * res_)
     return res
