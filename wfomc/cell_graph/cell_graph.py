@@ -154,16 +154,13 @@ class CellGraph(object):
     def get_all_weights(self) -> Tuple[List[RingElement], List[RingElement]]:
         cell_weights = []
         twotable_weights = []
-        for i, cell_i in enumerate(self.cells):
+        for cell_i in self.cells:
             cell_weights.append(self.get_cell_weight(cell_i))
             twotable_weight = []
-            for j, cell_j in enumerate(self.cells):
-                if i > j:
-                    twotable_weight.append(Rational(1, 1))
-                else:
-                    twotable_weight.append(self.get_two_table_weight(
-                        (cell_i, cell_j)
-                    ))
+            for cell_j in self.cells:
+                twotable_weight.append(self.get_two_table_weight(
+                    (cell_i, cell_j)
+                ))
             twotable_weights.append(twotable_weight)
         return cell_weights, twotable_weights
 

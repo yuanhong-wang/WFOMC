@@ -9,7 +9,7 @@ from logzero import logger
 from contexttimer import Timer
 
 from wfomc.problems import WFOMCProblem
-from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc
+from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recursive_wfomc
 
 from wfomc.utils import MultinomialCoefficients, Rational, round_rational
 from wfomc.context import WFOMCContext
@@ -27,8 +27,11 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
     leq_pred = Pred('LEQ', 2)
     if leq_pred in context.formula.preds():
         logger.info('Linear order axiom with the predicate LEQ is found')
-        logger.info('Invoke incremental WFOMC')
-        algo = Algo.INCREMENTAL
+        if algo == Algo.RECURSIVE:
+            logger.info('Invoke recursive WFOMC')
+        else:
+            algo = Algo.INCREMENTAL
+            logger.info('Invoke incremental WFOMC')
     else:
         leq_pred = None
 
@@ -47,6 +50,11 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
             )
         elif algo == Algo.INCREMENTAL:
             res = incremental_wfomc(
+                context.formula, context.domain,
+                context.get_weight, leq_pred
+            )
+        elif algo == Algo.RECURSIVE:
+            res = recursive_wfomc(
                 context.formula, context.domain,
                 context.get_weight, leq_pred
             )
