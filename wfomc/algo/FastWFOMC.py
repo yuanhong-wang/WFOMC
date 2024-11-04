@@ -7,15 +7,33 @@ from typing import Callable
 from contexttimer import Timer
 
 from wfomc.cell_graph.cell_graph import build_cell_graphs
+from wfomc.context.wfomc_context import WFOMCContext
 from wfomc.network.constraint import PartitionConstraint
 from wfomc.utils import MultinomialCoefficients, multinomial_less_than, RingElement, Rational
 from wfomc.fol.syntax import Const, Pred, QFFormula
+from wfomc.utils.polynomial import expand
 
 
-def fast_wfomc(formula: QFFormula,
-                 domain: set[Const],
-                 get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
-                 modified_cell_symmetry: bool = False) -> RingElement:
+def fast_wfomc(context: WFOMCContext,
+               modified_cell_symmetry: bool = False) -> RingElement:
+    formula = context.formula
+    domain = context.domain
+    get_weight = context.get_weight
+    partition_constraint = context.partition_constraint
+    if partition_constraint is None:
+        return _fast_wfomc(
+            formula, domain, get_weight, modified_cell_symmetry
+        )
+    else:
+        return _fast_wfomc_with_pc(
+            formula, domain, get_weight, partition_constraint
+        )
+
+
+def _fast_wfomc(formula: QFFormula,
+               domain: set[Const],
+               get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
+               modified_cell_symmetry: bool = False) -> RingElement:
     domain_size = len(domain)
     res = Rational(0, 1)
     for opt_cell_graph, weight in build_cell_graphs(
@@ -50,6 +68,7 @@ def fast_wfomc(formula: QFFormula,
                     body = body * opt_cell_graph.get_J_term(
                         l, partition[nonind_map[l]]
                     )
+
                     if not modified_cell_symmetry:
                         body = body * opt_cell_graph.get_cell_weight(
                             cliques[l][0]
@@ -63,7 +82,7 @@ def fast_wfomc(formula: QFFormula,
     return res
 
 
-def fast_wfomc_with_pc(formula: QFFormula,
+def _fast_wfomc_with_pc(formula: QFFormula,
                          domain: set[Const],
                          get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
                          partition_constraint: PartitionConstraint) -> RingElement:

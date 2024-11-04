@@ -3,7 +3,7 @@ from logzero import logger
 from wfomc.fol.sc2 import SC2
 from wfomc.fol.utils import new_predicate, convert_counting_formula
 
-from wfomc.network.constraint import CardinalityConstraint, PartitionConstraint, \
+from wfomc.network.constraint import CardinalityConstraint, PartitionConstraint, UnaryEvidenceEncoding, organize_evidence, \
     unary_evidence_to_ccs, unary_evidence_to_pc
 from wfomc.fol.syntax import *
 from wfomc.problems import WFOMCProblem
@@ -17,14 +17,14 @@ class WFOMCContext(object):
     """
 
     def __init__(self, problem: WFOMCProblem,
-                 use_partition_constraint: bool = False):
+                 unary_evidence_encoding: UnaryEvidenceEncoding = UnaryEvidenceEncoding.CCS):
         self.domain: set[Const] = problem.domain
         self.sentence: SC2 = problem.sentence
         self.weights: dict[Pred, tuple[Rational, Rational]] = problem.weights
         self.cardinality_constraint: CardinalityConstraint = problem.cardinality_constraint
         self.repeat_factor = 1
         self.unary_evidence = problem.unary_evidence
-        self.use_partition_constraint = use_partition_constraint
+        self.unary_evidence_encoding = unary_evidence_encoding
 
         logger.info('sentence: \n%s', self.sentence)
         logger.info('domain: \n%s', self.domain)
@@ -35,7 +35,10 @@ class WFOMCContext(object):
         logger.info('unary evidence: %s', self.unary_evidence)
 
         self.formula: QFFormula
+        # for handling linear order axiom
+        self.leq_pred: Pred = Pred('LEQ', 2)
         # for handling unary evidence
+        self.element2evidence: dict[Const, set[AtomicFormula]] = dict()
         self.partition_constraint: PartitionConstraint = None
         self._build()
         logger.info('Skolemized formula for WFOMC: \n%s', self.formula)
@@ -52,6 +55,9 @@ class WFOMCContext(object):
 
     def contain_existential_quantifier(self) -> bool:
         return self.sentence.contain_existential_quantifier()
+
+    def contain_linear_order_axiom(self) -> bool:
+        return self.leq_pred in self.formula.preds()
 
     def get_weight(self, pred: Pred) -> tuple[RingElement, RingElement]:
         default = Rational(1, 1)
@@ -110,17 +116,20 @@ class WFOMCContext(object):
             self.formula = self.formula.quantified_formula
 
         if self.unary_evidence:
-            if self.use_partition_constraint:
+            self.element2evidence = organize_evidence(self.unary_evidence)
+            if self.unary_evidence_encoding == UnaryEvidenceEncoding.PC:
                 logger.info('Use partition constraint to encode unary evidence')
-                evi_formula, partition = unary_evidence_to_pc(self.unary_evidence)
+                evi_formula, partition = unary_evidence_to_pc(
+                    self.element2evidence, self.domain
+                )
                 logger.info('formula to encode unary evidence: %s', evi_formula)
                 logger.info('partition constraint: %s', partition)
                 self.formula = self.formula & evi_formula
                 self.partition_constraint = partition
-            else:
+            elif self.unary_evidence_encoding == UnaryEvidenceEncoding.CCS:
                 logger.info('Use cardinality constraint to encode unary evidence')
                 evi_formula, ccs, repeat_factor = unary_evidence_to_ccs(
-                    self.unary_evidence, self.domain
+                    self.element2evidence, self.domain
                 )
                 logger.info('formula to encode unary evidence: %s', evi_formula)
                 logger.info('cardinality constraints: %s', ccs)

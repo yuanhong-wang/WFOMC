@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Callable
 
 from wfomc.cell_graph.cell_graph import CellGraph, Cell, build_cell_graphs
+from wfomc.context.wfomc_context import WFOMCContext
 from wfomc.utils import MultinomialCoefficients, multinomial, RingElement, Rational
 from wfomc.fol.syntax import Const, Pred, QFFormula
 
@@ -32,9 +33,10 @@ def get_config_weight_standard(cell_graph: CellGraph,
     return res
 
 
-def standard_wfomc(formula: QFFormula,
-                   domain: set[Const],
-                   get_weight: Callable[[Pred], tuple[RingElement, RingElement]]) -> RingElement:
+def standard_wfomc(context: WFOMCContext) -> RingElement:
+    formula = context.formula
+    domain = context.domain
+    get_weight = context.get_weight
     # cell_graph.show()
     res = Rational(0, 1)
     domain_size = len(domain)

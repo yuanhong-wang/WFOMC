@@ -32,6 +32,11 @@ class WFOMCProblem(object):
                     raise ValueError('Evidence must be unary.')
                 if atom.args[0] not in self.domain:
                     raise ValueError(f'Evidence must be consistent with the domain: {atom.args[0]} not in {self.domain}.')
+                if atom.pred not in self.sentence.preds():
+                    raise ValueError(f'Evidence predicate {atom.pred} not in the sentence.')
+            for atom in self.unary_evidence:
+                if ~atom in self.unary_evidence:
+                    raise ValueError(f'Evidence must be consistent (no negated evidence): {atom} and {~atom} both present.')
 
     def __str__(self) -> str:
         s = ''
@@ -60,12 +65,14 @@ class MLNProblem(object):
 
     def __init__(self, rules: tuple[list[tuple[Rational, Rational]], list[Formula]],
                  domain: set[Const],
-                 cardinality_constraint: CardinalityConstraint):
+                 cardinality_constraint: CardinalityConstraint = None,
+                 unary_evidence: set[AtomicFormula] = None):
         self.rules = rules
         # self.formulas: rules[1]
         # self.formula_weights: = dict(zip(rules[1], rules[0]))
         self.domain: set[Const] = domain
         self.cardinality_constraint: CardinalityConstraint = cardinality_constraint
+        self.unary_evidence: set[AtomicFormula] = unary_evidence
 
 
 def MLN_to_WFOMC(mln: MLNProblem):
@@ -86,4 +93,6 @@ def MLN_to_WFOMC(mln: MLNProblem):
         sentence = to_sc2(sentence)
     except:
         raise ValueError('Sentence must be a valid SC2 formula.')
-    return WFOMCProblem(sentence, mln.domain, weightings, mln.cardinality_constraint)
+    return WFOMCProblem(sentence, mln.domain, weightings,
+                        mln.cardinality_constraint,
+                        mln.unary_evidence)

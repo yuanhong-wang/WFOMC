@@ -156,16 +156,13 @@ class CellGraph(object):
     def get_all_weights(self) -> Tuple[List[RingElement], List[RingElement]]:
         cell_weights = []
         twotable_weights = []
-        for i, cell_i in enumerate(self.cells):
+        for cell_i in self.cells:
             cell_weights.append(self.get_cell_weight(cell_i))
             twotable_weight = []
-            for j, cell_j in enumerate(self.cells):
-                if i > j:
-                    twotable_weight.append(Rational(1, 1))
-                else:
-                    twotable_weight.append(self.get_two_table_weight(
-                        (cell_i, cell_j)
-                    ))
+            for cell_j in self.cells:
+                twotable_weight.append(self.get_two_table_weight(
+                    (cell_i, cell_j)
+                ))
             twotable_weights.append(twotable_weight)
         return cell_weights, twotable_weights
 
@@ -239,6 +236,7 @@ class CellGraph(object):
                 # NOTE: leq is sensitive to the order of cells
                 if i > j and self.leq_pred is None:
                     tables[(cell, other_cell)] = tables[(other_cell, cell)]
+                    continue
                 models_2 = conditional_on(models_1, gnd_lits,
                                           other_cell.get_evidences(b))
                 tables[(cell, other_cell)] = TwoTable(
@@ -721,14 +719,7 @@ class OptimizedCellGraphWithPC(CellGraph):
                 clique[cell_indices_in_clique[0]]
             ) ** nhat
         else:
-            r = self.get_two_table_weight(
-                (clique[cell_indices_in_clique[0]],
-                 clique[cell_indices_in_clique[1]])
-            )
-            thesum = (
-                (r ** MultinomialCoefficients.comb(nhat, 2)) *
-                self.get_d_term(l, nhat, par_idx)
-            )
+            thesum = self.get_d_term(l, nhat, par_idx)
         return thesum
 
     @functools.lru_cache(maxsize=None)

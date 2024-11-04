@@ -22,6 +22,7 @@ setup(
                       "logzero",
                       "pandas",
                       "pysat",
+                      "pynauty",
                       "tqdm",
                       "dataclasses",
                       "PrettyPrintTree"],
