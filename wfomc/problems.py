@@ -32,8 +32,6 @@ class WFOMCProblem(object):
                     raise ValueError('Evidence must be unary.')
                 if atom.args[0] not in self.domain:
                     raise ValueError(f'Evidence must be consistent with the domain: {atom.args[0]} not in {self.domain}.')
-                if atom.pred not in self.sentence.preds():
-                    raise ValueError(f'Evidence predicate {atom.pred} not in the sentence.')
             for atom in self.unary_evidence:
                 if ~atom in self.unary_evidence:
                     raise ValueError(f'Evidence must be consistent (no negated evidence): {atom} and {~atom} both present.')
