@@ -4,7 +4,8 @@ from .parser import parse_input
 from .parser.fol_parser import parse as fol_parse
 from .fol.sc2 import SC2, to_sc2
 from .fol.syntax import *
-from .fol.utils import exactly_one, exactly_one_qf
+from .network.constraint import CardinalityConstraint, UnaryEvidenceEncoding
+from .fol.utils import exactly_one, exactly_one_qf, exclusive_qf, exclusive
 from .solver import wfomc
 from .count_distribution import count_distribution
 from .utils.polynomial import Rational, var, expand, \
@@ -37,6 +38,8 @@ __all__ = [
     'multinomial_less_than',
     'exactly_one',
     'exactly_one_qf',
+    'exclusive_qf',
+    'exclusive',
     'Pred',
     'Term',
     'Var',
@@ -66,4 +69,5 @@ __all__ = [
     'X', 'Y', 'Z',
     'U', 'V', 'W',
     'top', 'bot',
+    'CardinalityConstraint',
 ]

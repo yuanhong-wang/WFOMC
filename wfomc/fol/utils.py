@@ -51,11 +51,8 @@ def exactly_one_qf(preds: list[Pred]) -> QFFormula:
         return top
     lits = [p(X) for p in preds]
     # p1(x) v p2(x) v ... v pm(x)
-    formula = reduce(lambda x, y: x | y, lits)
-    for i, l1 in enumerate(lits):
-        for j, l2 in enumerate(lits):
-            if i < j:
-                formula = formula & ~(l1 & l2)
+    formula = reduce(lambda x, y: x | y, lits) & \
+        exclusive_qf(preds)
     return formula
 
 
@@ -63,6 +60,25 @@ def exactly_one(preds: list[Pred]) -> QuantifiedFormula:
     if len(preds) == 1:
         return top
     return QuantifiedFormula(Universal(X), exactly_one_qf(preds))
+
+
+def exclusive_qf(preds: list[Pred]) -> QFFormula:
+    if len(preds) == 1:
+        return top
+    lits = [p(X) for p in preds]
+    formula = top
+    for i, l1 in enumerate(lits):
+        for j, l2 in enumerate(lits):
+            if i < j:
+                formula = formula & ~(l1 & l2)
+    return formula
+
+
+def exclusive(preds: list[Pred]) -> QuantifiedFormula:
+    if len(preds) == 1:
+        return top
+    return QuantifiedFormula(Universal(X), exclusive_qf(preds))
+
 
 def convert_counting_formula(formula: QuantifiedFormula, domain: set[Const]):
     """
