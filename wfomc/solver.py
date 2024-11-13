@@ -23,41 +23,26 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
             algo == algo.FASTv2:
         MultinomialCoefficients.setup(len(problem.domain))
 
-    context = WFOMCContext(problem)
-    leq_pred = Pred('LEQ', 2)
-    if leq_pred in context.formula.preds():
+    if problem.contain_linear_order_axiom():
         logger.info('Linear order axiom with the predicate LEQ is found')
-        if algo == Algo.RECURSIVE:
-            logger.info('Invoke recursive WFOMC')
-        else:
-            algo = Algo.INCREMENTAL
-            logger.info('Invoke incremental WFOMC')
-    else:
-        leq_pred = None
+        if algo != Algo.INCREMENTAL and algo != Algo.RECURSIVE:
+            raise RuntimeError("Linear order axiom is only supported by the "
+                               "incremental and recursive WFOMC algorithms")
 
+    logger.info(f'Invoke WFOMC with {algo} algorithm')
+
+    context = WFOMCContext(problem)
     with Timer() as t:
         if algo == Algo.STANDARD:
-            res = standard_wfomc(
-                context.formula, context.domain, context.get_weight
-            )
+            res = standard_wfomc(context)
         elif algo == Algo.FAST:
-            res = fast_wfomc(
-                context.formula, context.domain, context.get_weight
-            )
+            res = fast_wfomc(context)
         elif algo == Algo.FASTv2:
-            res = fast_wfomc(
-                context.formula, context.domain, context.get_weight, True
-            )
+            res = fast_wfomc(context, True)
         elif algo == Algo.INCREMENTAL:
-            res = incremental_wfomc(
-                context.formula, context.domain,
-                context.get_weight, leq_pred
-            )
+            res = incremental_wfomc(context)
         elif algo == Algo.RECURSIVE:
-            res = recursive_wfomc(
-                context.formula, context.domain,
-                context.get_weight, leq_pred
-            )
+            res = recursive_wfomc(context)
     res = context.decode_result(res)
     logger.info('WFOMC time: %s', t.elapsed)
     return res

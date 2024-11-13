@@ -5,6 +5,7 @@ import pynauty
 
 from sympy import factorint, factor_list
 from wfomc.cell_graph import CellGraph, build_cell_graphs
+from wfomc.context.wfomc_context import WFOMCContext
 from wfomc.utils import RingElement, Rational
 from wfomc.utils.polynomial import expand
 from wfomc.fol.syntax import Const, Pred, QFFormula
@@ -401,11 +402,12 @@ def clean_global_variables():
     ZERO_FACTOR_INDEX = -1
     FACTOR_ADJ_MAT = []
 
-def recursive_wfomc(formula: QFFormula,
-                  domain: set[Const],
-                  get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
-                  leq_pred: Pred,
-                  real_version: bool = True) -> RingElement:
+def recursive_wfomc(context: WFOMCContext,
+                    real_version: bool = True) -> RingElement:
+    formula = context.formula
+    domain = context.domain
+    get_weight = context.get_weight
+    leq_pred = context.leq_pred
     domain_size = len(domain)
     res = Rational(0, 1)
     for cell_graph, weight in build_cell_graphs(

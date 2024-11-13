@@ -24,6 +24,9 @@ class WFOMCProblem(object):
         self.weights: dict[Pred, tuple[Rational, Rational]] = weights
         self.cardinality_constraint: CardinalityConstraint = cardinality_constraint
 
+    def contain_linear_order_axiom(self) -> bool:
+        return Pred('LEQ', 2) in self.sentence.preds()
+
     def __str__(self) -> str:
         s = ''
         s += 'Domain: \n'

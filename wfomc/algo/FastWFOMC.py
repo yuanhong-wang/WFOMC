@@ -5,14 +5,16 @@ from typing import Callable
 from contexttimer import Timer
 
 from wfomc.cell_graph.cell_graph import build_cell_graphs
+from wfomc.context.wfomc_context import WFOMCContext
 from wfomc.utils import MultinomialCoefficients, multinomial_less_than, RingElement, Rational
 from wfomc.fol.syntax import Const, Pred, QFFormula
 
 
-def fast_wfomc(formula: QFFormula,
-                 domain: set[Const],
-                 get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
-                 modified_cell_symmetry: bool = False) -> RingElement:
+def fast_wfomc(context: WFOMCContext,
+               modified_cell_symmetry: bool = False) -> RingElement:
+    formula = context.formula
+    domain = context.domain
+    get_weight = context.get_weight
     domain_size = len(domain)
     res = Rational(0, 1)
     for opt_cell_graph, weight in build_cell_graphs(
