@@ -2,4 +2,4 @@
 \forall X: (\forall Y: (((H(Y) & LEQ(X, Y)) -> H(X)) & 
                          ((T(X) & LEQ(X, Y)) -> T(Y))))
 
-domain = 3
+domain = 4
