@@ -461,6 +461,8 @@ class QuantifiedFormula(Formula):
         return Negation(self)
 
     def __or__(self, other: Formula) -> Formula:
+        if isinstance(other, (Top, Bot)):
+            return other & self
         if isinstance(other, QFFormula) and \
                 self.quantified_var not in other.vars() and \
                 not isinstance(self.quantifier_scope, Counting):
@@ -468,6 +470,8 @@ class QuantifiedFormula(Formula):
         return Disjunction(self, other)
 
     def __and__(self, other: Formula) -> Formula:
+        if isinstance(other, (Top, Bot)):
+            return other & self
         if isinstance(other, QFFormula) and \
                 self.quantified_var not in other.vars() and \
                 not isinstance(self.quantifier_scope, Counting):
@@ -510,9 +514,13 @@ class CompoundFormula(Formula):
         return Negation(self)
 
     def __or__(self, other):
+        if isinstance(other, (Top, Bot)):
+            return other & self
         return Disjunction(self, other)
 
     def __and__(self, other):
+        if isinstance(other, (Top, Bot)):
+            return other & self
         return Conjunction(self, other)
 
     def implies(self, other):
