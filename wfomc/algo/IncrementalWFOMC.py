@@ -7,8 +7,7 @@ from wfomc.utils import RingElement, Rational
 from wfomc.fol.syntax import Const, Pred, QFFormula
 
 
-def incremental_wfomc(context: WFOMCContext,
-                      leq_pred: Pred = None) -> RingElement:
+def incremental_wfomc(context: WFOMCContext) -> RingElement:
     formula = context.formula
     domain = context.domain
     get_weight = context.get_weight
