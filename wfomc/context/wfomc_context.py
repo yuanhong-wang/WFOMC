@@ -3,7 +3,8 @@ from logzero import logger
 from wfomc.fol.sc2 import SC2
 from wfomc.fol.utils import new_predicate, convert_counting_formula
 
-from wfomc.network.constraint import CardinalityConstraint
+from wfomc.network.constraint import CardinalityConstraint, PartitionConstraint, UnaryEvidenceEncoding, organize_evidence, \
+    unary_evidence_to_ccs, unary_evidence_to_pc
 from wfomc.fol.syntax import *
 from wfomc.problems import WFOMCProblem
 from wfomc.fol.syntax import AUXILIARY_PRED_NAME, SKOLEM_PRED_NAME
@@ -15,13 +16,16 @@ class WFOMCContext(object):
     Context for WFOMC algorithm
     """
 
-    def __init__(self, problem: WFOMCProblem):
+    def __init__(self, problem: WFOMCProblem,
+                 unary_evidence_encoding: UnaryEvidenceEncoding = UnaryEvidenceEncoding.CCS):
         self.problem: WFOMCProblem = problem
         self.domain: set[Const] = problem.domain
         self.sentence: SC2 = problem.sentence
         self.weights: dict[Pred, tuple[Rational, Rational]] = problem.weights
         self.cardinality_constraint: CardinalityConstraint = problem.cardinality_constraint
         self.repeat_factor = 1
+        self.unary_evidence = problem.unary_evidence
+        self.unary_evidence_encoding = unary_evidence_encoding
 
         logger.info('sentence: \n%s', self.sentence)
         logger.info('domain: \n%s', self.domain)
@@ -29,18 +33,28 @@ class WFOMCContext(object):
         for pred, w in self.weights.items():
             logger.info('%s: %s', pred, w)
         logger.info('cardinality constraint: %s', self.cardinality_constraint)
+        logger.info('unary evidence: %s', self.unary_evidence)
 
         self.formula: QFFormula
         # for handling linear order axiom
         self.leq_pred: Pred = None
         self.predecessor_pred: Pred = None
+        self.circular_predecessor_pred: Pred = None
+        # for handling unary evidence
+        self.element2evidence: dict[Const, set[AtomicFormula]] = dict()
+        self.partition_constraint: PartitionConstraint = None
         self._build()
         logger.info('Skolemized formula for WFOMC: \n%s', self.formula)
         logger.info('weights for WFOMC: \n%s', self.weights)
+        logger.info('repeat factor: %d', self.repeat_factor)
+        logger.info('partition constraint: %s', self.partition_constraint)
 
     def contain_cardinality_constraint(self) -> bool:
         return self.cardinality_constraint is not None and \
             not self.cardinality_constraint.empty()
+
+    def contain_partition_constraint(self) -> bool:
+        return self.partition_constraint is not None
 
     def contain_existential_quantifier(self) -> bool:
         return self.sentence.contain_existential_quantifier()
@@ -101,6 +115,30 @@ class WFOMCContext(object):
         while(not isinstance(self.formula, QFFormula)):
             self.formula = self.formula.quantified_formula
 
+        if self.unary_evidence:
+            self.element2evidence = organize_evidence(self.unary_evidence)
+            if self.unary_evidence_encoding == UnaryEvidenceEncoding.PC:
+                logger.info('Use partition constraint to encode unary evidence')
+                evi_formula, partition = unary_evidence_to_pc(
+                    self.element2evidence, self.domain
+                )
+                logger.info('formula to encode unary evidence: %s', evi_formula)
+                logger.info('partition constraint: %s', partition)
+                self.formula = self.formula & evi_formula
+                self.partition_constraint = partition
+            elif self.unary_evidence_encoding == UnaryEvidenceEncoding.CCS:
+                logger.info('Use cardinality constraint to encode unary evidence')
+                evi_formula, ccs, repeat_factor = unary_evidence_to_ccs(
+                    self.element2evidence, self.domain
+                )
+                logger.info('formula to encode unary evidence: %s', evi_formula)
+                logger.info('cardinality constraints: %s', ccs)
+                self.formula = self.formula & evi_formula
+                if not self.contain_cardinality_constraint():
+                    self.cardinality_constraint = CardinalityConstraint()
+                self.cardinality_constraint.extend_simple_constraints(ccs)
+                self.repeat_factor *= repeat_factor
+
         self.ext_formulas = self.sentence.ext_formulas
         if self.sentence.contain_counting_quantifier():
             logger.info('translate SC2 to SNF')
@@ -133,3 +171,6 @@ class WFOMCContext(object):
             self.leq_pred = Pred('LEQ', 2)
         if self.problem.contain_predecessor_axiom():
             self.predecessor_pred = Pred('PRED', 2)
+        if self.problem.contain_circular_predecessor_axiom():
+            self.predecessor_pred = Pred('CIRCULAR_PRED', 2)
+            self.circular_predecessor_pred = Pred('CIRCULAR_PRED', 2)

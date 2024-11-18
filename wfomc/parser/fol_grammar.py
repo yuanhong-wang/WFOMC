@@ -19,6 +19,9 @@ function_free_logic_grammar = r"""
     ?term: constant
         | variable
 
+    unary_evidence: unary_literal* ("," unary_literal)*
+    ?unary_literal: atomic_ffl | negation
+
     left_square_bracket: "["
     right_square_bracket: "]"
     left_parenthesis: "("
