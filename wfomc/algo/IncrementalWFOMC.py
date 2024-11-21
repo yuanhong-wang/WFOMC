@@ -1,3 +1,4 @@
+import math
 from typing import Callable
 from functools import reduce
 
@@ -42,74 +43,39 @@ def incremental_wfomc(context: WFOMCContext) -> RingElement:
                 j = helper(cell, pc_pred, pc_ccs)
                 if j is None:
                     continue
-                if predecessor_pred is None:
-                    table[tuple(int(k == i) for k in range(n_cells))]  = (
-                        cell_graph.get_cell_weight(cell),
-                        tuple(cc - 1 if k == j else cc
-                              for k, cc in enumerate(pc_ccs))
-                    )
-                else:
-                    if circular_predecessor_pred is None:
-                        table[(tuple(int(k == i) for k in range(n_cells)), cell)] = (
-                            cell_graph.get_cell_weight(cell),
-                            tuple(cc - 1 if k == j else cc
-                                  for k, cc in enumerate(pc_ccs))
-                        )
-                    else:
-                        table[(tuple(int(k == i) for k in range(n_cells)), cell, cell)] = (
-                            cell_graph.get_cell_weight(cell),
-                            tuple(cc - 1 if k == j else cc
-                                  for k, cc in enumerate(pc_ccs))
-                        )
-        else:
-            if predecessor_pred is None:
-                table = dict(
+                table[
                     (
                         tuple(int(k == i) for k in range(n_cells)),
-                        (
-                            cell_graph.get_cell_weight(cell),
-                            None
-                        )
+                        None if predecessor_pred is None else cell,
+                        None if circular_predecessor_pred is None else cell
                     )
-                    for i, cell in enumerate(cells)
+                ] = (
+                    cell_graph.get_cell_weight(cell),
+                    tuple(cc - 1 if k == j else cc
+                          for k, cc in enumerate(pc_ccs))
                 )
-            else:
-                if circular_predecessor_pred is not None:
-                    table = dict(
-                        (
-                            (
-                                tuple(int(k == i) for k in range(n_cells)),
-                                cell,
-                                cell
-                            ),
-                            (
-                                cell_graph.get_cell_weight(cell),
-                                None
-                            )
-                        )
-                        for i, cell in enumerate(cells)
+        else:
+            table = dict(
+                (
+                    (
+                        tuple(int(k == i) for k in range(n_cells)),
+                        None if predecessor_pred is None else cell,
+                        None if circular_predecessor_pred is None else cell
+                    ),
+                    (
+                        cell_graph.get_cell_weight(cell),
+                        None
                     )
-                else:
-                    table = dict(
-                        (
-                            (
-                                tuple(int(k == i) for k in range(n_cells)),
-                                cell
-                            ),
-                            (
-                                cell_graph.get_cell_weight(cell),
-                                None
-                            )
-                        )
-                        for i, cell in enumerate(cells)
-                    )
+                )
+                for i, cell in enumerate(cells)
+            )
 
-        for _ in range(domain_size - 1):
+        for cur_idx in range(domain_size - 1):
             old_table = table
             table = dict()
             for j, cell in enumerate(cells):
                 w = cell_graph.get_cell_weight(cell)
-                for key, (w_old, old_ccs) in old_table.items():
+                for (ivec, last_cell, first_cell), (w_old, old_ccs) in old_table.items():
                     if old_ccs is not None:
                         idx = helper(cell, pc_pred, old_ccs)
                         if idx is None:
@@ -121,24 +87,21 @@ def incremental_wfomc(context: WFOMCContext) -> RingElement:
                     else:
                         new_ccs = None
 
-                    if predecessor_pred is None:
-                        ivec = key
-                        w_new = w_old * w * reduce(
-                            lambda x, y: x * y,
-                            (
-                                cell_graph.get_two_table_weight((cell, cells[k]))
-                                ** int(ivec[k]) for k in range(n_cells)
-                            ),
-                            Rational(1, 1)
-                        )
-                    else:
-                        if circular_predecessor_pred is not None:
-                            ivec, first_cell, last_cell = key
+                    w_new = w_old * w
+                    for k, other_cell in enumerate(cells):
+                        if cur_idx == domain_size - 2 and other_cell == first_cell:
+                            if other_cell == last_cell:
+                                w_new = (
+                                    w_new * cell_graph.get_two_table_with_pred_weight((other_cell, cell))
+                                    * cell_graph.get_two_table_with_pred_weight((cell, other_cell))
+                                    * cell_graph.get_two_table_weight((cell, other_cell)) ** max(ivec[k] - 2, 0)
+                                )
+                            else:
+                                w_new = (
+                                    w_new * cell_graph.get_two_table_with_pred_weight((other_cell, cell))
+                                    * cell_graph.get_two_table_weight((cell, other_cell)) ** max(ivec[k] - 1, 0)
+                                )
                         else:
-                            ivec, last_cell = key
-                        # ivec, last_cell = key
-                        w_new = w_old * w
-                        for k, other_cell in enumerate(cells):
                             if other_cell == last_cell:
                                 w_new = (
                                     w_new * cell_graph.get_two_table_with_pred_weight((cell, other_cell))
@@ -149,36 +112,13 @@ def incremental_wfomc(context: WFOMCContext) -> RingElement:
                     ivec = list(ivec)
                     ivec[j] += 1
                     ivec = tuple(ivec)
-                    if predecessor_pred is None:
-                        w_new = w_new + table.get(ivec, (Rational(0, 1), ()))[0]
-                        table[ivec] = (
-                            w_new, new_ccs
-                        )
-                    else:
-                        if circular_predecessor_pred is not None:
-                            w_new = w_new + table.get((ivec, first_cell, cell), (Rational(0, 1), ()))[0]
-                            table[(tuple(ivec), first_cell, cell)] = (
-                            # table[(tuple(ivec), cell)] = (
-                                w_new, new_ccs
-                            )
-                        else:
-                            w_new = w_new + table.get((ivec, cell), (Rational(0, 1), ()))[0]
-                            table[(tuple(ivec), cell)] = (
-                            # table[(tuple(ivec), cell)] = (
-                                w_new, new_ccs
-                            )
-        if circular_predecessor_pred is not None:
-            w_sum = Rational(0, 1)
-            for key, (w, _) in table.items():
-                if w == 0:
-                    continue
-                _, first_cell, last_cell = key
-                w = w / cell_graph.get_two_table_weight((last_cell, first_cell)) * \
-                cell_graph.get_two_table_with_pred_weight((first_cell, last_cell))
-                w_sum = w_sum + w
-            res = res + weight * w_sum
-        else:
-            res = res + weight * sum(w for w, _ in table.values())
+                    if last_cell is not None:
+                        last_cell = cell
+                    w_new = w_new + table.get((ivec, last_cell, first_cell), (Rational(0, 1), ()))[0]
+                    table[(tuple(ivec), last_cell, first_cell)] = (
+                        w_new, new_ccs
+                    )
+        res = res + weight * sum(w for w, _ in table.values())
 
     if context.unary_evidence_encoding == \
             UnaryEvidenceEncoding.PC:
@@ -187,6 +127,6 @@ def incremental_wfomc(context: WFOMCContext) -> RingElement:
                 i for _, i in context.partition_constraint.partition
             )
         )
-    # if leq_pred is not None:
-    #     res *= Rational(math.factorial(domain_size), 1)
+    if leq_pred is not None:
+        res *= Rational(math.factorial(domain_size), 1)
     return res

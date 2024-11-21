@@ -1,8 +1,10 @@
-ExactlyOne[A, B] &
-\forall X: (A_F(X) <-> (A(X) & (\forall Y: (A(Y) -> ~CIRCULAR_PRED(Y,X))))) &
-\forall X: (B_F(X) <-> (B(X) & (\forall Y: (B(Y) -> ~CIRCULAR_PRED(Y,X)))))
+ExactlyOne[A, B, C, D] &
+\forall X: (\forall Y: (A(X) & B(Y) -> (CIRCULAR_PRED(X,Y) | CIRCULAR_PRED(Y,X)))) &
+\forall X: (\forall Y: (A(X) & C(Y) -> (~CIRCULAR_PRED(X,Y) & ~CIRCULAR_PRED(Y,X)))) &
+\forall X: (\forall Y: (B(X) & C(Y) -> (~CIRCULAR_PRED(X,Y) & ~CIRCULAR_PRED(Y,X))))
 
-domain = 10
-|A| = 5
-|A_F| <= 1
-|B_F| <= 1
+
+domain = 8
+|A| = 1
+|B| = 1
+|C| = 1
