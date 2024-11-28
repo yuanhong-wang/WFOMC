@@ -1,11 +1,11 @@
-# Exact Lifted Sampler for Two-Variable Logic
+# Exact Lifted Counter for Two-Variable Logic
 
-This tool is for sampling instances or combinatorical structures from the two-variable fragment of first-order logic.
-
+This tool is for counting the models (or combinatorical structures) from the two-variable fragment of first-order logic.
 
 
 ## Input format
 
+The input file with the suffix `.wfomcs` contains the following information **in order**:
 1. First-order sentence with at most two logic variables, see [fol_grammar.py](sampling_fo2/parser/fol_grammar.py) for details, e.g.,
   * `\forall X: (\forall Y: (R(X, Y) <-> Z(X, Y)))`
   * `\forall X: (\exists Y: (R(X, Y)))`
@@ -21,12 +21,21 @@ This tool is for sampling instances or combinatorical structures from the two-va
   * `|P| >= k`
   * `|P| < k`
   * `|P| <= k`
-  * ...
+
+### Use linear order constraint
+
+To use linear order constraint (or linear order axiom), just use the predefined predicate `LEQ` in the input file. 
+For the `head-tail` example in [Lifted Inference with Linear Order Axiom.](https://doi.org/10.1609/aaai.v37i10.26449), you can write the sentence as:
+```
+\forall X: (\forall Y: (~H(X) | ~T(X))) &
+\forall X: (\forall Y: (H(Y) & LEQ(X, Y) -> H(X))) &
+\forall X: (\forall Y: (T(X) & LEQ(X, Y) -> T(Y))) &
+```
 
 
 ### Example input file
 
-2 colored graphs:
+- 2 colored graphs:
 ```
 \forall X: (\forall Y: ((E(X,Y) -> E(Y,X)) &
                         (R(X) | B(X)) &
@@ -36,8 +45,7 @@ This tool is for sampling instances or combinatorical structures from the two-va
 V = 10
 ```
 
-
-2 regular graphs:
+- 2 regular graphs:
 ```
 \forall X: (~E(X,X)) &
 \forall X: (\forall Y: ((E(X,Y) -> E(Y,X)) &
@@ -50,9 +58,7 @@ V = 6
 |E| = 12
 ```
 
-> **Note: You can also directly input the SC2 sentence**
-
-2 regular graphs (sc2):
+- 2 regular graphs where `\exists_{=2} Y: (E(X,Y))` means there are exactly 2 edges from each node (please refer to [Weighted First-Order Model Counting in the Two-Variable Fragment With Counting Quantifiers](https://jair.org/index.php/jair/article/view/12320/26673):
 ```
 \forall X: (~E(X,X)) &
 \forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
@@ -61,7 +67,7 @@ V = 6
 V = 6
 ```
 
-Sampling possible worlds from `friends-smokes` MLN:
+- Transformed from `friends-smokes` MLN:
 ```
 \forall X: (~fr(X,X)) &
 \forall X: (\forall Y: (fr(X,Y) -> fr(Y,X))) &
@@ -72,7 +78,7 @@ person = 10
 2.7 1 aux
 ```
 
-> **Note: You can also directly input the MLN in the form defined in [mln_grammar.py](sampling_fo2/parser/mln_grammar.py)**
+> **Note: Now you can also directly input the MLN in the form defined in [mln_grammar.py](sampling_fo2/parser/mln_grammar.py)**
 ```
 ~friends(X,X).
 friends(X,Y) -> friends(Y,X).
@@ -83,7 +89,6 @@ friends(X,Y) -> friends(Y,X).
 
 person = 10
 ```
-
 
 More examples are in [models](models/)
 
@@ -96,62 +101,13 @@ $ pip install -e .
 
 
 ### How to use
-Run the following command:
 ```
-$ python sampling_fo2/sampler.py -i [input] -k [N] -s
-```
-Find more arguments: 
-```
-$ python sampling_fo2/sampler.py -h
-```
-
-## Bonus
-
-This repo also contains the code for WFOMC (the counting counterpart problem of first-order model sampling).
-Just run:
-```
-$ python sampling_fo2/wfomc.py -i [input]
+$ python sampling_fo2/wfomc.py -i [input] -a [algo]
 ```
 
 ## References
 
-```
-@article{DBLP:journals/ai/WangPWK24,
-  author       = {Yuanhong Wang and
-                  Juhua Pu and
-                  Yuyi Wang and
-                  Ondrej Kuzelka},
-  title        = {Lifted algorithms for symmetric weighted first-order model sampling},
-  journal      = {Artif. Intell.},
-  volume       = {331},
-  pages        = {104114},
-  year         = {2024},
-  url          = {https://doi.org/10.1016/j.artint.2024.104114},
-  doi          = {10.1016/J.ARTINT.2024.104114},
-  timestamp    = {Fri, 31 May 2024 21:06:28 +0200},
-  biburl       = {https://dblp.org/rec/journals/ai/WangPWK24.bib},
-  bibsource    = {dblp computer science bibliography, https://dblp.org}
-}
-```
 
-```
-@inproceedings{DBLP:conf/lics/WangP0K23,
-  author       = {Yuanhong Wang and
-                  Juhua Pu and
-                  Yuyi Wang and
-                  Ondrej Kuzelka},
-  title        = {On Exact Sampling in the Two-Variable Fragment of First-Order Logic},
-  booktitle    = {{LICS}},
-  pages        = {1--13},
-  year         = {2023},
-  url          = {https://doi.org/10.1109/LICS56636.2023.10175742},
-  doi          = {10.1109/LICS56636.2023.10175742},
-  timestamp    = {Thu, 20 Jul 2023 11:32:59 +0200},
-  biburl       = {https://dblp.org/rec/conf/lics/WangP0K23.bib},
-  bibsource    = {dblp computer science bibliography, https://dblp.org}
-}
-```
-If you use the WFOMC code, please cite
 ```
 @inproceedings{DBLP:conf/uai/BremenK21,
   author       = {Timothy van Bremen and
@@ -171,5 +127,44 @@ If you use the WFOMC code, please cite
   timestamp    = {Fri, 17 Dec 2021 17:06:27 +0100},
   biburl       = {https://dblp.org/rec/conf/uai/BremenK21.bib},
   bibsource    = {dblp computer science bibliography, https://dblp.org}
+}
+```
+```
+@article{kuzelka_weighted_2021,
+  title = {Weighted First-Order Model Counting in the Two-Variable Fragment with Counting Quantifiers},
+  author = {Kuzelka, Ondrej},
+  year = {2021},
+  month = mar,
+  journal = {Journal of Artificial Intelligence Research},
+  volume = {70},
+  eprint = {2007.05619},
+  pages = {1281--1307},
+  issn = {1076-9757},
+  doi = {10.1613/jair.1.12320}
+}
+```
+```
+@article{toth_lifted_2022-1,
+  title = {Lifted Inference with Linear Order Axiom},
+  author = {T{\'o}th, Jan and Ku{\v z}elka, Ond{\v r}ej},
+  year = {2022},
+  journal = {Proceedings of the AAAI Conference on Artificial Intelligence},
+  volume = {37},
+  number = {10},
+  pages = {12295--12304},
+  doi = {10.1609/aaai.v37i10.26449}
+}
+```
+```
+@incollection{endriss_more_2024,
+  title = {A More Practical Algorithm for Weighted First-Order Model Counting with Linear Order Axiom},
+  booktitle = {Frontiers in {{Artificial Intelligence}} and {{Applications}}},
+  author = {Meng, Qiaolan and T{\'o}th, Jan and Wang, Yuanhong and Wang, Yuyi and Ku{\v z}elka, Ond{\v r}ej},
+  editor = {Endriss, Ulle and Melo, Francisco S. and Bach, Kerstin and {Bugar{\'i}n-Diz}, Alberto and {Alonso-Moral}, Jos{\'e} M. and Barro, Sen{\'e}n and Heintz, Fredrik},
+  year = {2024},
+  month = oct,
+  publisher = {IOS Press},
+  isbn = {978-1-64368-548-9},
+  keywords = {linter/error}
 }
 ```
