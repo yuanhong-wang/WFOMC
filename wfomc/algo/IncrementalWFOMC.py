@@ -10,15 +10,18 @@ from wfomc.fol.syntax import Const, Pred, QFFormula
 from wfomc.utils.multinomial import MultinomialCoefficients
 
 
-def incremental_wfomc(context: WFOMCContext) -> RingElement:
+def incremental_wfomc(context: WFOMCContext,
+                      circle_len: int = None) -> RingElement:
     formula = context.formula
     domain = context.domain
     get_weight = context.get_weight
     leq_pred = context.leq_pred
     predecessor_pred = context.predecessor_pred
     circular_predecessor_pred = context.circular_predecessor_pred
-    res = Rational(0, 1)
     domain_size = len(domain)
+    if circle_len is None:
+        circle_len = domain_size
+    res = Rational(0, 1)
     for cell_graph, weight in build_cell_graphs(
         formula, get_weight,
         leq_pred=leq_pred,
@@ -27,7 +30,6 @@ def incremental_wfomc(context: WFOMCContext) -> RingElement:
         # cell_graph.show()
         cells = cell_graph.get_cells()
         n_cells = len(cells)
-        domain_size = len(domain)
 
         def helper(cell, pc_pred, pc_ccs):
             for i, p in enumerate(pc_pred):
@@ -89,7 +91,7 @@ def incremental_wfomc(context: WFOMCContext) -> RingElement:
 
                     w_new = w_old * w
                     for k, other_cell in enumerate(cells):
-                        if cur_idx == domain_size - 2 and other_cell == first_cell:
+                        if cur_idx == circle_len - 2 and other_cell == first_cell:
                             if other_cell == last_cell:
                                 w_new = (
                                     w_new * cell_graph.get_two_table_with_pred_weight((other_cell, cell))

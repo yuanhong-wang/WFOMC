@@ -19,12 +19,14 @@ class WFOMCProblem(object):
                  domain: set[Const],
                  weights: dict[Pred, tuple[Rational, Rational]],
                  cardinality_constraint: CardinalityConstraint = None,
-                 unary_evidence: set[AtomicFormula] = None):
+                 unary_evidence: set[AtomicFormula] = None,
+                 circle_len: int = None):
         self.domain: set[Const] = domain
         self.sentence: SC2 = sentence
         self.weights: dict[Pred, tuple[Rational, Rational]] = weights
         self.cardinality_constraint: CardinalityConstraint = cardinality_constraint
         self.unary_evidence = unary_evidence
+        self.circle_len = circle_len if circle_len is not None else len(domain)
         if self.unary_evidence is not None:
             # check if the evidence is unary and consistent with the domain
             for atom in self.unary_evidence:

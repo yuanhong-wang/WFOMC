@@ -51,7 +51,7 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
         elif algo == Algo.FASTv2:
             res = fast_wfomc(context, True)
         elif algo == Algo.INCREMENTAL:
-            res = incremental_wfomc(context)
+            res = incremental_wfomc(context, problem.circle_len)
         elif algo == Algo.RECURSIVE:
             res = recursive_wfomc(context)
     res = context.decode_result(res)
