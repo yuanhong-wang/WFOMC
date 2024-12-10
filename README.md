@@ -24,12 +24,23 @@ The input file with the suffix `.wfomcs` contains the following information **in
 
 ### Use linear order constraint
 
-To use linear order constraint (or linear order axiom), just use the predefined predicate `LEQ` in the input file. 
+To use linear order constraint (or linear order axiom), just use the predefined predicates `LEQ` and `PRED` in the input file. 
 For the `head-tail` example in [Lifted Inference with Linear Order Axiom.](https://doi.org/10.1609/aaai.v37i10.26449), you can write the sentence as:
 ```
 \forall X: (\forall Y: (~H(X) | ~T(X))) &
 \forall X: (\forall Y: (H(Y) & LEQ(X, Y) -> H(X))) &
 \forall X: (\forall Y: (T(X) & LEQ(X, Y) -> T(Y))) &
+```
+For the `Watts-Strogatz` model in [Lifted Inference with Linear Order Axiom.](https://doi.org/10.1609/aaai.v37i10.26449), you can write the sentence as:
+```
+\forall X: (\forall Y: (PERM(X,Y) -> E(X,Y))) &
+\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+\forall X: (~E(X,X)) &
+\forall X: (\forall Y: (aux(X,Y) <-> (sm(X) & E(X,Y) -> sm(Y))))
+
+vertices = 5
+2.3 1 aux
+|E| = 30 # 2n + 2m where n = 5, m = 10
 ```
 
 

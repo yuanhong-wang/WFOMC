@@ -1,0 +1,8 @@
+\forall X: (\forall Y: (PERM(X,Y) -> E(X,Y))) &
+\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+\forall X: (~E(X,X)) &
+\forall X: (\forall Y: (XI(X,Y) <-> (sm(X) & E(X,Y) -> sm(Y))))
+
+vertices = 5
+2.3 1 XI
+|E| = 14 # 2n + 2m where n = 5, m = 2

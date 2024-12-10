@@ -25,7 +25,11 @@ class WFOMCProblem(object):
         self.cardinality_constraint: CardinalityConstraint = cardinality_constraint
 
     def contain_linear_order_axiom(self) -> bool:
-        return Pred('LEQ', 2) in self.sentence.preds()
+        return Pred('PRED', 2) in self.sentence.preds() or \
+            Pred('LEQ', 2) in self.sentence.preds()
+
+    def contain_predecessor_axiom(self) -> bool:
+        return Pred('PRED', 2) in self.sentence.preds()
 
     def __str__(self) -> str:
         s = ''

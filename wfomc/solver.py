@@ -28,6 +28,11 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
         if algo != Algo.INCREMENTAL and algo != Algo.RECURSIVE:
             raise RuntimeError("Linear order axiom is only supported by the "
                                "incremental and recursive WFOMC algorithms")
+    if problem.contain_predecessor_axiom():
+        logger.info('Predecessor predicate PRED is found')
+        if algo != Algo.INCREMENTAL:
+            raise RuntimeError("Predecessor axiom is only supported by the "
+                               "incremental WFOMC algorithm")
 
     logger.info(f'Invoke WFOMC with {algo} algorithm')
 

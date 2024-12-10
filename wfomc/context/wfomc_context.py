@@ -16,6 +16,7 @@ class WFOMCContext(object):
     """
 
     def __init__(self, problem: WFOMCProblem):
+        self.problem: WFOMCProblem = problem
         self.domain: set[Const] = problem.domain
         self.sentence: SC2 = problem.sentence
         self.weights: dict[Pred, tuple[Rational, Rational]] = problem.weights
@@ -31,7 +32,8 @@ class WFOMCContext(object):
 
         self.formula: QFFormula
         # for handling linear order axiom
-        self.leq_pred: Pred = Pred('LEQ', 2)
+        self.leq_pred: Pred = None
+        self.predecessor_pred: Pred = None
         self._build()
         logger.info('Skolemized formula for WFOMC: \n%s', self.formula)
         logger.info('weights for WFOMC: \n%s', self.weights)
@@ -126,3 +128,8 @@ class WFOMCContext(object):
                     self.get_weight,
                 )
             )
+
+        if self.problem.contain_linear_order_axiom():
+            self.leq_pred = Pred('LEQ', 2)
+        if self.problem.contain_predecessor_axiom():
+            self.predecessor_pred = Pred('PRED', 2)
