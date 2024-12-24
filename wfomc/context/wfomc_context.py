@@ -1,5 +1,7 @@
 from __future__ import annotations
 from logzero import logger
+
+from copy import deepcopy
 from wfomc.fol.sc2 import SC2
 from wfomc.fol.utils import new_predicate, convert_counting_formula
 
@@ -16,6 +18,7 @@ class WFOMCContext(object):
     """
 
     def __init__(self, problem: WFOMCProblem):
+        problem = deepcopy(problem)
         self.domain: set[Const] = problem.domain
         self.sentence: SC2 = problem.sentence
         self.weights: dict[Pred, tuple[Rational, Rational]] = problem.weights
