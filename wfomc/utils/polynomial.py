@@ -52,6 +52,8 @@ def _get_degrees(monomial: Poly):
 
 def coeff_dict(p: Poly, gens: list[Symbol]) -> Generator[tuple[int], Rational, None]:
     for monomial, coeff in p.as_coefficients_dict().items():
+        if monomial == -1:
+            coeff = -coeff
         degrees = dict(_get_degrees(monomial))
         for var, degree in degrees.items():
             if (var is not None and var not in gens) and degree != 0:
