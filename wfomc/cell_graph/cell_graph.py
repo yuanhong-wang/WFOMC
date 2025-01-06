@@ -25,7 +25,8 @@ class CellGraph(object):
 
     def __init__(self, formula: QFFormula,
                  get_weight: Callable[[Pred], Tuple[RingElement, RingElement]],
-                 leq_pred: Pred = None):
+                 leq_pred: Pred = None,
+                 predecessor_pred: Pred = None):
         """
         Cell graph that handles cells (1-types) and the WMC between them
 
@@ -37,6 +38,7 @@ class CellGraph(object):
         self.get_weight: Callable[[Pred],
                                   Tuple[RingElement, RingElement]] = get_weight
         self.leq_pred: Pred = leq_pred
+        self.predecessor_pred: Pred = predecessor_pred
         self.preds: Tuple[Pred] = tuple(self.formula.preds())
         logger.debug('prednames: %s', self.preds)
 
@@ -52,12 +54,21 @@ class CellGraph(object):
             self.formula, c
         )
         if self.leq_pred is not None:
-            self.gnd_formula_cc = self.gnd_formula_cc & self.leq_pred(c, c)
+            self.gnd_formula_cc = self.gnd_formula_cc & self.leq_pred(c, c) & (~self.predecessor_pred(c, c))
             self.gnd_formula_ab = self.gnd_formula_ab & \
                 self.leq_pred(b, a) & \
                 (~self.leq_pred(a, b))
+            if self.predecessor_pred is not None:
+                self.gnd_formula_ab_with_pred = self.gnd_formula_ab & \
+                    self.predecessor_pred(b, a) & \
+                    (~self.predecessor_pred(a, b))
+                self.gnd_formula_ab = self.gnd_formula_ab & \
+                    (~self.predecessor_pred(b, a)) & \
+                    (~self.predecessor_pred(a, b))
         logger.info('ground a b: %s', self.gnd_formula_ab)
         logger.info('ground c: %s', self.gnd_formula_cc)
+        if self.predecessor_pred is not None:
+            logger.info(f'ground a, b with predecessor: {self.gnd_formula_ab_with_pred}')
 
         # build cells
         self.cells: List[Cell] = self._build_cells()
@@ -69,7 +80,12 @@ class CellGraph(object):
         self.cell_weights: Dict[Cell, Poly] = self._compute_cell_weights()
         logger.info('computing two table weights')
         self.two_tables: Dict[Tuple[Cell, Cell],
-                              TwoTable] = self._build_two_tables()
+                              TwoTable] = self._build_two_tables(self.gnd_formula_ab)
+        if self.predecessor_pred is not None:
+            self.two_tables_with_pred: Dict[Tuple[Cell, Cell],
+                                            TwoTable] = self._build_two_tables(
+                self.gnd_formula_ab_with_pred
+            )
 
     def _ground_on_tuple(self, formula: QFFormula,
                          c1: Const, c2: Const = None) -> QFFormula:
@@ -151,6 +167,12 @@ class CellGraph(object):
         self._check_existence(cells)
         return self.two_tables.get(cells).get_weight(evidences)
 
+    @functools.lru_cache(maxsize=None, typed=True)
+    def get_two_table_with_pred_weight(self, cells: Tuple[Cell, Cell],
+                             evidences: FrozenSet[AtomicFormula] = None) -> RingElement:
+        self._check_existence(cells)
+        return self.two_tables_with_pred.get(cells).get_weight(evidences)
+
     def get_all_weights(self) -> Tuple[List[RingElement], List[RingElement]]:
         cell_weights = []
         twotable_weights = []
@@ -210,14 +232,14 @@ class CellGraph(object):
                     weight = weight * self.get_weight(pred)[1]
         return weight
 
-    def _build_two_tables(self):
+    def _build_two_tables(self, gnd_formula_ab: QFFormula):
         # build a pd.DataFrame containing all model as well as the weight
         models = dict()
-        gnd_lits = self.gnd_formula_ab.atoms()
+        gnd_lits = gnd_formula_ab.atoms()
         gnd_lits = gnd_lits.union(
             frozenset(map(lambda x: ~x, gnd_lits))
         )
-        for model in self.gnd_formula_ab.models():
+        for model in gnd_formula_ab.models():
             weight = Rational(1, 1)
             for lit in model:
                 # ignore the weight appearing in cell weight
@@ -476,6 +498,7 @@ def build_cell_graphs(formula: QFFormula,
                       get_weight: Callable[[Pred],
                                            Tuple[RingElement, RingElement]],
                       leq_pred: Pred = None,
+                      predecessor_pred: Pred = None,
                       optimized: bool = False,
                       domain_size: int = 0,
                       modified_cell_symmetry: bool = False) \
@@ -484,7 +507,9 @@ def build_cell_graphs(formula: QFFormula,
     if len(nullary_atoms) == 0:
         logger.info('No nullary atoms found, building a single cell graph')
         if not optimized:
-            yield CellGraph(formula, get_weight, leq_pred), Rational(1, 1)
+            yield CellGraph(
+                formula, get_weight, leq_pred, predecessor_pred
+            ), Rational(1, 1)
         else:
             yield OptimizedCellGraph(
                 formula, get_weight, domain_size, modified_cell_symmetry
@@ -499,7 +524,9 @@ def build_cell_graphs(formula: QFFormula,
                 logger.info('Formula is unsatisfiable, skipping')
                 continue
             if not optimized:
-                cell_graph = CellGraph(subs_formula, get_weight, leq_pred)
+                cell_graph = CellGraph(
+                    subs_formula, get_weight, leq_pred, predecessor_pred
+                )
             else:
                 cell_graph = OptimizedCellGraph(
                     subs_formula, get_weight, domain_size,
