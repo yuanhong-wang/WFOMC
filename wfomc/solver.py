@@ -7,6 +7,7 @@ import logzero
 
 from logzero import logger
 from contexttimer import Timer
+from wfomc.network.constraint import UnaryEvidenceEncoding
 
 from wfomc.problems import WFOMCProblem
 from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recursive_wfomc
@@ -14,14 +15,12 @@ from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recu
 from wfomc.utils import MultinomialCoefficients, Rational, round_rational
 from wfomc.context import WFOMCContext
 from wfomc.parser import parse_input
-from wfomc.fol.syntax import Pred
+from wfomc.utils.polynomial import expand
 
 
-def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
-    # both standard and fast WFOMCs need precomputation
-    if algo == Algo.STANDARD or algo == Algo.FAST or \
-            algo == algo.FASTv2:
-        MultinomialCoefficients.setup(len(problem.domain))
+def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
+          unary_evidence_encoding: UnaryEvidenceEncoding = UnaryEvidenceEncoding.CCS) -> Rational:
+    MultinomialCoefficients.setup(len(problem.domain))
 
     if problem.contain_linear_order_axiom():
         logger.info('Linear order axiom with the predicate LEQ is found')
@@ -34,9 +33,16 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
             raise RuntimeError("Predecessor axiom is only supported by the "
                                "incremental WFOMC algorithm")
 
-    logger.info(f'Invoke WFOMC with {algo} algorithm')
+    if problem.contain_unary_evidence():
+        logger.info(f'Unary evidence is found, using {unary_evidence_encoding} encoding')
+        if unary_evidence_encoding == UnaryEvidenceEncoding.PC and \
+                algo != Algo.FASTv2 and algo != Algo.INCREMENTAL:
+            raise RuntimeError("Partition constraint is only supported for the "
+                               "fastv2 WFOMC and incremental WFOMC algorithms")
 
-    context = WFOMCContext(problem)
+    logger.info(f'Invoke WFOMC with {algo} algorithm and {unary_evidence_encoding} encoding')
+
+    context = WFOMCContext(problem, unary_evidence_encoding)
     with Timer() as t:
         if algo == Algo.STANDARD:
             res = standard_wfomc(context)
@@ -45,7 +51,7 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
         elif algo == Algo.FASTv2:
             res = fast_wfomc(context, True)
         elif algo == Algo.INCREMENTAL:
-            res = incremental_wfomc(context)
+            res = incremental_wfomc(context, problem.circle_len)
         elif algo == Algo.RECURSIVE:
             res = recursive_wfomc(context)
     res = context.decode_result(res)
@@ -64,6 +70,9 @@ def parse_args():
                         default='./check-points')
     parser.add_argument('--algo', '-a', type=Algo,
                         choices=list(Algo), default=Algo.FASTv2)
+    parser.add_argument('--unary_evidence_encoding', '-e', type=UnaryEvidenceEncoding,
+                        choices=list(UnaryEvidenceEncoding),
+                        default=UnaryEvidenceEncoding.CCS)
     parser.add_argument('--debug', action='store_true', default=False)
     args = parser.parse_args()
     return args
@@ -86,7 +95,8 @@ if __name__ == '__main__':
     logger.info('Parse input: %ss', t)
 
     res = wfomc(
-        problem, algo=args.algo
+        problem, algo=args.algo,
+        unary_evidence_encoding=args.unary_evidence_encoding
     )
     logger.info('WFOMC (arbitrary precision): %s', res)
     round_val = round_rational(res)

@@ -1,0 +1,14 @@
+\forall X: (~Perm(X,X)) &
+\forall X: (\exists Y: (Perm(X, Y))) &
+\forall Y: (\exists X: (Perm(X, Y))) &
+\forall X: (\forall Y: (Pred(X,Y) -> Perm(X,Y))) &
+\forall X: (\forall Y: (Pred(X,Y) -> LEQ(X,Y))) &
+ExactlyOne[Math, Physic] &
+\forall X: (\forall Y: (Math(X) & Math(Y) & Pred(X,Y) <-> MathPred(X, Y)))
+
+domain = {math1, math2, physic1} # physic2, physic3, physic4, physic5}
+|Perm| = 3
+|Pred| = 2
+|MathPred| = 1
+
+Math(math1), Math(math2), Physic(physic1) # , Physic(physic2), Physic(physic3), Physic(physic4), Physic(physic5)
