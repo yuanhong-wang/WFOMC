@@ -32,7 +32,7 @@ class TreeConstraint(Constraint):
 
 
 class CardinalityConstraint(Constraint):
-    def __init__(self, constraints: list[tuple[dict[Pred, float], str, float]] = None):
+    def __init__(self, constraints: list[tuple[dict[Pred, float], str, float]] = None) -> None:
         self.constraints: list[tuple[dict[Pred, float], str, float]] = constraints
         if self.constraints is None:
             self.constraints = list()
@@ -42,38 +42,8 @@ class CardinalityConstraint(Constraint):
             for constraint in self.constraints:
                 self.preds.update(constraint[0].keys())
 
-        self.gen_vars: list[Symbol]
-        self.var2pred: dict[Symbol, Pred] = dict()
-        self.validator: str = ""
-
     def empty(self) -> bool:
         return len(self.constraints) == 0
-
-    def transform_weighting(self, get_weight: Callable[[Pred], tuple[Rational, Rational]]) \
-            -> dict[Pred, tuple[Rational, Rational]]:
-        new_weights: dict[Pred, tuple[RingElement, RingElement]] = {}
-        self.gen_vars = create_vars('x0:{}'.format(
-            len(self.preds))
-        )
-        for sym, pred in zip(self.gen_vars, self.preds):
-            weight = get_weight(pred)
-            new_weights[pred] = (weight[0] * sym, weight[1])
-            self.var2pred[sym] = pred
-        return new_weights
-
-    def decode_poly(self, poly: RingElement) -> RingElement:
-        poly = expand(poly)
-        coeffs = coeff_dict(poly, self.gen_vars)
-        # logger.debug('coeffs: %s', list(coeffs))
-        res = Rational(0, 1)
-        for degrees, coeff in coeffs:
-            if self.valid(degrees):
-                res += coeff
-        return res
-
-    def valid(self, degrees: list[int]) -> bool:
-        kwargs = zip((self.var2pred[sym].name for sym in self.gen_vars), degrees)
-        return eval(self.validator.format(**dict(kwargs)))
 
     def extend_simple_constraints(self, ccs: list[tuple[Pred, str, int]]):
         for pred, comp, card in ccs:
@@ -90,18 +60,79 @@ class CardinalityConstraint(Constraint):
         self.constraints.append((expr, comp, param))
         self.preds.update(expr.keys())
 
-    def build(self):
-        validator_list: list[str] = []
-        for expr, comp, param in self.constraints:
-            single_validator = []
-            for pred, coef in expr.items():
-                single_validator.append(f'{coef} * {{{pred.name}}}')
-            single_validator = ' + '.join(single_validator)
-            if comp == '=':
-                comp = '=='
-            validator_list.append(f'{single_validator} {comp} {param}')
-        self.validator = ' and '.join(validator_list)
-        logger.info('cardinality validator: \n%s', self.validator)
+    def build(self, get_weight: Callable[[Pred], tuple[Rational, Rational]]) -> \
+            tuple[
+                dict[Pred, tuple[RingElement, RingElement]],
+                Callable[[RingElement], RingElement],
+            ]:
+        """
+        Build the cardinality constraint
+        :param get_weight: function to get the weight of a predicate
+
+        :return: new weights and a function to decode the polynomial
+        """
+        new_weights: dict[Pred, tuple[RingElement, RingElement]] = {}
+
+        gen_vars = list()
+        validator = ""
+
+        def decode_poly(poly: RingElement) -> RingElement:
+            poly = expand(poly)
+            coeffs = coeff_dict(poly, gen_vars)
+            res = Rational(0, 1)
+            for degrees, coeff in coeffs:
+                kwargs = zip(
+                    (var.name for var in gen_vars),
+                    degrees,
+                )
+                if eval(validator.format(**dict(kwargs))):
+                    res = res + coeff
+            return res
+
+        USE_CC_ENCODING = False
+        if len(self.preds) <= len(self.constraints) and not USE_CC_ENCODING:
+            # encoding CC per predicate
+            gen_vars = create_vars('x0:{}'.format(
+                len(self.preds))
+            )
+            pred2var: dict[Pred, Symbol] = dict()
+            for sym, pred in zip(gen_vars, self.preds):
+                weight = get_weight(pred)
+                new_weights[pred] = (weight[0] * sym, weight[1])
+                pred2var[pred] = sym
+            validators = list()
+            for expr, comp, param in self.constraints:
+                for pred, coef in expr.items():
+                    validators.append('{} {} {}'.format(
+                        ' + '.join(
+                            f'{coef} * {{{pred2var[pred].name}}}'
+                            for pred, coef in expr.items()
+                        ),
+                        comp if comp != '=' else '==',
+                        param
+                    ))
+            validator = ' and '.join(validators)
+        else:
+            logger.info(
+                'More predicates than constraints, using CC encoding'
+            )
+            gen_vars = create_vars('x0:{}'.format(
+                len(self.constraints)
+            ))
+            validators = list()
+            for sym, (expr, comp, param) in zip(gen_vars, self.constraints):
+                for pred, coef in expr.items():
+                    if pred not in new_weights:
+                        weight = get_weight(pred)
+                    else:
+                        weight = new_weights[pred]
+                    new_weights[pred] = (weight[0] * sym ** coef, weight[1])
+                validators.append(
+                    f'{{{sym.name}}} {comp if comp != "=" else "=="} {param}'
+                )
+            validator = ' and '.join(validators)
+
+        return new_weights, decode_poly
 
     def __str__(self):
         s = ''

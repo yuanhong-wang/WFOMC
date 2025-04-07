@@ -42,7 +42,10 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
 
     logger.info(f'Invoke WFOMC with {algo} algorithm and {unary_evidence_encoding} encoding')
 
-    context = WFOMCContext(problem, unary_evidence_encoding)
+    context = WFOMCContext(
+        problem,
+        unary_evidence_encoding,
+    )
     with Timer() as t:
         if algo == Algo.STANDARD:
             res = standard_wfomc(context)
@@ -96,7 +99,7 @@ if __name__ == '__main__':
 
     res = wfomc(
         problem, algo=args.algo,
-        unary_evidence_encoding=args.unary_evidence_encoding
+        unary_evidence_encoding=args.unary_evidence_encoding,
     )
     logger.info('WFOMC (arbitrary precision): %s', res)
     round_val = round_rational(res)

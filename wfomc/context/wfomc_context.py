@@ -45,6 +45,7 @@ class WFOMCContext(object):
         # for handling unary evidence
         self.element2evidence: dict[Const, set[AtomicFormula]] = dict()
         self.partition_constraint: PartitionConstraint = None
+        self.decode_poly = None
         self._build()
         logger.info('Skolemized formula for WFOMC: \n%s', self.formula)
         logger.info('weights for WFOMC: \n%s', self.weights)
@@ -67,10 +68,10 @@ class WFOMCContext(object):
             return self.weights[pred]
         return (default, default)
 
-    def decode_result(self, res: RingElement):
+    def decode_result(self, res: RingElement) -> RingElement:
         if not self.contain_cardinality_constraint():
             return res / self.repeat_factor
-        res = self.cardinality_constraint.decode_poly(res)
+        res = self.decode_poly(res)
         return res / self.repeat_factor
 
     def _skolemize_one_formula(self, formula: QuantifiedFormula) -> QFFormula:
@@ -155,19 +156,16 @@ class WFOMCContext(object):
                 self.repeat_factor *= repeat_factor
 
         if self.contain_cardinality_constraint():
-            self.cardinality_constraint.build()
+            new_weights, decoder = self.cardinality_constraint.build(
+                self.get_weight
+            )
+            self.weights.update(new_weights)
+            self.decode_poly = decoder
 
         for ext_formula in self.ext_formulas:
             self.formula = self.formula & self._skolemize_one_formula(ext_formula)
 
         # self.formula = self.formula.simplify()
-
-        if self.contain_cardinality_constraint():
-            self.weights.update(
-                self.cardinality_constraint.transform_weighting(
-                    self.get_weight,
-                )
-            )
 
         if self.problem.contain_linear_order_axiom():
             self.leq_pred = Pred('LEQ', 2)

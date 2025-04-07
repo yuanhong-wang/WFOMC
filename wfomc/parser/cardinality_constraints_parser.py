@@ -3,6 +3,8 @@
 from collections import defaultdict
 from lark import Transformer
 
+from wfomc.utils import str2number
+
 
 class CCTransfomer(Transformer):
     # NOTE: only support LRA expr
@@ -21,17 +23,17 @@ class CCTransfomer(Transformer):
 
     def cardinality_constraint(self, args):
         expr, comparator, number = args
-        return expr, comparator, float(number)
+        return expr, comparator, str2number(number)
 
     def cc_atom(self, args):
         if len(args) == 1:
-            return 1.0, args[0]
+            return 1, args[0]
         else:
-            return float(args[0][0]), args[1]
+            return str2number(args[0]), args[1]
 
     def cc_atomic_expr(self, args):
         coef, pred = args[0]
-        expr = defaultdict(lambda : 0.0)
+        expr = defaultdict(lambda : 0)
         expr[pred] = coef
         return expr
 

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import random
 from itertools import accumulate
-from typing import Iterable, Generator
+from typing import Callable, Iterable, Generator
 from functools import reduce
 from itertools import accumulate, repeat
 
-from symengine import Pow, var, Expr, Symbol
+from symengine import Eq, Ne, Pow, RealDouble, var, Expr, Symbol
 from symengine import Rational as sym_Rational
 from symengine.lib.symengine_wrapper import lcm
 from decimal import Decimal
@@ -32,7 +32,12 @@ def coeff_monomial(polynomial, monomial) -> Rational:
 
 
 def round_rational(n: Rational) -> Decimal:
-    n = Decimal(int(n.p)) / Decimal(int(n.q))
+    # NOTE(lucien): workaround for new encoding of CC
+    # x**1.0 * x ** -1.0 will give a RealDouble number
+    if isinstance(n, Rational):
+        n = Decimal(int(n.p)) / Decimal(int(n.q))
+    elif isinstance(n, RealDouble):
+        n = Decimal(float(n))
     return n
 
 
@@ -81,6 +86,7 @@ def choices(population: Iterable, weights: Iterable[Rational], k=1) -> list:
         w.p * lcm_val // w.q for w in weights
     ]
     return _choices_int_weights(population, weights, k)
+
 
 # from gmpy2 import mpq
 # from sympy import Poly, symbols

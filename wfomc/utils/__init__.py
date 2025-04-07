@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 
 from .multinomial import MultinomialCoefficients, multinomial, multinomial_less_than
@@ -6,6 +7,18 @@ from .third_typing import RingElement
 
 def format_np_complex(num: np.ndarray) -> str:
     return '{num.real:+0.04f}+{num.imag:+0.04f}j'.format(num=num)
+
+
+def str2number(s: str) -> Optional[float]:
+    print(s)
+    try:
+        return int(s)
+    except ValueError:
+        try:
+            return float(s)
+        except ValueError:
+            return None
+
 
 __all__ = [
     "MultinomialCoefficients",

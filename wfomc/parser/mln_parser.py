@@ -4,7 +4,7 @@ from wfomc.fol.syntax import Const, Pred
 from wfomc.network.constraint import CardinalityConstraint
 from wfomc.parser.cardinality_constraints_parser import CCTransfomer
 from wfomc.parser.mln_grammar import grammar
-from wfomc.utils import Rational
+from wfomc.utils import Rational, str2number
 
 
 from wfomc.parser.fol_parser import FOLTransformer
@@ -38,7 +38,7 @@ class MLNTransformer(FOLTransformer, CCTransfomer):
         return (domain_name, domain_spec)
 
     def weighting(self, args):
-        return float(args[0])
+        return str2number(args[0])
 
     def rules(self, args):
         rules = args
