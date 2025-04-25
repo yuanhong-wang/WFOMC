@@ -87,6 +87,16 @@ class CellGraph(object):
                 constants = [c1, c1]
         substitution = dict(zip(variables, constants))
         gnd_formula = formula.substitute(substitution)
+        # NOTE: workaround for the case where ground binary atoms not appearing in the formula
+        if c2 is not None:
+            binary_preds = list(filter(
+                lambda x: x.arity == 2, gnd_formula.preds()
+            ))
+            for pred in binary_preds:
+                atom = pred(c1, c2)
+                if atom not in gnd_formula.atoms():
+                    gnd_formula = gnd_formula & (atom | ~atom)
+            # NOTE: end workaround
         return gnd_formula
 
     def show(self):
