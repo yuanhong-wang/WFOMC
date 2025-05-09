@@ -366,7 +366,7 @@ class OptimizedCellGraph(CellGraph):
 
         self_loop = set()
         for i in range(len(self.cliques)):
-            for j in range(self.domain_size):
+            for j in range(1, self.domain_size + 1):
                 if self.get_J_term(i, j) != Rational(1, 1):
                     self_loop.add(i)
                     break
