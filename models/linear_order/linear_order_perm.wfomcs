@@ -1,9 +1,7 @@
-\forall X: (~Perm(X,X)) &
-\forall X: (\exists Y: (Perm(X, Y))) &
-\forall Y: (\exists X: (Perm(X, Y))) &
+\forall X: (~Perm(X,X) & Leq(X,X)) &
+\forall X: (\exists_{=1} Y: (Perm(X, Y))) &
+\forall Y: (\exists_{=1} X: (Perm(X, Y))) &
 \forall X: (\forall Y: (Pred(X,Y) -> Perm(X,Y))) &
-\forall X: (\forall Y: (Pred(X,Y) -> LEQ(X,Y)))
+\forall X: (\forall Y: (Pred(X,Y) -> Leq(X,Y)))
 
-domain = 4
-|Perm| = 4
-|Pred| = 3
+domain = 10

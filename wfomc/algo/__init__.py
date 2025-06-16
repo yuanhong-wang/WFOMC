@@ -9,7 +9,8 @@ __all__ = [
     "standard_wfomc",
     "fast_wfomc",
     "incremental_wfomc",
-    "recursive_wfomc"
+    "recursive_wfomc",
+    "dr"
 ]
 
 
@@ -19,6 +20,7 @@ class Algo(Enum):
     FASTv2 = 'fastv2'
     INCREMENTAL = 'incremental'
     RECURSIVE = 'recursive'
+    DR = 'dr'
 
     def __str__(self):
         return self.value

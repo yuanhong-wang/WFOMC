@@ -1,5 +1,8 @@
 \forall X: (~E(X,X)) &
-\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
-\forall X: (\exists_{=3} Y: (E(X,Y)))
+\forall X: (\forall Y: (E(X,Y) -> E(Y,X)))
+# & \forall X: (\forall Y: (R(X,Y) -> R(Y,X)))
+& \forall X: (\exists_{=2} Y: (E(X,Y)))
+# & \forall X: (\exists Y: (R(X,Y)))
+# & \forall X: (\exists_{=2} Y: (R(X,Y)))
 
-V = 8
+V = 7

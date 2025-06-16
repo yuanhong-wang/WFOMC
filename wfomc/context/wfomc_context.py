@@ -31,7 +31,10 @@ class WFOMCContext(object):
 
         self.formula: QFFormula
         # for handling linear order axiom
-        self.leq_pred: Pred = Pred('LEQ', 2)
+        if problem.contain_linear_order_axiom():
+            self.leq_pred: Pred = Pred('LEQ', 2)
+        else:
+            self.leq_pred: Pred = None
         self._build()
         logger.info('Skolemized formula for WFOMC: \n%s', self.formula)
         logger.info('weights for WFOMC: \n%s', self.weights)

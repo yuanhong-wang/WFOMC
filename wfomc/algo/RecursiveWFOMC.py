@@ -337,6 +337,7 @@ def dfs_wfomc(cell_weights, domain_size, cell_factor_tuple_list):
         res += w_l * value # * expand(gcd**(domain_size - 1))
     return res
 
+
 def dfs_wfomc_real(cell_weights, domain_size, node: TreeNode = None):
     res = 0
     for l in range(CELLS_NUM):
@@ -364,7 +365,7 @@ def dfs_wfomc_real(cell_weights, domain_size, node: TreeNode = None):
                 value = expand(value)
                 IG_CACHE.set(domain_size-1, vertex_color_kind, vertex_color_count, can_label, value)
         res += w_l * value # * expand(gcd**(domain_size - 1))
-    return res
+    return expand(res)
 
 def get_cache_size():
     total_size = 0
@@ -438,7 +439,7 @@ def recursive_wfomc(context: WFOMCContext,
         else:
             global ROOT
             ROOT.cell_weights = cell_weights
-            res_ = dfs_wfomc_real(cell_weights, domain_size, ROOT)
+            res_ = dfs_wfomc_real(cell_weights, domain_size, None)
             if PRINT_TREE:
                 print_tree(ROOT)
         res = res + weight * res_
