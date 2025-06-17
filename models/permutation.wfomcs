@@ -3,4 +3,4 @@
 \forall X: (\exists_{=1} Y: (perm(X,Y))) &
 \forall X: (\exists_{=1} Y: (perm(Y,X)))
 
-domain = 10
+domain = 50

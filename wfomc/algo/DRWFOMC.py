@@ -246,56 +246,83 @@ def domain_recursive_wfomc(problem: WFOMCProblem) -> RingElement:
         print('init T:')
         print(T)
 
-        all_T_sources = list()
+        config_updates_cache = dict()
+        def update_config(target_c, other_c, num):
+            if (target_c, other_c) in config_updates_cache:
+                config_updates_cache_num = config_updates_cache[(target_c, other_c)]
+                start_num = num
+                while start_num not in config_updates_cache_num and start_num > 0:
+                    start_num -= 1
+            else:
+                config_updates_cache[(target_c, other_c)] = dict()
+                start_num = 0
+
+            if start_num == 0:
+                F = dict()
+                F_config = np.zeros(shape, dtype=np.uint8)
+                F_config = HashableArrayWrapper(F_config)
+                F[(target_c, F_config)] = Rational(1, 1)
+            else:
+                F = config_updates_cache[(target_c, other_c)][start_num]
+
+            for j in range(start_num + 1, num + 1):
+                F_new = defaultdict(lambda: Rational(0, 1))
+                for (target_c_old, F_config_old), V in F.items():
+                    for (target_c_new, other_c_new), rij in t_updates[(target_c_old, other_c)].items():
+                        F_config_new = np.array(F_config_old.array)
+                        F_config_new[other_c_new] += 1
+                        F_config_new = HashableArrayWrapper(F_config_new)
+                        F_new[(target_c_new, F_config_new)] += V * rij
+                F = F_new
+                config_updates_cache[(target_c, other_c)][j] = F
+            return F
+
+        # all_T_sources = list()
         for h in range(2, domain_size + 1):
             print(f'------------------------ h = {h} ------------------------')
             T_new = defaultdict(lambda: Rational(0, 1))
-            T_sources = defaultdict(lambda: set())
+            # T_sources = defaultdict(lambda: set())
             for (i, target_t), w_weight in w.items():
                 for config, W in T.items():
+                    target_c = (i, ) + target_t
                     F = dict()
                     F_config = np.zeros(shape, dtype=np.uint8)
                     F_config = HashableArrayWrapper(F_config)
-                    F[((i, ) + target_t, F_config)] = w_weight
+                    F[(target_c, F_config)] = w_weight
 
-                    config_tmp = np.array(config.array)
-                    for j in range(h - 1):
+                    for other_c in np.argwhere(config.array > 0):
+                        other_c = tuple(other_c.flatten())
                         F_new = defaultdict(lambda: Rational(0, 1))
-                        # get the first index whose value > 0
-                        c_j = tuple(
-                            idx[0] for idx in np.nonzero(config_tmp)
-                        )
-                        config_tmp[c_j] -= 1
-                        for (target_c_old, F_config_old), V in F.items():
-                            for (target_c_new, c_j_new), rij in t_updates[(target_c_old, c_j)].items():
-                                F_config_new = np.array(F_config_old.array)
-                                F_config_new[c_j_new] += 1
-                                F_config_new = HashableArrayWrapper(F_config_new)
-                                F_new[(target_c_new, F_config_new)] += V * rij
+                        num = config.array[other_c]
+                        for (target_c, F_config), V in F.items():
+                            F_update = update_config(target_c, other_c, num)
+                            for target_c_new, F_config_update in F_update.keys():
+                                F_config_new = HashableArrayWrapper(
+                                    F_config.array + F_config_update.array
+                                )
+                                F_new[(target_c_new, F_config_new)] += V * F_update[(target_c_new, F_config_update)]
                         F = F_new
 
                     for (last_target_c, last_F_config), V in F.items():
                         last_F_config.array[last_target_c] += 1
                         T_new[last_F_config] += (
                             W * V
-                            # * MultinomialCoefficients.coef(
-                            #     tuple(config.array[config.array > 0])
-                            # )
                         )
-                        T_sources[last_F_config].add(config)
-            all_T_sources.append(T_sources)
+                        # T_sources[last_F_config].add(config)
+            # all_T_sources.append(T_sources)
             T = T_new
-        config = np.zeros(shape, dtype=np.uint8)
-        config[-1, -1] = domain_size
-        prober = all_T_sources[-1][HashableArrayWrapper(config)]
-        for h in range(2, len(all_T_sources)):
-            T_sources = all_T_sources[-h]
-            new_prober = set()
-            for config in prober:
-                if config in T_sources:
-                    new_prober.update(T_sources[config])
-            prober = new_prober
-            print(prober)
+            print(len(T))
+        # config = np.zeros(shape, dtype=np.uint8)
+        # config[-1, -1] = domain_size
+        # prober = all_T_sources[-1][HashableArrayWrapper(config)]
+        # for h in range(2, len(all_T_sources)):
+        #     T_sources = all_T_sources[-h]
+        #     new_prober = set()
+        #     for config in prober:
+        #         if config in T_sources:
+        #             new_prober.update(T_sources[config])
+        #     prober = new_prober
+        #     print(prober)
         for config, weight in T.items():
             config = config.array.sum(axis=0)
             if config.flatten()[-1] == domain_size:
