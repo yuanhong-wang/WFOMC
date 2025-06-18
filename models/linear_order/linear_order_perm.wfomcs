@@ -4,4 +4,4 @@
 \forall X: (\forall Y: (Pred(X,Y) -> Perm(X,Y))) &
 \forall X: (\forall Y: (Pred(X,Y) -> Leq(X,Y)))
 
-domain = 10
+domain = 100

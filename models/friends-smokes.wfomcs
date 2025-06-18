@@ -3,5 +3,5 @@
 \forall X: (\forall Y: (aux(X,Y) <-> (fr(X,Y) & sm(X) -> sm(Y)))) &
 \forall X: (\exists Y: (fr(X,Y)))
 
-person = 10
+person = 30
 2.7 1 aux

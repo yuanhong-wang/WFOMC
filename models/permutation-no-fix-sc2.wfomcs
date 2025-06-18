@@ -2,4 +2,4 @@
 \forall X: (\exists_{=1} Y: (perm(X,Y))) &
 \forall Y: (\exists_{=1} X: (perm(X,Y)))
 
-domain = 20
+domain = 1000

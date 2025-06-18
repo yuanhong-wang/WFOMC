@@ -2,7 +2,7 @@ import numpy as np
 import hashlib
 
 from logzero import logger
-from collections import defaultdict
+from collections import Counter, defaultdict
 from itertools import product
 from wfomc.cell_graph.cell_graph import build_cell_graphs
 from wfomc.fol.sc2 import SC2
@@ -98,14 +98,14 @@ def domain_recursive_wfomc(problem: WFOMCProblem) -> RingElement:
          (~pred(a, b), pred(b, a)),
          (pred(a, b), ~pred(b, a)),
          (pred(a, b), pred(b, a)))
-        for pred in ext_preds)
+        for pred in ext_preds[::-1])
     cnt_atoms = list(
         ((~pred(a, b), ~pred(b, a)),
          (~pred(a, b), pred(b, a)),
          (pred(a, b), ~pred(b, a)),
          (pred(a, b), pred(b, a)))
-        for pred in cnt_preds)
-    for atoms in product(*ext_atoms, *cnt_atoms):
+        for pred in cnt_preds[::-1])
+    for atoms in product(*cnt_atoms, *ext_atoms):
         binary_evidence.append(frozenset(sum(atoms, start = ())))
 
     res = Rational(0, 1)
@@ -115,17 +115,24 @@ def domain_recursive_wfomc(problem: WFOMCProblem) -> RingElement:
         res_ = Rational(0, 1)
         cells = cell_graph.get_cells()
         n_cells = len(cells)
+        w2t = dict()
         w = defaultdict(lambda: Rational(0, 1))
         r = defaultdict(lambda: defaultdict(lambda: Rational(0, 1)))
         for i in range(n_cells):
             cell_weight = cell_graph.get_cell_weight(cells[i])
             t = list()
-            for pred in ext_preds + cnt_preds:
+            for pred in ext_preds:
                 if cells[i].is_positive(pred):
-                    t.append(1)
-                else:
                     t.append(0)
-            w[(i, tuple(t))] = w[(i, tuple(t))] + cell_weight
+                else:
+                    t.append(1)
+            for pred, param in zip(cnt_preds, cnt_params):
+                if cells[i].is_positive(pred):
+                    t.append(param - 1)
+                else:
+                    t.append(param)
+            w2t[i] = tuple(t)
+            w[i] = w[i] + cell_weight
             for j in range(n_cells):
                 cell1 = cells[i]
                 cell2 = cells[j]
@@ -148,21 +155,18 @@ def domain_recursive_wfomc(problem: WFOMCProblem) -> RingElement:
                             t.append(0)
                     r[(i, j)][(tuple(t), tuple(reverse_t))] = two_table_weight
 
-
         t_updates = defaultdict(lambda: defaultdict(lambda: Rational(0, 1)))
         all_ts = list(
             product(*([tuple(range(2)) for _ in ext_preds] + [tuple(range(k + 1)) for k in cnt_params]))
         )
-        for (i, w_i_t), _ in w.items():
-            for (j, w_j_t), _ in w.items():
+        for i in range(n_cells):
+            for j in range(n_cells):
                 for t1 in all_ts:
                     for t2 in all_ts:
-                        if any(t1[idx] < w_i_t[idx] for idx in range(len(t1))) or \
-                                any(t2[idx] < w_j_t[idx] for idx in range(len(t2))):
-                            continue
                         for (dt, reverse_dt), rijt in r[(i, j)].items():
                             t1_new = list(i - j for i, j in zip(t1, dt))
                             t2_new = list(i - j for i, j in zip(t2, reverse_dt))
+                            # print(t1, t2, t1_new, t2_new, rijt)
                             if any(
                                 t1_new[idx + len(ext_preds)] < 0 or \
                                 t2_new[idx + len(ext_preds)] < 0
@@ -179,18 +183,8 @@ def domain_recursive_wfomc(problem: WFOMCProblem) -> RingElement:
                             t_updates[(c1, c2)][(c1_new, c2_new)] += rijt
         # print(all_ts)
         # print(w)
-        # print(t_updates)
 
-        T = dict()
         shape = (n_cells, ) + tuple(2 for _ in ext_preds) + tuple(k + 1 for k in cnt_params)
-        for (i, t), weight in w.items():
-            c = (i, ) + t
-            config = np.zeros(shape, dtype=np.uint8)
-            config[c] = 1
-            config = HashableArrayWrapper(config)
-            T[config] = weight
-        print('init T:')
-        print(T)
 
         config_updates_cache = dict()
         def update_config(target_c, other_c, num):
@@ -233,38 +227,40 @@ def domain_recursive_wfomc(problem: WFOMCProblem) -> RingElement:
             new_config = HashableArrayWrapper(
                 np.array(config.array, copy=True, dtype=np.uint8)
             )
-            indices = tuple(np.argwhere(new_config.array > 0)[-1])
-            new_config.array[indices] -= 1
-            for (i, target_t), w_weight in w.items():
-                if i == indices[0]:
-                    break
-            init_t = list(i - j for i, j in zip(indices[1:], target_t))
-            for i in range(len(ext_preds)):
-                init_t[i] = max(init_t[i], 0)
-            for i in range(len(cnt_preds)):
-                if init_t[i + len(ext_preds)] < 0:
-                    return Rational(0, 1)
-            init_t = tuple(init_t)
-            target_c = (indices[0], ) + init_t
+            target_c = tuple(np.argwhere(new_config.array > 0)[-1])
+            new_config.array[target_c] -= 1
+            # init_t = w2t[indices[0]]
+            # init_t = list(i - j for i, j in zip(indices[1:], target_t))
+            # for i in range(len(ext_preds)):
+            #     init_t[i] = max(init_t[i], 0)
+            # for i in range(len(cnt_preds)):
+            #     if init_t[i + len(ext_preds)] < 0:
+            #         return Rational(0, 1)
+            # init_t = tuple(init_t)
+            # target_c = (indices[0], ) + init_t
             F = dict()
             F_config = np.zeros(shape, dtype=np.uint8)
             F_config = HashableArrayWrapper(F_config)
-            F[(target_c, F_config)] = w_weight
+            F[(target_c, F_config)] = Rational(1, 1)
             for other_c in np.argwhere(new_config.array > 0):
                 other_c = tuple(other_c.flatten())
                 F_new = defaultdict(lambda: Rational(0, 1))
                 num = new_config.array[other_c]
                 for (target_c, F_config), V in F.items():
+                    # print(other_c, target_c, num)
                     F_update = update_config(target_c, other_c, num)
+                    # print(F_update)
                     for target_c_new, F_config_update in F_update.keys():
                         F_config_new = HashableArrayWrapper(
                             F_config.array + F_config_update.array
                         )
                         F_new[(target_c_new, F_config_new)] += V * F_update[(target_c_new, F_config_update)]
                 F = F_new
+            # print(F)
             for (last_target_c, last_F_config), V in F.items():
                 if all(i == 0 for i in last_target_c[1:]):
                     T[last_F_config] += V
+            # print(T)
             ret = Rational(0, 1)
             for recursive_config, weight in T.items():
                 W = domain_recursion(recursive_config)
@@ -274,9 +270,13 @@ def domain_recursive_wfomc(problem: WFOMCProblem) -> RingElement:
 
         for config in multinomial(n_cells, domain_size):
             init_config = np.zeros(shape, dtype=np.uint8)
+            W = Rational(1, 1)
             for i, n in enumerate(config):
-                init_config[(i, ) + tuple(-1 for _ in range(len(ext_preds) + len(cnt_preds)))] = n
+                init_config[(i, ) + w2t[i]] = n
+                W = W * (w[i] ** n)
             init_config = HashableArrayWrapper(init_config)
-            res += (MultinomialCoefficients.coef(config) * domain_recursion(init_config) * graph_weight)
+            dr_res = domain_recursion(init_config)
+            res += (MultinomialCoefficients.coef(config) * W *
+                    dr_res * graph_weight)
         # print(Cache)
     return res
