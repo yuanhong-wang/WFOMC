@@ -3,7 +3,7 @@ import functools
 import pandas as pd
 from typing import Callable
 from functools import reduce
-from rcviz import callgraph, viz
+# from rcviz import callgraph, viz
 
 from wfomc.cell_graph import build_cell_graphs
 from wfomc.context.wfomc_context import WFOMCContext

@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import functools
 from dataclasses import dataclass, field
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Any
 from collections import OrderedDict
 from PrettyPrint import PrettyPrintTree
 
 from . import boolean_algebra as backend
-
 
 __all__ = [
     'Pred',
@@ -62,7 +61,6 @@ PREDS_FOR_EXISTENTIAL = [
     TSEITIN_PRED_NAME, SKOLEM_PRED_NAME, EVIDOM_PRED_NAME
 ]
 
-
 RESERVED_PRED_NAMES: tuple[str] = (
     'true',
     'false',
@@ -75,6 +73,7 @@ RESERVED_PRED_NAMES: tuple[str] = (
 
 RESERVED_VAR_NAMES: tuple[str] = (
 )
+
 
 @dataclass(frozen=True)
 class Pred:
@@ -283,7 +282,7 @@ class AtomicFormula(QFFormula):
 
     def __str__(self):
         s = '{}({})'.format(self.pred,
-                               ','.join([str(arg) for arg in self.args]))
+                            ','.join([str(arg) for arg in self.args]))
         return s if self.positive else '~' + s
 
     def __repr__(self):
@@ -392,21 +391,26 @@ class Existential(Quantifier):
 
 @dataclass(frozen=True)
 class Counting(Quantifier):
-    comparator: str
-    count_param: int
+    comparator: str  # '='  or  'mod'
+    count_param: Any  # int
 
     def __post_init__(self):
-        assert self.comparator in ['='], 'Only equality is supported'
+        assert self.comparator in ['=', 'mod'], \
+            f"Unsupported comparator '{self.comparator}'"
+        if self.comparator == 'mod':
+            r, k = self.count_param
+            assert 0 <= r < k, "Require 0 ≤ r < k"
+
+        # 固定写法 '\exists'
         object.__setattr__(self, 'quantifier', '\\exists')
 
-    def complement(self) -> Counting:
-        raise FOLSyntaxError('Complement of counting quantifier is not supported')
-
+    # 用于 pretty-print / 调试
     def __str__(self):
-        return '{}_{{{}{}}} {}'.format(
-            self.quantifier, self.comparator,
-            self.count_param, self.quantified_var
-        )
+        if self.comparator == 'mod':
+            r, k = self.count_param
+            return f'\\exists_{{{r}mod{k}}} {self.quantified_var}'
+        else:  # '=' 及其他比较符
+            return f'\\exists_{{{self.comparator}{self.count_param}}} {self.quantified_var}'
 
 
 class QuantifiedFormula(Formula):
@@ -414,6 +418,7 @@ class QuantifiedFormula(Formula):
     Quantified formula, e.g. \\forall x P(x),
     \\exists x P(x) and \\exists_{=2} x P(x)
     """
+
     def __init__(self, quantifier_scope: Quantifier, quantified_formula: Formula):
         self.quantifier_scope = quantifier_scope
         self.quantified_formula = quantified_formula
@@ -437,7 +442,7 @@ class QuantifiedFormula(Formula):
                 inverse_substitution[self.quantified_var],
                 self.quantified_var, self
             )
-        )
+            )
         quantifier_scope = self.quantifier_scope.rename_quantified_var(
             substitution.get(self.quantified_var, self.quantified_var)
         )

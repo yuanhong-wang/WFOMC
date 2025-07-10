@@ -1,0 +1,7 @@
+\forall X: (~E(X,X)) &
+\forall X: (~F(X,X)) &
+\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+\forall X: (\exists_{=2} Y: (E(X,Y)))  &     # 每个 X 与恰好 2 个 Y 满足 E
+\forall X: (\exists_{1mod3} Y: (F(X,Y)))  # 每个 X 与 Y 满足 F 的个数 ≡ 1 (mod 3)
+
+V = 5

@@ -7,7 +7,6 @@ from wfomc.fol.utils import exactly_one
 from wfomc.parser.fol_grammar import function_free_logic_grammar
 from wfomc.fol.syntax import *
 
-
 QuantifiersEnum = Enum('QuantifiersEnum', ['UNIVERSAL', 'EXISTENTIAL', 'COUNTING'])
 
 Quantifiers = {
@@ -15,6 +14,7 @@ Quantifiers = {
     QuantifiersEnum.EXISTENTIAL: Existential,
     QuantifiersEnum.COUNTING: Counting
 }
+
 
 class FOLTransformer(Transformer):
 
@@ -66,6 +66,40 @@ class FOLTransformer(Transformer):
     def existential_quantifier(self, args):
         return (QuantifiersEnum.EXISTENTIAL, [])
 
+    # ---------- =  ----------
+    def counting_quantifier(self, args):
+        """处理 \exists_{=k}, \exists_{<=k}, …"""
+        comparator = str(args[0])  # '=', '<=', …
+        k = int(args[1])
+        return (QuantifiersEnum.COUNTING, (comparator, k))
+
+    # ---------- mod  ----------
+    def mod_quantifier(self, args):
+        """
+        process \exists_{r mod k}
+        args = [r, k]
+        return ('mod', (r, k))
+        """
+        if len(args) != 2:
+            raise ValueError(
+                "Use \\exists_{r mod k}; the old \\exists_{mod k} form is unsupported."
+            )
+        r, k = map(int, args)
+        return (QuantifiersEnum.COUNTING, ('mod', (r, k)))
+
+    # ---------- 3 Wrap the quantifier tuple into an object ----------
+    def quantifier_variable(self, args):
+        qinfo, var = args
+        qtype = qinfo[0]
+
+        if qtype == QuantifiersEnum.UNIVERSAL:
+            return Universal(var)
+        elif qtype == QuantifiersEnum.EXISTENTIAL:
+            return Existential(var)
+        else:  # COUNTING
+            comparator, param = qinfo[1]  # ('=', k)  or ('mod', (r,k))
+            return Counting(var, comparator, param)
+
     def equality(self, args):
         return '='
 
@@ -88,9 +122,6 @@ class FOLTransformer(Transformer):
         param = int(args[0])
         assert param >= 0, "Counting parameter must be non-negative"
         return param
-
-    def counting_quantifier(self, args):
-        return QuantifiersEnum.COUNTING, args
 
     def quantifier_variable(self, args):
         quantifier = args[0][0]

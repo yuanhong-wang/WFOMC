@@ -24,10 +24,10 @@ function_free_logic_grammar = r"""
     left_parenthesis: "("
     right_parenthesis: ")"
     quantifier_variable: quantifier variable
-    ?quantifier: universal_quantifier | existential_quantifier | counting_quantifier
+    ?quantifier: universal_quantifier | existential_quantifier | counting_quantifier 
     universal_quantifier: "\\forall"
     existential_quantifier: "\\exists"
-    counting_quantifier: "\\exists_{" comparator count_parameter "}"
+    counting_quantifier : "\\exists_{" comparator count_parameter "}" | "\\exists_{" INT "mod" count_parameter "}"    -> mod_quantifier   //  ∃_{r mod k}
     constant: LCASE_CNAME
     variable: UCASE_LETTER
     predicate: CNAME

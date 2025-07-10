@@ -9,6 +9,7 @@ from logzero import logger
 from contexttimer import Timer
 
 from wfomc.algo.DRWFOMC import domain_recursive_wfomc
+from wfomc.context.dr_context import DRWFOMCContext
 from wfomc.problems import WFOMCProblem
 from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recursive_wfomc
 
@@ -32,7 +33,11 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
 
     logger.info(f'Invoke WFOMC with {algo} algorithm')
 
-    context = WFOMCContext(problem)
+    if algo == Algo.DR:
+        dr_context = DRWFOMCContext(problem)
+    else:
+        context = WFOMCContext(problem)
+
     with Timer() as t:
         if algo == Algo.STANDARD:
             res = standard_wfomc(context)
@@ -45,9 +50,11 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
         elif algo == Algo.RECURSIVE:
             res = recursive_wfomc(context)
         elif algo == Algo.DR:
-            res = domain_recursive_wfomc(problem)
+            res = domain_recursive_wfomc(dr_context)
             print(res)
-    res = context.decode_result(res)
+
+    if algo != Algo.DR:
+        res = context.decode_result(res)
     logger.info('WFOMC time: %s', t.elapsed)
     return res
 
