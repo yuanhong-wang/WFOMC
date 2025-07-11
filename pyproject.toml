@@ -1,0 +1,36 @@
+[project]
+name = "wfomc"
+version = "0.1.0"
+description = "A exact model counter for two-variables first-order logic"
+readme = "README.md"
+authors = [
+    { name = "lucienwang1009", email = "lucienwang1009@gmail.com" }
+]
+requires-python = ">=3.9"
+dependencies = [
+    "contexttimer>=0.3.3",
+    "dataclasses>=0.8",
+    "lark>=1.2.2",
+    "logzero>=1.7.0",
+    "networkx>=3.2.1",
+    "numpy>=2.0.2",
+    "pandas>=2.3.1",
+    "prettyprinttree>=2.0.1",
+    "pynauty==2.8.6",
+    "python-sat>=1.8.dev17",
+    "symengine>=0.14.1",
+    "sympy>=1.14.0",
+    "tqdm>=4.67.1",
+]
+
+[project.scripts]
+wfomc = "wfomc:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+]

@@ -94,15 +94,21 @@ More examples are in [models](models/)
 
 
 ### Installation
-Install the package:
+
+Install UV via:
+[github](https://github.com/astral-sh/uv) or
 ```
-$ pip install -e .
+pip install uv
 ```
 
+Sync the dependencies:
+```
+uv sync
+```
 
 ### How to use
 ```
-$ python sampling_fo2/wfomc.py -i [input] -a [algo]
+$ uv run wfomc -i [input] -a [algo]
 ```
 
 ## References
