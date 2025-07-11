@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from wfomc.fol.sc2 import SC2, to_sc2
-from wfomc.fol.syntax import Const, Pred, top, AUXILIARY_PRED_NAME, \
+from wfomc.fol.syntax import AtomicFormula, Const, Pred, top, AUXILIARY_PRED_NAME, \
     Formula, QuantifiedFormula, Universal, Equivalence
 from wfomc.fol.utils import new_predicate
 from wfomc.network.constraint import CardinalityConstraint
@@ -18,18 +18,39 @@ class WFOMCProblem(object):
     def __init__(self, sentence: SC2,
                  domain: set[Const],
                  weights: dict[Pred, tuple[Rational, Rational]],
-                 cardinality_constraint: CardinalityConstraint = None):
+                 cardinality_constraint: CardinalityConstraint = None,
+                 unary_evidence: set[AtomicFormula] = None,
+                 circle_len: int = None):
         self.domain: set[Const] = domain
         self.sentence: SC2 = sentence
         self.weights: dict[Pred, tuple[Rational, Rational]] = weights
         self.cardinality_constraint: CardinalityConstraint = cardinality_constraint
+        self.unary_evidence = unary_evidence
+        self.circle_len = circle_len if circle_len is not None else len(domain)
+        if self.unary_evidence is not None:
+            # check if the evidence is unary and consistent with the domain
+            for atom in self.unary_evidence:
+                if len(atom.args) != 1:
+                    raise ValueError('Evidence must be unary.')
+                if atom.args[0] not in self.domain:
+                    raise ValueError(f'Evidence must be consistent with the domain: {atom.args[0]} not in {self.domain}.')
+            for atom in self.unary_evidence:
+                if ~atom in self.unary_evidence:
+                    raise ValueError(f'Evidence must be consistent (no negated evidence): {atom} and {~atom} both present.')
 
     def contain_linear_order_axiom(self) -> bool:
-        return Pred('PRED', 2) in self.sentence.preds() or \
-            Pred('LEQ', 2) in self.sentence.preds()
+        return Pred('LEQ', 2) in self.sentence.preds() or \
+            self.contain_predecessor_axiom()
 
     def contain_predecessor_axiom(self) -> bool:
-        return Pred('PRED', 2) in self.sentence.preds()
+        return Pred('PRED', 2) in self.sentence.preds() or \
+            self.contain_circular_predecessor_axiom()
+
+    def contain_circular_predecessor_axiom(self) -> bool:
+        return Pred('CIRCULAR_PRED', 2) in self.sentence.preds()
+
+    def contain_unary_evidence(self) -> bool:
+        return self.unary_evidence is not None and len(self.unary_evidence) > 0
 
     def __str__(self) -> str:
         s = ''
@@ -42,6 +63,9 @@ class WFOMCProblem(object):
         if self.cardinality_constraint is not None:
             s += 'Cardinality Constraint: \n'
             s += '\t' + str(self.cardinality_constraint) + '\n'
+        if self.unary_evidence is not None:
+            s += 'Unary Evidence: \n'
+            s += '\t' + str(self.unary_evidence) + '\n'
         return s
 
     def __repr__(self) -> str:
@@ -55,12 +79,14 @@ class MLNProblem(object):
 
     def __init__(self, rules: tuple[list[tuple[Rational, Rational]], list[Formula]],
                  domain: set[Const],
-                 cardinality_constraint: CardinalityConstraint):
+                 cardinality_constraint: CardinalityConstraint = None,
+                 unary_evidence: set[AtomicFormula] = None):
         self.rules = rules
         # self.formulas: rules[1]
         # self.formula_weights: = dict(zip(rules[1], rules[0]))
         self.domain: set[Const] = domain
         self.cardinality_constraint: CardinalityConstraint = cardinality_constraint
+        self.unary_evidence: set[AtomicFormula] = unary_evidence
 
 
 def MLN_to_WFOMC(mln: MLNProblem):
@@ -81,4 +107,6 @@ def MLN_to_WFOMC(mln: MLNProblem):
         sentence = to_sc2(sentence)
     except:
         raise ValueError('Sentence must be a valid SC2 formula.')
-    return WFOMCProblem(sentence, mln.domain, weightings, mln.cardinality_constraint)
+    return WFOMCProblem(sentence, mln.domain, weightings,
+                        mln.cardinality_constraint,
+                        mln.unary_evidence)

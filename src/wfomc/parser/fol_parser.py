@@ -117,6 +117,15 @@ class FOLTransformer(Transformer):
     def predicates(self, args):
         return list(args)
 
+    def unary_evidence(self, args):
+        lits = set(args)
+        for lit in lits:
+            if len(lit.vars()) > 0:
+                raise ValueError(f"Unary evidence must be ground: {lit}")
+            if lit.pred.arity != 1:
+                raise ValueError(f"Unary evidence only supports unary predicates for now: {lit}")
+        return lits
+
 
 def parse(text: str) -> Formula:
     fol_parser = Lark(function_free_logic_grammar, start='ffl')

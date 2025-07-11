@@ -1,0 +1,5 @@
+ExactlyOne[A, B] &
+\forall X: (\forall Y: (A(X) & A(Y) & PRED(X,Y) <-> AA(X,Y)))
+
+domain = 10
+|AA| = 1

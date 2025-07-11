@@ -30,6 +30,7 @@ from .utils.polynomial import Rational, var, expand, \
 from .utils.third_typing import RingElement
 from .utils.multinomial import MultinomialCoefficients, \
     multinomial, multinomial_less_than
+from .network.constraint import UnaryEvidenceEncoding
 
 
 __all__ = [
@@ -87,6 +88,7 @@ __all__ = [
     'U', 'V', 'W',
     'top', 'bot',
     'CardinalityConstraint',
+    'UnaryEvidenceEncoding',
 ]
 
 
