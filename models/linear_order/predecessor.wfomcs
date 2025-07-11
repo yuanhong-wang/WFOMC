@@ -1,0 +1,13 @@
+ExactlyOne[H, T] &
+\forall X: (LEQ(X,X)) &
+\forall X: (\forall Y: (H(X) & H(Y) & PRED(X,Y) <-> HH(X,Y))) &
+\forall X: (\forall Y: (H(X) & T(Y) & PRED(X,Y) <-> HT(X,Y))) &
+\forall X: (\forall Y: (T(X) & H(Y) & PRED(X,Y) <-> TH(X,Y))) &
+\forall X: (\forall Y: (T(X) & T(Y) & PRED(X,Y) <-> TT(X,Y)))
+
+domain = 15
+
+|HH| = 2
+|HT| = 3
+|TH| = 4
+|TT| = 5
