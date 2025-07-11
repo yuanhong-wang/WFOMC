@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-wfomc = "wfomc:main"
+wfomc = "wfomc.solver:main"
 
 [build-system]
 requires = ["hatchling"]
