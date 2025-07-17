@@ -1,0 +1,5 @@
+\forall X: ((T(X) | F(X)) & ~(T(X) & F(X)))
+
+domain = 4
+
+T(domain0)

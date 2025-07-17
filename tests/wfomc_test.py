@@ -1,10 +1,11 @@
+from itertools import product
 import pytest
 import logging
 import logzero
 
 from pathlib import Path
 
-from wfomc import wfomc, parse_input, Algo
+from wfomc import wfomc, parse_input, Algo, UnaryEvidenceEncoding
 
 
 current_path = Path(__file__).parent.absolute()
@@ -16,10 +17,24 @@ models_dir2args = {
         (Algo.INCREMENTAL, ),
         (Algo.RECURSIVE, ),
     ),
+    current_path.parent / 'models' / 'unary_evidence': (
+        (Algo.STANDARD, UnaryEvidenceEncoding.CCS),
+        (Algo.FAST, UnaryEvidenceEncoding.CCS),
+        (Algo.FASTv2, UnaryEvidenceEncoding.CCS),
+        (Algo.INCREMENTAL, UnaryEvidenceEncoding.CCS),
+        (Algo.RECURSIVE, UnaryEvidenceEncoding.CCS),
+        (Algo.INCREMENTAL, UnaryEvidenceEncoding.PC),
+        (Algo.FASTv2, UnaryEvidenceEncoding.PC),
+    ),
     current_path.parent / 'models' / 'linear_order': (
         (Algo.INCREMENTAL, ),
         (Algo.RECURSIVE, ),
     ),
+    current_path.parent / 'models' / 'linear_order_unary_evidence': (
+        (Algo.INCREMENTAL, UnaryEvidenceEncoding.CCS),
+        (Algo.RECURSIVE, UnaryEvidenceEncoding.CCS),
+        (Algo.INCREMENTAL, UnaryEvidenceEncoding.PC),
+    )
 }
 model_files = list((current_path.parent / 'models').glob('**/*.wfomcs')) + \
     list((current_path.parent / 'models').glob('**/*.mln'))

@@ -21,7 +21,7 @@ from .parser import parse_input
 from .parser.fol_parser import parse as fol_parse
 from .fol.sc2 import SC2, to_sc2
 from .fol.syntax import *
-from .network.constraint import CardinalityConstraint
+from .network.constraint import CardinalityConstraint, UnaryEvidenceEncoding
 from .fol.utils import exactly_one, exactly_one_qf, exclusive_qf, exclusive
 from .solver import wfomc
 from .count_distribution import count_distribution
@@ -39,6 +39,8 @@ __all__ = [
     'MLN_to_WFOMC',
     'parse_input',
     'wfomc',
+    'CardinalityConstraint',
+    'UnaryEvidenceEncoding',
     'count_distribution',
     'SC2',
     'to_sc2',

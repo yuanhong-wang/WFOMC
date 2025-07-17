@@ -90,9 +90,8 @@ class MultinomialCoefficients(object):
             )
         if sum(lst) > MultinomialCoefficients.n:
             raise RuntimeError(
-                'The sum %d of input is larger than precomputed maximal sum %d, '
-                'please re-initialized MultinomialCoefficients using bigger n',
-                sum(lst), MultinomialCoefficients.n
+                f'The sum {sum(lst)} of input is larger than precomputed maximal sum {MultinomialCoefficients.n}, '
+                'please re-initialized MultinomialCoefficients using bigger n'
             )
         ret = 1
         tmplist = lst
