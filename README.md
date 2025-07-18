@@ -6,14 +6,14 @@ This tool is for counting the models (or combinatorical structures) from the two
 ## Input format
 
 The input file with the suffix `.wfomcs` contains the following information **in order**:
-1. First-order sentence with at most two logic variables, see [fol_grammar.py](sampling_fo2/parser/fol_grammar.py) for details, e.g.,
+1. First-order sentence with at most two logic variables (must in capital letters, e.g., `X`, `Y`, `Z`, etc.), see [fol_grammar.py](sampling_fo2/parser/fol_grammar.py) for details, e.g.,
   * `\forall X: (\forall Y: (R(X, Y) <-> Z(X, Y)))`
   * `\forall X: (\exists Y: (R(X, Y)))`
   * `\exists X: (F(X) -> \forall Y: (R(X, Y)))`
   * ..., even more complex sentence...
 2. Domain: 
   * `domain=3` or
-  * `domain={p1, p2, p3}`
+  * `domain={p1, p2, p3}`, where `p1`, `p2`, `p3` are the constants in the domain (must start with a lowercase letter).
 3. Weighting (optional): `positve_weight negative_weight predicate`
 4. Cardinality constraint (optional): 
   * `|P| = k`
@@ -21,6 +21,8 @@ The input file with the suffix `.wfomcs` contains the following information **in
   * `|P| >= k`
   * `|P| < k`
   * `|P| <= k`
+5. Unary evidence (optional): 
+  * `P(p1), ~P(p3)`
 
 ### Use linear order constraint
 
@@ -83,12 +85,24 @@ person = 10
 ~friends(X,X).
 friends(X,Y) -> friends(Y,X).
 2.7 friends(X,Y) & smokes(X) -> smokes(Y)
-\forall X: (\existes Y: (fr(X,Y))).
+\forall X: (\exists Y: (fr(X,Y))).
 # or 
 \exists Y: (fr(X,Y)).
 
 person = 10
 ```
+
+> Add unary evidence:
+```
+~friends(X,X).
+friends(X,Y) -> friends(Y,X).
+2.7 friends(X,Y) & smokes(X) -> smokes(Y)
+\forall X: (\exists Y: (fr(X,Y))).
+
+person = {alice, bob, charlie, david, eve}
+
+smokes(alice), ~smokes(bob)
+``` 
 
 More examples are in [models](models/)
 
@@ -108,69 +122,20 @@ uv sync
 
 ### How to use
 ```
-$ uv run wfomc -i [input] -a [algo]
+$ uv run wfomc -i [input] -a [algo] -e [unary_evidence_encoding]
 ```
+where
+- `input` is the input file with the suffix `.wfomcs` or `.mln`
+- `algo` is the algorithm to use, including:
+  - `standard`: the standard WFOMC algorithm in Beame et al. (2015)
+  - `fast`: the fast WFOMC algorithm in Timothy van Bremen and Ondrej Kuzelka (2021)
+  - `fastv2` (default): the optimized fast WFOMC algorithm
+  - `incremental`: the incremental WFOMC algorithm for linear order axiom in Toth and Kuzelka (2022)
+  - `recursive`: the recursive WFOMC algorithm for linear order axiom in Meng et al. (2024)
+- `unary_evidence_encoding` is the encoding for unary evidence, including:
+  - `ccs` (default): using cardinality constraints to encode unary evidence, see Wang et al. (2024)
+  - `pc`: **only work for `fast` and `fastv2`**
 
 ## References
 
-
-```
-@inproceedings{DBLP:conf/uai/BremenK21,
-  author       = {Timothy van Bremen and
-                  Ondrej Kuzelka},
-  editor       = {Cassio P. de Campos and
-                  Marloes H. Maathuis and
-                  Erik Quaeghebeur},
-  title        = {Faster lifting for two-variable logic using cell graphs},
-  booktitle    = {Proceedings of the Thirty-Seventh Conference on Uncertainty in Artificial
-                  Intelligence, {UAI} 2021, Virtual Event, 27-30 July 2021},
-  series       = {Proceedings of Machine Learning Research},
-  volume       = {161},
-  pages        = {1393--1402},
-  publisher    = {{AUAI} Press},
-  year         = {2021},
-  url          = {https://proceedings.mlr.press/v161/bremen21a.html},
-  timestamp    = {Fri, 17 Dec 2021 17:06:27 +0100},
-  biburl       = {https://dblp.org/rec/conf/uai/BremenK21.bib},
-  bibsource    = {dblp computer science bibliography, https://dblp.org}
-}
-```
-```
-@article{kuzelka_weighted_2021,
-  title = {Weighted First-Order Model Counting in the Two-Variable Fragment with Counting Quantifiers},
-  author = {Kuzelka, Ondrej},
-  year = {2021},
-  month = mar,
-  journal = {Journal of Artificial Intelligence Research},
-  volume = {70},
-  eprint = {2007.05619},
-  pages = {1281--1307},
-  issn = {1076-9757},
-  doi = {10.1613/jair.1.12320}
-}
-```
-```
-@article{toth_lifted_2022-1,
-  title = {Lifted Inference with Linear Order Axiom},
-  author = {T{\'o}th, Jan and Ku{\v z}elka, Ond{\v r}ej},
-  year = {2022},
-  journal = {Proceedings of the AAAI Conference on Artificial Intelligence},
-  volume = {37},
-  number = {10},
-  pages = {12295--12304},
-  doi = {10.1609/aaai.v37i10.26449}
-}
-```
-```
-@incollection{endriss_more_2024,
-  title = {A More Practical Algorithm for Weighted First-Order Model Counting with Linear Order Axiom},
-  booktitle = {Frontiers in {{Artificial Intelligence}} and {{Applications}}},
-  author = {Meng, Qiaolan and T{\'o}th, Jan and Wang, Yuanhong and Wang, Yuyi and Ku{\v z}elka, Ond{\v r}ej},
-  editor = {Endriss, Ulle and Melo, Francisco S. and Bach, Kerstin and {Bugar{\'i}n-Diz}, Alberto and {Alonso-Moral}, Jos{\'e} M. and Barro, Sen{\'e}n and Heintz, Fredrik},
-  year = {2024},
-  month = oct,
-  publisher = {IOS Press},
-  isbn = {978-1-64368-548-9},
-  keywords = {linter/error}
-}
-```
+Please refer to [reference.bib](reference.bib) for the references of the algorithms.

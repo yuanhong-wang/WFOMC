@@ -24,7 +24,7 @@ class MLNTransformer(FOLTransformer, CCTransfomer):
         return args[0].value
 
     def set_domain(self, args):
-        return set(args[0])
+        return set(Const(i) for i in args[0])
 
     def domain_name(self, args):
         return args[0].value
@@ -32,7 +32,9 @@ class MLNTransformer(FOLTransformer, CCTransfomer):
     def domain(self, args):
         domain_name, domain_spec = args
         if isinstance(domain_spec, int):
-            domain_spec = set(f'{domain_name}{i}' for i in range(domain_spec))
+            domain_spec = set(
+                Const(f'{domain_name}{i}') for i in range(domain_spec)
+            )
         return (domain_name, domain_spec)
 
     def weighting(self, args):
@@ -61,6 +63,7 @@ class MLNTransformer(FOLTransformer, CCTransfomer):
         rules = args[0]
         domain = args[1][1] # Only one definition domain is supported
         cardinality_constraints = args[2]
+        unary_evidence = args[3]
 
         ccs: list[tuple[dict[Pred, float], str, float]] = list()
         if len(cardinality_constraints) > 0:
@@ -77,16 +80,22 @@ class MLNTransformer(FOLTransformer, CCTransfomer):
         else:
             cardinality_constraint = None
 
-        return rules, domain, cardinality_constraint
+        return rules, domain, cardinality_constraint, unary_evidence
 
 def parse(text: str) -> MLNProblem:
     mln_parser = Lark(grammar,
                         start='mln')
     tree = mln_parser.parse(text)
-    (rules, domain, cardinality_constraint) = MLNTransformer().transform(tree)
+    (
+        rules,
+        domain,
+        cardinality_constraint,
+        unary_evidence
+    ) = MLNTransformer().transform(tree)
 
     return MLNProblem(
         rules,
         domain,
-        cardinality_constraint
+        cardinality_constraint,
+        unary_evidence
     )

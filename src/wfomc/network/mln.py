@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Set, FrozenSet
 
-from wfomc.fol.syntax import QuantifiedFormula, Const, Pred, Var
+from wfomc.fol.syntax import AtomicFormula, QuantifiedFormula, Const, Pred, Var
 from wfomc.fol.utils import pad_vars
 
 
@@ -10,7 +10,8 @@ class MLN(object):
     def __init__(self, formulas: List[QuantifiedFormula],
                  weights: List[float] = None,
                  domain: Set[Const] = None,
-                 predicate_definition: Set[Pred] = None):
+                 predicate_definition: Set[Pred] = None,
+                 unary_evidence: Set[AtomicFormula] = None):
         self.formulas: List[QuantifiedFormula] = formulas
         if weights is not None:
             if len(weights) != len(formulas):
@@ -19,6 +20,7 @@ class MLN(object):
                 )
         self.weights: List[float] = weights
         self.domain: Set[Const] = domain
+        self.unary_evidence: Set[AtomicFormula] = unary_evidence
 
         # deal with predicate_definition
         preds = set()

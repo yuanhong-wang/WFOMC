@@ -13,7 +13,7 @@ domain_grammar = r"""
 
 
 grammar = r"""
-    ?wfomcs: ffl domain weightings cardinality_constraints
+    ?wfomcs: ffl domain weightings cardinality_constraints unary_evidence
     weightings: weighting*
     weighting: weight weight predicate
 
