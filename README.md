@@ -1,6 +1,6 @@
-# Exact Lifted Counter for Two-Variable Logic
+# Exact Lifted Counter for Two-Variable Logic and Extensions
 
-This tool is for counting the models (or combinatorical structures) from the two-variable fragment of first-order logic.
+This tool is for counting the models (or combinatorical structures) from the two-variable fragment of first-order logic and extensions.
 
 
 ## Input format
