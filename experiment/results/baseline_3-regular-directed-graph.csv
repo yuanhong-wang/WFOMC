@@ -1,0 +1,9 @@
+timestamp,formula,domain_size,algorithm,result,time_sec,memory_bytes,memory_kb,memory_mb,status
+2025-07-26T13:27:56.877509,3-regular-directed-graph,2,fast,0,62.97280168533325,6409,6.26,0.0061,completed
+2025-07-26T13:29:48.747471,3-regular-directed-graph,5,fast,44,111.77460098266602,6353,6.2,0.0061,completed
+2025-07-26T14:53:08.947668,3-regular-directed-graph,8,fast,TIMEOUT,5000,6444,6.29,0.0061,timeout
+2025-07-26T14:53:09.568797,3-regular-directed-graph,2,dr,0,0.5274341106414795,5494,5.37,0.0052,completed
+2025-07-26T14:53:10.237814,3-regular-directed-graph,5,dr,44,0.5693862438201904,5457,5.33,0.0052,completed
+2025-07-26T14:53:15.636218,3-regular-directed-graph,8,dr,749649145,5.283830642700195,6353,6.2,0.0061,completed
+2025-07-26T14:58:53.423790,3-regular-directed-graph,11,dr,277435664056527360,337.6935122013092,6353,6.2,0.0061,completed
+2025-07-26T16:22:13.801982,3-regular-directed-graph,14,dr,TIMEOUT,5000,6444,6.29,0.0061,timeout
