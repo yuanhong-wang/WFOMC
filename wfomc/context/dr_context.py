@@ -60,14 +60,15 @@ class DRWFOMCContext(object):
         self.cnt_preds = []  # 计数谓词列表
         self.cnt_params = []  # 计数参数 k (int)
         self.cnt_remainder = []  # 余数 r (int)
-
+        ## mod
         self.mod_pred_index = []  # 模运算谓词索引
         self.exist_mod = False  # 是否存在模运算
-        # unary constraints
         self.unary_mod_constraints = []  # 一元模约束 [(Pred, r, k), …]
+        ## <=
         self.exist_le = False  # "是否有<="
         self.le_pred = []  # 小于等于谓词列表
         self.le_index = []  # 小于等于谓词索引
+        ## 比较器处理函数映射
         self.comparator_handlers = {  # 比较器处理函数映射
             'mod': self._handle_mod,
             '=': self._handle_eq,
@@ -162,18 +163,22 @@ class DRWFOMCContext(object):
             param: 参数 (r, k)
             _: 比较器（此处未使用）
         """
-        self.exist_mod = True  # 标记存在模运算量词
-        self.mod_pred_index.append(idx)  # 记录模运算谓词索引
-        r, k = param  # cnt_param_raw = (r, k)，分解参数
-        self.cnt_remainder.append(r)  # 记录余数
-        self.cnt_params.append(k)  # 记录模数
-        # 只要检测到形如 ∀X … ∃_{r mod k} Y : P(Y) 或 ∃_{=k} X : Q(X)。且 P/Q 只带一个自变量——就把 (谓词, r, k) 丢进 unary_mod_constraints。
-        if isinstance(inner, AtomicFormula) and inner.pred.arity == 1 and inner.args == (qscope.quantified_var,):
-            self.unary_mod_constraints.append((inner.pred, r, k))
-        # ── 引入二元 aux，保持语义同时满足后端假设 ───────
-        self._add_aux_equiv(inner)  # 添加辅助等价关系 # TODO 还需要这一步吗
+        r, k = param  # (r, k) 分解参数
 
-    # 处理  ∃_{=m} / ∃_{<=m}
+        ## unary mod
+        if (isinstance(inner, AtomicFormula)
+                and inner.pred.arity == 1
+                and inner.args == (qscope.quantified_var,)):
+            self.unary_mod_constraints.append((inner.pred, r, k))  # 供 config 剪枝
+            return  # 不再进入递归
+
+        ## binary mod
+        self.exist_mod = True
+        self.mod_pred_index.append(idx) # 记录模运算谓词索引
+        self.cnt_remainder.append(r) # 记录余数
+        self.cnt_params.append(k) # 记录模数
+        self._add_aux_equiv(inner)  # 仍然引入二元 aux
+
     def _handle_eq(self, idx, inner, qscope, param, comparator):
         """
         处理等号量词 ∃_{=m}
@@ -231,7 +236,9 @@ class DRWFOMCContext(object):
             comparator = qscope.comparator  # 'mod' / '=' / '<=' / ...
             cnt_param_raw = qscope.count_param  # (r,k) 或 int
 
-            # ---- 根据 comparator 分派到对应的 handler ----------------------------
+            ## 根据 comparator 分派到对应的 handler
+            idx = len(self.cnt_preds)  # 用当前 cnt_preds 长度算下标
+            # 也就是说，cnt_formulas 和 cnt_preds的长度是不同的。unary mod不会添加进cnt_preds中。为了跳过unary mod,不采用手动累加 idx = idx + 1。是因为idx 必须始终与 cnt_preds 的当前长度保持同步，保持新谓词下标依然连续、正确，
             self.comparator_handlers[comparator](idx, inner, qscope, cnt_param_raw, comparator)
 
         self.all_preds = self.ext_preds + self.cnt_preds # 收集全部谓词
