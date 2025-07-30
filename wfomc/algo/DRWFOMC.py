@@ -24,15 +24,9 @@ def domain_recursive_wfomc(context: DRWFOMCContext) -> RingElement:
         cells = cell_graph.get_cells()
         n_cells = len(cells) # # 1-type cell 数
         w2t, w, r = context.build_weight(cells, cell_graph)  # 构建 cell 的权重、类型映射及递归转移参数
-        ## 处理一元 counting mod 约束（∃_{r mod k}）
-        unary_masks = []  # # 每个约束对应一个 mask 和 (r,k) [(np.int8[n_cells], r, k), …]
-        for pred, r_mod, k_mod in context.unary_mod_constraints:
-            mask = np.fromiter(
-                (1 if cell.is_positive(pred) else 0 for cell in cells), # cell 是否满足该一元谓词
-                dtype=np.int8, count=n_cells
-            )
-            unary_masks.append((mask, r_mod, k_mod))
-            # 一阶 1-type cell 是否把某个一元谓词 pred 标成 True”转换成一个长度为 n_cells 的 0‒1 向量mask。比如，cells = [B(X)^LEQ(X,X)^~@aux0(X,X)^~A(X), @aux0(X,X)^A(X)^LEQ(X,X)^~B(X)], 那么unary_masks = [([0 1], 0, 2)]
+        ## 处理一元约束
+        unary_mod_mask = context.build_unary_mod_mask(cells)  # 构建 unary_mod_masks（unary counting mod 约束）
+        unary_eq_mask = context.build_unary_eq_mask(cells)  # 构建 unary_eq_mask
 
         t_updates = context.build_t_updates(r, n_cells, domain_size)  # 构建 t_updates（pairwise 组合时状态更新表）
         shape = (n_cells,) + tuple(c_type_shape) # 配置数组的维度: (cell 数) × (扩展谓词维度) × (计数约束维度)
@@ -94,13 +88,10 @@ def domain_recursive_wfomc(context: DRWFOMCContext) -> RingElement:
         ## ========== 主循环：遍历所有多项式配置 ==========
         for config in multinomial(n_cells, domain_size):
             ## --- 检查一元 mod 约束 ---
-            skip = False
-            for mask, r_mod, k_mod in unary_masks:  # 遍历每个约束
-                config_total_unary_constraint = (mask @ np.fromiter(config, dtype=np.int32))  # config 是当前 1-type 配置，元素是“第 i 个 cell 放了多少个元素”。mask @ config 就是向量点积 —— 自动算出 整个结构里满足 pred 的元素总数
-                if config_total_unary_constraint % k_mod != r_mod:
-                    skip = True
-                    break
-            if skip:  # 有一个约束不满足，就跳过这个配置
+            if context.check_unary_mod_constraints(config, unary_mod_mask):  # 有一个约束不满足，就跳过这个配置
+                continue
+            ## --- 检查一元 eq 约束 ---
+            if context.check_unary_eq_constraints(config, unary_eq_mask):  # 有一个约束不满足，就跳过这个配置
                 continue
             ## 初始化配置数组并赋值
             init_config = np.zeros(shape, dtype=np.uint8)
