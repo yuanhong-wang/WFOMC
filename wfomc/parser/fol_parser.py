@@ -69,7 +69,7 @@ class FOLTransformer(Transformer):
     # ---------- =  ----------
     def counting_quantifier(self, args):
         """处理 \exists_{=k}, \exists_{<=k}, …"""
-        comparator = str(args[0])  # '=', '<=', …
+        comparator = args[0]  # '=', '<=', …
         k = int(args[1])
         return (QuantifiersEnum.COUNTING, (comparator, k))
 

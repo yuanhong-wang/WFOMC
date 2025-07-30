@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import psutil
 import os
 import argparse
 import logging
@@ -16,20 +16,20 @@ from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recu
 from wfomc.utils import MultinomialCoefficients, Rational, round_rational
 from wfomc.context import WFOMCContext
 from wfomc.parser import parse_input
-from wfomc.fol.syntax import Pred
+from wfomc.fol.syntax import Pred, Const
 
 
 def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
     # both standard and fast WFOMCs need precomputation
     if algo == Algo.STANDARD or algo == Algo.FAST or \
-            algo == algo.FASTv2:
+            algo == Algo.FASTv2:
         MultinomialCoefficients.setup(len(problem.domain))
 
     if problem.contain_linear_order_axiom():
         logger.info('Linear order axiom with the predicate LEQ is found')
-        if algo != Algo.INCREMENTAL and algo != Algo.RECURSIVE:
+        if algo != Algo.INCREMENTAL and algo != Algo.RECURSIVE and algo != Algo.DR:
             raise RuntimeError("Linear order axiom is only supported by the "
-                               "incremental and recursive WFOMC algorithms")
+                               "incremental, recursive and domain_recursive WFOMC algorithms")
 
     logger.info(f'Invoke WFOMC with {algo} algorithm')
 
@@ -37,7 +37,7 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
         dr_context = DRWFOMCContext(problem)
     else:
         context = WFOMCContext(problem)
-
+    res: Rational = Rational(0, 1)
     with Timer() as t:
         if algo == Algo.STANDARD:
             res = standard_wfomc(context)
@@ -51,7 +51,6 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD) -> Rational:
             res = recursive_wfomc(context)
         elif algo == Algo.DR:
             res = domain_recursive_wfomc(dr_context)
-            print(res)
 
     if algo != Algo.DR:
         res = context.decode_result(res)
@@ -70,6 +69,7 @@ def parse_args():
                         default='./check-points')
     parser.add_argument('--algo', '-a', type=Algo,
                         choices=list(Algo), default=Algo.FASTv2)
+    parser.add_argument('--domain-size', '-n', type=int, help='domain size', default=-1) # 这里为了自动化测试临时添加一个参数
     parser.add_argument('--debug', action='store_true', default=False)
     args = parser.parse_args()
     return args
@@ -89,6 +89,10 @@ if __name__ == '__main__':
 
     with Timer() as t:
         problem = parse_input(args.input)
+        if args.domain_size != -1:
+            # Override domain with generated domain of specified size
+            problem.domain = {Const(f'd{i}') for i in range(args.domain_size)}
+            pass
     logger.info('Parse input: %ss', t)
 
     res = wfomc(
@@ -96,4 +100,5 @@ if __name__ == '__main__':
     )
     logger.info('WFOMC (arbitrary precision): %s', res)
     round_val = round_rational(res)
+    print("results:", round_val)
     logger.info('WFOMC (round): %s (exp(%s))', round_val, round_val.ln())

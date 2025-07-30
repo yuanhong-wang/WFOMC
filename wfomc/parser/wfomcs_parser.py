@@ -114,13 +114,16 @@ def parse(text: str) -> \
 
 
 if __name__ == '__main__':
-    wfoms = parse(r'''
-\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+    parse(r"""
 \forall X: (~E(X,X)) &
-\forall X: (\exists Y: (E(X,Y)))
-
-vertices = 10
-0.1 1 E
-0.2 2 F
-0.3 3 G
-    ''')
+\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+\forall X: (\exists_{<=3} Y: (E(X,Y)))
+V = 5
+    """)
+#     wfoms = parse(r'''
+# \forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+# \forall X: (~E(X,X)) &
+# \forall X: (\exists Y: (E(X,Y)))
+#
+# v = 10
+#     ''')

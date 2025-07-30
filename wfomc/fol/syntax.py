@@ -195,6 +195,11 @@ class QFFormula(Formula):
         return str(self)
 
     def atoms(self) -> frozenset[AtomicFormula]:
+        # return backend.get_atoms(self.expr)
+        # Top / Bot（expr is None）或简化后是常量 true/false，都没有一阶原子
+        import sympy
+        if self.expr is None or self.expr in (sympy.true, sympy.false):
+            return frozenset()
         return backend.get_atoms(self.expr)
 
     def terms(self) -> Iterable[Term]:
@@ -232,12 +237,20 @@ class QFFormula(Formula):
                 for symbol, value in model.items()
             )
 
-    def substitute(self, substitution: dict[Term, Term]) -> QFFormula:
-        atom_substitutions = OrderedDict()
-        for atom in self.atoms():
-            atom_substitutions[atom.expr] = atom.substitute(substitution).expr
-        return QFFormula(backend.substitute(self.expr, atom_substitutions))
+    def substitute(self, substitution: dict[Term, Term]) -> QFFormula: # TODO 这里好像是binary modk 的时候修改了
+        # atom_substitutions = OrderedDict()
+        # for atom in self.atoms():
+        #     atom_substitutions[atom.expr] = atom.substitute(substitution).expr
+        # return QFFormula(backend.substitute(self.expr, atom_substitutions))
+        # ⊤ / ⊥ 无需替换，原样返回
+        if self.expr is None:
+            return self
 
+        atom_substitutions = OrderedDict(
+            (atom.expr, atom.substitute(substitution).expr)
+            for atom in self.atoms()
+        )
+        return QFFormula(backend.substitute(self.expr, atom_substitutions))
     def sub_nullary_atoms(self, substitution: dict[AtomicFormula, bool]) -> QFFormula:
         substitution = dict((atom.expr, value) for atom, value in substitution.items())
         return QFFormula(backend.substitute(self.expr, substitution))
@@ -395,7 +408,8 @@ class Counting(Quantifier):
     count_param: Any  # int
 
     def __post_init__(self):
-        assert self.comparator in ['=', 'mod'], \
+        allowed = ['=', '!=', '<', '>', '<=', '>=', 'mod']
+        assert self.comparator in allowed, \
             f"Unsupported comparator '{self.comparator}'"
         if self.comparator == 'mod':
             r, k = self.count_param
@@ -404,12 +418,11 @@ class Counting(Quantifier):
         # 固定写法 '\exists'
         object.__setattr__(self, 'quantifier', '\\exists')
 
-    # 用于 pretty-print / 调试
     def __str__(self):
         if self.comparator == 'mod':
             r, k = self.count_param
             return f'\\exists_{{{r}mod{k}}} {self.quantified_var}'
-        else:  # '=' 及其他比较符
+        else:
             return f'\\exists_{{{self.comparator}{self.count_param}}} {self.quantified_var}'
 
 
