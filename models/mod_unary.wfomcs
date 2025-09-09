@@ -1,0 +1,11 @@
+\forall X: (LEQ(X,X)) &
+\forall X: (A(X) | B(X)) &
+\forall X: (~A(X) | ~B(X)) &
+
+
+\exists_{=2} X: (A(X))
+
+
+v = 4
+
+# 支持单双层 + "mod or = or <=",
