@@ -1,0 +1,8 @@
+\forall X: (Eq(X,X) & ~R(X,X)) &
+\forall Y: (\exists_{=4} X: (K(X))) &
+\forall X: (\exists_{=3} Y: (R(X,Y))) &
+\forall X: (\forall Y: ((K(X) & K(Y) & ~Eq(X,Y)) -> R(X,Y))) &
+\forall X: (\forall Y: ((R(X,Y) & ~(K(X) & K(Y))) -> Leq(Y,X))) &
+\forall X: (\forall Y: ((K(X) & ~K(Y)) -> Leq(X,Y)))
+
+domain = 4

@@ -55,7 +55,9 @@ class CardinalityConstraint(Constraint):
         self.gen_vars = create_vars('x0:{}'.format(
             len(self.preds))
         )
-        for sym, pred in zip(self.gen_vars, self.preds):
+        # 将集合转换为排序后的列表，以确保顺序的确定性
+        sorted_preds = sorted(list(self.preds), key=lambda p: p.name)
+        for sym, pred in zip(self.gen_vars, sorted_preds):
             weight = get_weight(pred)
             new_weights[pred] = (weight[0] * sym, weight[1])
             self.var2pred[sym] = pred

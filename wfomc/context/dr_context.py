@@ -60,12 +60,13 @@ class DRWFOMCContext(object):
         self.cnt_preds = []  # 计数谓词列表
         self.cnt_params = []  # 计数参数 k (int)
         self.cnt_remainder = []  # 余数 r (int)
-        ## unary mod
+        ## unary
         self.mod_pred_index = []  # 模运算谓词索引
         self.exist_mod = False  # 是否存在模运算
         self.unary_mod_constraints = []  # 一元模约束 [(Pred, r, k), …]
-        ## unary eq
         self.unary_eq_constraints = []  # [(pred, k), ...]
+        self.unary_le_constraints = []  # [(pred, k_max), ...]
+
         ## <=
         self.exist_le = False  # "是否有<="
         self.le_pred = []  # 小于等于谓词列表
@@ -91,57 +92,6 @@ class DRWFOMCContext(object):
         self.card_vars = []
         self.build_cardinality_constraints()
 
-    def check_unary_mod_constraints(self, config, unary_mod_mask)-> bool:
-        for mask, r_mod, k_mod in unary_mod_mask:  # 遍历每个约束
-            config_total_unary_constraint = (mask @ np.fromiter(config, dtype=np.int32))  # config 是当前 1-type 配置，元素是“第 i 个 cell 放了多少个元素”。mask @ config 就是向量点积 —— 自动算出 整个结构里满足 pred 的元素总数
-            if config_total_unary_constraint % k_mod != r_mod:
-                return True
-        return False
-
-    def check_unary_eq_constraints(self, config, unary_eq_mask) -> bool:
-        for mask, k_eq in unary_eq_mask:
-            if (mask @ np.fromiter(config, dtype=np.int32)) != k_eq:
-                return True
-        return False
-
-
-    def build_unary_mod_mask(self, cells) -> list:
-        """
-        # 一阶 1-type cell 是否把某个一元谓词 pred 标成 True”转换成一个长度为 n_cells 的 0‒1 向量mask。比如，cells = [B(X)^LEQ(X,X)^~@aux0(X,X)^~A(X), @aux0(X,X)^A(X)^LEQ(X,X)^~B(X)], 那么unary_mod_mask = [([0 1], 0, 2)]
-        """
-        n_cells = len(cells)
-        masks = [] # 每个约束对应一个 mask 和 (r,k) [(np.int8[n_cells], r, k), …]
-        for pred, r, k in self.unary_mod_constraints:
-            mask = np.fromiter(
-                (1 if cell.is_positive(pred) else 0 for cell in cells), # cell 是否满足该一元谓词
-                dtype=np.int8,
-                count=n_cells
-            )
-            masks.append((mask, r, k))
-        return masks
-
-    def build_unary_eq_mask(self, cells) -> list:
-        """
-        Parameters
-        ----------
-        cells : List[OneTypeCell]
-            全部 1-type cell，对应 domain_recursive_wfomc 里的 `cells`
-
-        Returns
-        -------
-        List[(np.ndarray[int8], int)]
-            (mask, k_eq)；mask 长度 = n_cells，值 ∈ {0,1}
-        """
-        n_cells = len(cells)
-        masks = []
-        for pred, k_eq in self.unary_eq_constraints:
-            mask = np.fromiter(
-                (1 if cell.is_positive(pred) else 0 for cell in cells),
-                dtype=np.int8,
-                count=n_cells
-            )
-            masks.append((mask, k_eq))
-        return masks
 
     def stop_condition(self, last_target_c):
         """
@@ -184,13 +134,13 @@ class DRWFOMCContext(object):
         """
         if isinstance(formula.quantified_formula, QuantifiedFormula):
             # 双层 ∀X (∃_{·} Y : ...)
-            counting = formula.quantified_formula
-            return ("Universal_Counting",
-                    counting.quantified_formula,  # P(X)
-                    counting.quantifier_scope)  # scope of ∃_{·} Y
+            inner_formula = formula.quantified_formula
+            return ("double layer",
+                    inner_formula.quantified_formula,  # P(X)
+                    inner_formula.quantifier_scope)  # scope of ∃_{·} Y
         else:
             # 单层 ∃_{·} X : ...
-            return ("Counting",
+            return ("single layer",
                     formula.quantified_formula,  # P(X)
                     formula.quantifier_scope)  # scope of ∃_{·} X
 
@@ -207,12 +157,12 @@ class DRWFOMCContext(object):
         self.cnt_preds.append(aux_pred)  # 将辅助谓词添加到计数谓词列表
         return aux_pred
 
-    def _handle_mod(self, idx, inner, qscope, param, _):  # 处理  ∃_{r mod k}
+    def _handle_mod(self, idx, inner_formula, qscope, param, _):  # 处理  ∃_{r mod k}
         """
         处理模运算量词 ∃_{r mod k}
         Args:
             idx: 索引
-            inner: 内部公式
+            inner_formula: 内部公式
             qscope: 量词作用域
             param: 参数 (r, k)
             _: 比较器（此处未使用）
@@ -220,10 +170,10 @@ class DRWFOMCContext(object):
         r, k = param  # (r, k) 分解参数
 
         ## unary mod
-        if (isinstance(inner, AtomicFormula)
-                and inner.pred.arity == 1
-                and inner.args == (qscope.quantified_var,)):
-            self.unary_mod_constraints.append((inner.pred, r, k))  # 供 config 剪枝
+        if (isinstance(inner_formula, AtomicFormula)
+                and inner_formula.pred.arity == 1
+                and inner_formula.args == (qscope.quantified_var,)):
+            self.unary_mod_constraints.append((inner_formula.pred, r, k))  # 供 config 剪枝
             return  # 不再进入递归
 
         ## binary mod
@@ -231,44 +181,50 @@ class DRWFOMCContext(object):
         self.mod_pred_index.append(idx) # 记录模运算谓词索引
         self.cnt_remainder.append(r) # 记录余数
         self.cnt_params.append(k) # 记录模数
-        self._add_aux_equiv(inner)  # 仍然引入二元 aux
+        self._add_aux_equiv(inner_formula)  # 仍然引入二元 aux
 
-    def _handle_eq(self, idx, inner, qscope, param, comparator):
+    def _handle_eq(self, idx, inner_formula, qscope, param, comparator):
         """
         处理等号量词 ∃_{=m}
         Args:
             idx: 索引
             layer: 层级
-            inner: 内部公式
+            inner_formula: 内部公式
             qscope: 量词作用域
             param: 参数 k
             comparator: 比较器
         """
         ## unary ∃_{=k} X  A(X)
-        if (isinstance(inner, AtomicFormula)
-                and inner.pred.arity == 1
-                and inner.args == (qscope.quantified_var,)):
-            self.unary_eq_constraints.append((inner.pred, param))  # 供 config 剪枝
+        if (isinstance(inner_formula, AtomicFormula)
+                and inner_formula.pred.arity == 1
+                and inner_formula.args == (qscope.quantified_var,)):
+            self.unary_eq_constraints.append((inner_formula.pred, param))  # 供 config 剪枝
             return  # 不进递归，不占 cnt_preds
         ## biarny
         self.cnt_remainder.append(None)  # 不需要余数
         self.cnt_params.append(param)  # 直接添加参数k
-        aux_pred = self._add_aux_equiv(inner)  # 添加辅助等价关系
+        aux_pred = self._add_aux_equiv(inner_formula)  # 添加辅助等价关系
 
-    def _handle_le(self, idx, inner, qscope, param, comparator):
+    def _handle_le(self, idx, inner_formula, qscope, param, comparator):
         """
         处理小于等于量词 ∃_{<=m}
         Args:
             idx: 索引
             layer: 层级
-            inner: 内部公式
+            inner_formula: 内部公式
             qscope: 量词作用域
             param: 参数 k
             comparator: 比较器
         """
+        if (isinstance(inner_formula, AtomicFormula)
+                and inner_formula.pred.arity == 1
+                and inner_formula.args == (qscope.quantified_var,)):
+            self.unary_le_constraints.append((inner_formula.pred, param))  # 供 config 剪枝
+            return  # 不进递归，不占 cnt_preds
+
         self.cnt_remainder.append(None)  # 不需要余数
         self.cnt_params.append(param)  # 直接添加参数k
-        aux_pred = self._add_aux_equiv(inner)
+        aux_pred = self._add_aux_equiv(inner_formula)
         self.le_pred.append(aux_pred)  # 只有 <= 才需要额外标记
         self.exist_le = True  # 标记存在 <= 量词
 
@@ -293,14 +249,14 @@ class DRWFOMCContext(object):
 
         ## 处理计数公式
         for idx, formula in enumerate(cnt_formulas):
-            _, inner, qscope = self._split_layer(formula)  # 因为可能是双层或单层，所以需要拆分
+            _, inner_formula, qscope = self._split_layer(formula)  # 因为可能是双层或单层，所以需要拆分
             comparator = qscope.comparator  # 'mod' / '=' / '<=' / ...
             cnt_param_raw = qscope.count_param  # (r,k) 或 int
 
             ## 根据 comparator 分派到对应的 handler
             idx = len(self.cnt_preds)  # 用当前 cnt_preds 长度算下标
             # 也就是说，cnt_formulas 和 cnt_preds的长度是不同的。unary mod不会添加进cnt_preds中。为了跳过unary mod,不采用手动累加 idx = idx + 1。是因为idx 必须始终与 cnt_preds 的当前长度保持同步，保持新谓词下标依然连续、正确，
-            self.comparator_handlers[comparator](idx, inner, qscope, cnt_param_raw, comparator)
+            self.comparator_handlers[comparator](idx, inner_formula, qscope, cnt_param_raw, comparator)
 
         self.all_preds = self.ext_preds + self.cnt_preds # 收集全部谓词
         self._pred2idx = {pred: i for i, pred in enumerate(self.all_preds)} # 构建一次性的“谓词 → 索引”映射（O(n)）
@@ -476,9 +432,9 @@ class DRWFOMCContext(object):
 
         Returns:
             tuple: (w2t 字典, w 权重字典, r 关系字典)
-                   w2t: 从单元格索引到谓词状态字典的映射
-                   w: 每个单元格类型的权重字典
-                   r: 单元格对之间的关系字典
+                   w2t: 从单元格索引到谓词状态字典的映射, 例如 {0: (1, 0, 1, 2), 1: (0, 1, 0, 1)}, 值代表需要满足的数量
+                   w: 每个单元格类型的权重字典，例如 {0: Rational(1, 1), 1: Rational(2, 1)}, 键是单元格索引，值是权重
+                   r: 单元格对之间的关系字典，
         """
 
         n_cells = len(cells)
@@ -538,6 +494,81 @@ class DRWFOMCContext(object):
             return self.weights[pred]
         return default, default
 
+    def check_unary_constraints(self, config, mask) -> tuple[bool,bool, bool]:
+        return self.check_unary_mod_constraints(config, mask[0]), self.check_unary_eq_constraints(config, mask[1]), self.check_unary_le_constraints(config, mask[2])
+
+
+    def check_unary_mod_constraints(self, config, unary_mod_mask)-> bool:
+        for mask, r_mod, k_mod in unary_mod_mask:  # 遍历每个约束
+            config_total_unary_constraint = (mask @ np.fromiter(config, dtype=np.int32))  # config 是当前 1-type 配置，元素是“第 i 个 cell 放了多少个元素”。mask @ config 就是向量点积 —— 自动算出 整个结构里满足 pred 的元素总数
+            if config_total_unary_constraint % k_mod != r_mod:
+                return True
+        return False
+
+    def check_unary_eq_constraints(self, config, unary_eq_mask) -> bool:
+        for mask, k_eq in unary_eq_mask:
+            if (mask @ np.fromiter(config, dtype=np.int32)) != k_eq:
+                return True
+        return False
+
+    def check_unary_le_constraints(self, config, unary_le_masks) -> bool:
+        vec = np.fromiter(config, dtype=np.int32)
+        for mask, k_max in unary_le_masks:
+            if (mask @ vec) > k_max: # count > k ⇒ 违反
+                return True
+        return False
+
+    def build_unary_mask(self, cells) -> tuple[list, list, list]:
+        return self.build_unary_mod_mask(cells),self.build_unary_eq_mask(cells), self.build_unary_le_mask(cells)
+    def build_unary_le_mask(self, cells) -> list:
+        n_cells = len(cells)
+        masks = []
+        for pred, k_max in self.unary_le_constraints:
+            mask = np.fromiter(
+                (1 if cell.is_positive(pred) else 0 for cell in cells),
+                dtype=np.int8, count=n_cells
+            )
+            masks.append((mask, k_max))
+        return masks
+
+    def build_unary_mod_mask(self, cells) -> list:
+        """
+        # 一阶 1-type cell 是否把某个一元谓词 pred 标成 True”转换成一个长度为 n_cells 的 0‒1 向量mask。比如，cells = [B(X)^LEQ(X,X)^~@aux0(X,X)^~A(X), @aux0(X,X)^A(X)^LEQ(X,X)^~B(X)], 那么unary_mod_mask = [([0 1], 0, 2)]
+        """
+        n_cells = len(cells)
+        masks = [] # 每个约束对应一个 mask 和 (r,k) [(np.int8[n_cells], r, k), …]
+        for pred, r, k in self.unary_mod_constraints:
+            mask = np.fromiter(
+                (1 if cell.is_positive(pred) else 0 for cell in cells), # cell 是否满足该一元谓词
+                dtype=np.int8,
+                count=n_cells
+            )
+            masks.append((mask, r, k))
+        return masks
+
+    def build_unary_eq_mask(self, cells) -> list:
+        """
+        Parameters
+        ----------
+        cells : List[OneTypeCell]
+            全部 1-type cell，对应 domain_recursive_wfomc 里的 `cells`
+
+        Returns
+        -------
+        List[(np.ndarray[int8], int)]
+            (mask, k_eq)；mask 长度 = n_cells，值 ∈ {0,1}
+        """
+        n_cells = len(cells)
+        masks = []
+        for pred, k_eq in self.unary_eq_constraints:
+            mask = np.fromiter(
+                (1 if cell.is_positive(pred) else 0 for cell in cells),
+                dtype=np.int8,
+                count=n_cells
+            )
+            masks.append((mask, k_eq))
+        return masks
+
 
 class ConfigUpdater:
     def __init__(self, t_updates, shape, cache):
@@ -576,6 +607,8 @@ class ConfigUpdater:
         return F  # 返回最终的状态转移权重字典
 
 
+
+
 class HashableArrayWrapper(object):
     def __init__(self, input_array: np.ndarray):
         self.array = input_array.astype(np.uint8, copy=False)
@@ -594,3 +627,5 @@ class HashableArrayWrapper(object):
 
     def __repr__(self):
         return f"HashableArrayWrapper({self.array})"
+
+

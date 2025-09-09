@@ -80,45 +80,64 @@ def exclusive(preds: list[Pred]) -> QuantifiedFormula:
     return QuantifiedFormula(Universal(X), exclusive_qf(preds))
 
 
-def convert_counting_formula(formula: QuantifiedFormula, domain: set[Const]):
+def new_predicate(arity: int, pred_name: str, used_pred_names: set[str] = None) -> Pred:
+    # (This helper function should already exist in utils.py, keep it as is)
+    # ...
+    # (Assuming the rest of the function is here)
+    i = 0
+    name = f'{pred_name}{i}'
+    if used_pred_names is None:
+        return Pred(name, arity)
+    while name in used_pred_names:
+        i += 1
+        name = f'{pred_name}{i}'
+    return Pred(name, arity)
+
+
+def convert_counting_formula(formula: QuantifiedFormula, domain: set) -> \
+        tuple[QFFormula, list[QuantifiedFormula], tuple, int]:
     """
-    Only need to deal with \forall X \exists_{=k} Y: f(X,Y)
+    Translates a counting formula to a universally quantified formula,
+    existentially quantified formulas, a cardinality constraint, and a repeat factor.
+
+    This new version handles both unary (single layer) and binary (double layer) counting formulas.
     """
-    uni_formula = top
-    ext_formulas = []
+    # 检查是单层还是一元公式
+    # 灵感来源于 dr_context.py 中的 _split_layer 方法
+    if not isinstance(formula.quantified_formula, QuantifiedFormula):
+        # ========= 处理一元计数公式 (例如 ∃=k X: P(X)) =========
+        inner_formula = formula.quantified_formula
 
-    cnt_quantified_formula = formula.quantified_formula.quantified_formula
-    cnt_quantifier = formula.quantified_formula.quantifier_scope
-    count_param = cnt_quantifier.count_param
+        # 确保内部是一元原子公式
+        if not (isinstance(inner_formula, AtomicFormula) and inner_formula.pred.arity == 1):
+            raise TypeError(f"Unary counting quantifier requires a unary atomic formula inside, but got {inner_formula}")
 
-    repeat_factor = (math.factorial(count_param)) ** len(domain)
+        quantifier_scope = formula.quantifier_scope
+        comparator = quantifier_scope.comparator
+        count_param = int(quantifier_scope.count_param)
 
-    # Follow the steps in "A Complexity Upper Bound for
-    # Some Weighted First-Order Model Counting Problems With Counting Quantifiers"
-    # (2)
-    aux_pred = new_predicate(2, AUXILIARY_PRED_NAME)
-    aux_atom = aux_pred(X, Y)
-    uni_formula = uni_formula & (cnt_quantified_formula.equivalent(aux_atom))
-    # (3)
-    sub_aux_preds, sub_aux_atoms = [], []
-    for i in range(count_param):
-        aux_pred_i = new_predicate(2, f'{aux_pred.name}_')
-        aux_atom_i = aux_pred_i(X, Y)
-        sub_aux_preds.append(aux_pred_i)
-        sub_aux_atoms.append(aux_atom_i)
-        sub_ext_formula = QuantifiedFormula(Existential(Y), aux_atom_i)
-        sub_ext_formula = QuantifiedFormula(Universal(X), sub_ext_formula)
-        ext_formulas.append(sub_ext_formula)
-    # (4)
-    for i in range(count_param):
-        for j in range(i):
-            uni_formula = uni_formula & (~sub_aux_atoms[i] | ~sub_aux_atoms[j])
-    # (5)
-    or_sub_aux_atoms = QFFormula(False)
-    for atom in sub_aux_atoms:
-        or_sub_aux_atoms = or_sub_aux_atoms | atom
-    uni_formula = uni_formula & or_sub_aux_atoms.equivalent(aux_atom)
-    # (6)
-    cardinality_constraint = (aux_pred, '=', len(domain) * count_param)
+        # 直接在该谓词上创建基数约束
+        predicate_to_constrain = inner_formula.pred
+        cardinality_constraint = (predicate_to_constrain, comparator, count_param)
 
-    return uni_formula, ext_formulas, cardinality_constraint, repeat_factor
+        # 对于纯一元约束，没有额外的公式或重复因子
+        return top, [], cardinality_constraint, 1
+
+    else:
+        # ========= 处理二元计数公式 (例如 ∀X ∃=k Y: R(X,Y)) - 沿用旧逻辑 =========
+        cnt_quantified_formula = formula.quantified_formula.quantified_formula
+
+        aux_pred = new_predicate(2, AUXILIARY_PRED_NAME)
+        aux_atom = aux_pred(X, Y)
+
+        # f(X,Y) <=> aux(X,Y)
+        uni_formula = cnt_quantified_formula.equivalent(aux_atom)
+
+        # ∃=k Y: aux(X,Y)
+        quantifier_scope = formula.quantified_formula.quantifier_scope
+        comparator = quantifier_scope.comparator
+        count_param = int(quantifier_scope.count_param)
+
+        cardinality_constraint = (aux_pred, comparator, count_param)
+
+        return uni_formula, [], cardinality_constraint, 1

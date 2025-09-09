@@ -47,22 +47,22 @@ def incremental_wfomc(context: WFOMCContext) -> RingElement:
         else:
             table = dict(
                 (
-                    tuple(int(k == i) for k in range(n_cells)),
+                    tuple(int(k == i) for k in range(n_cells)), # <-- 这是 𝐤   (ivec)
                     (
-                        cell_graph.get_cell_weight(cell),
+                        cell_graph.get_cell_weight(cell), # <-- 第一个分量对应 T₁(𝐤) 的权重
                         None
                     )
                 )
                 for i, cell in enumerate(cells)
             )
 
-        for _ in range(domain_size - 1):
-            old_table = table
-            table = dict()
-            for j, cell in enumerate(cells):
+        for _ in range(domain_size - 1): # 在 “加一个新元素” 的循环里，对每个目标 cell 重新计算权重并累加到新表 table 中：
+            old_table = table # 取旧 table # 保存上一轮的哈希表，键就是 1-type 配置 𝐤（长度 p 的元组），值是 (已累积权重 T_h(𝐤), 约束状态)
+            table = dict() # 为下一轮新建空表 T_{h+1}
+            for j, cell in enumerate(cells): # 尝试把 本轮新元素 放进第 j 个 1-type cell
                 w = cell_graph.get_cell_weight(cell)
-                for ivec, (w_old, old_ccs) in old_table.items():
-                    if old_ccs is not None:
+                for ivec, (w_old, old_ccs) in old_table.items(): # 尝试把 本轮新元素 放进第 j 个 1-type cell
+                    if old_ccs is not None: # 如果当前 cell 不能再放元素，则 continue。否则更新剩余配额 → new_ccs
                         idx = helper(cell, pc_pred, old_ccs)
                         if idx is None:
                             continue

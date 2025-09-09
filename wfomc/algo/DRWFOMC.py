@@ -25,9 +25,7 @@ def domain_recursive_wfomc(context: DRWFOMCContext) -> RingElement:
         n_cells = len(cells) # # 1-type cell 数
         w2t, w, r = context.build_weight(cells, cell_graph)  # 构建 cell 的权重、类型映射及递归转移参数
         ## 处理一元约束
-        unary_mod_mask = context.build_unary_mod_mask(cells)  # 构建 unary_mod_masks（unary counting mod 约束）
-        unary_eq_mask = context.build_unary_eq_mask(cells)  # 构建 unary_eq_mask
-
+        unary_mask = context.build_unary_mask(cells)
         t_updates = context.build_t_updates(r, n_cells, domain_size)  # 构建 t_updates（pairwise 组合时状态更新表）
         shape = (n_cells,) + tuple(c_type_shape) # 配置数组的维度: (cell 数) × (扩展谓词维度) × (计数约束维度)
         Cache_F = dict()  # 全局缓存，用于 update_config 的结果
@@ -87,12 +85,10 @@ def domain_recursive_wfomc(context: DRWFOMCContext) -> RingElement:
 
         ## ========== 主循环：遍历所有多项式配置 ==========
         for config in multinomial(n_cells, domain_size):
-            ## --- 检查一元 mod 约束 ---
-            if context.check_unary_mod_constraints(config, unary_mod_mask):  # 有一个约束不满足，就跳过这个配置
+            ## --- 检查一元约束 ---
+            if any(context.check_unary_constraints(config, unary_mask)):  # 有一个约束不满足，就跳过这个配置
                 continue
-            ## --- 检查一元 eq 约束 ---
-            if context.check_unary_eq_constraints(config, unary_eq_mask):  # 有一个约束不满足，就跳过这个配置
-                continue
+
             ## 初始化配置数组并赋值
             init_config = np.zeros(shape, dtype=np.uint8)
             W = Rational(1, 1)
