@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import random
-from itertools import accumulate
+from itertools import accumulate, repeat
 from typing import Iterable, Generator, TypeAlias
 from functools import reduce
-from itertools import accumulate, repeat
+from collections import defaultdict
 
-from symengine import Pow, var, Expr, Symbol
-from symengine import Rational as sym_Rational
-from symengine.lib.symengine_wrapper import lcm
+from flint import fmpq, fmpq_mpoly_ctx, fmpq_mpoly
 from decimal import Decimal
 from bisect import bisect_left
 
-Rational: TypeAlias = sym_Rational
-Poly: TypeAlias = Expr
+
+Rational: TypeAlias = fmpq
+Poly: TypeAlias = fmpq_mpoly
 RingElement: TypeAlias = Rational | Poly
 
 
@@ -24,19 +23,19 @@ def create_vars(var_name: str, count: int = 1) -> list[Poly]:
     :param count: The number of variables to create
     :return: A list of polynomial variables
     """
-    vars_list = var(','.join(f'{var_name}{i}' for i in range(count)))
-    return vars_list if count > 1 else [vars_list]
+    ctx = fmpq_mpoly_ctx.get((var_name, count), 'lex')
+    gens = ctx.gens()
+    return gens if count > 1 else [gens[0]]
 
 
 def expand(polynomial: Poly) -> Poly:
-    return polynomial.expand()
+    return polynomial
 
 
 def coeff_monomial(polynomial, monomial) -> Rational:
-    coeff = polynomial.as_coefficients_dict()[monomial]
-    if isinstance(coeff, int):
-        coeff = Rational(coeff, 1)
-    return coeff
+    for degrees, coeff in polynomial.terms():
+        if degrees == monomial:
+            return coeff
 
 
 def round_rational(n: Rational) -> Decimal:
@@ -58,15 +57,15 @@ def _get_degrees(monomial: Poly):
         )
 
 
-def coeff_dict(p: Poly, gens: list[Symbol]) -> Generator[tuple[int], Rational, None]:
-    for monomial, coeff in p.as_coefficients_dict().items():
-        if monomial == -1:
-            coeff = -coeff
-        degrees = dict(_get_degrees(monomial))
-        for var, degree in degrees.items():
-            if (var is not None and var not in gens) and degree != 0:
-                coeff *= Pow(var, degree)
-        yield tuple(degrees.get(sym, 0) for sym in gens), coeff
+def coeff_dict(p: Poly, gens: list[Poly]) -> Generator[tuple[int], Rational, None]:
+    p_gens = p.context().gens()
+    coeffs = defaultdict(lambda: Rational(0, 1))
+    gens_map = {i: p_gens.index(g) for i, g in enumerate(gens)}
+    for monomial, coeff in p.terms():
+        degrees = tuple(monomial[gens_map[i]] for i in range(len(gens)))
+        coeffs[degrees] += coeff
+    for degrees, coeff in coeffs.items():
+        yield degrees, coeff
 
 
 def _choices_int_weights(population: Iterable, weights: Iterable[int], k=1):

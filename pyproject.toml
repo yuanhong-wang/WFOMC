@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "lucienwang1009", email = "lucienwang1009@gmail.com" }
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "contexttimer>=0.3.3",
     "dataclasses>=0.8",
@@ -17,6 +17,7 @@ dependencies = [
     "pandas>=2.3.1",
     "prettyprinttree>=2.0.1",
     "pynauty==2.8.6",
+    "python-flint>=0.8.0",
     "python-sat>=1.8.dev17",
     "symengine>=0.14.1",
     "sympy>=1.14.0",
@@ -32,5 +33,6 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "ipython>=9.6.0",
     "pytest>=8.4.1",
 ]

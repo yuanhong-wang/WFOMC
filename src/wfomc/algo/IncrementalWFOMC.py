@@ -1,12 +1,9 @@
-from typing import Callable
 from functools import reduce
 
 from wfomc.cell_graph import build_cell_graphs
-from wfomc.context.wfomc_context import WFOMCContext
-from wfomc.network.constraint import UnaryEvidenceEncoding
-from wfomc.utils import RingElement, Rational
-from wfomc.fol.syntax import Const, Pred, QFFormula
-from wfomc.utils.multinomial import MultinomialCoefficients
+from wfomc.context import WFOMCContext
+from wfomc.network import UnaryEvidenceEncoding
+from wfomc.utils import RingElement, Rational, MultinomialCoefficients
 
 
 def incremental_wfomc(context: WFOMCContext) -> RingElement:

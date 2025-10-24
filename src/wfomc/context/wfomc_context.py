@@ -1,17 +1,14 @@
-from __future__ import annotations
 import math
 from logzero import logger
-
 from copy import deepcopy
 from wfomc.fol.sc2 import SC2
 from wfomc.fol.utils import new_predicate, convert_counting_formula
 
-from wfomc.network.constraint import CardinalityConstraint, PartitionConstraint, UnaryEvidenceEncoding, organize_evidence, \
+from wfomc.network import CardinalityConstraint, PartitionConstraint, UnaryEvidenceEncoding, organize_evidence, \
     unary_evidence_to_ccs, unary_evidence_to_pc
 from wfomc.fol.syntax import *
 from wfomc.problems import WFOMCProblem
-from wfomc.fol.syntax import AUXILIARY_PRED_NAME, SKOLEM_PRED_NAME
-from wfomc.utils.third_typing import RingElement, Rational
+from wfomc.utils import Rational, RingElement
 
 
 class WFOMCContext(object):
@@ -23,7 +20,7 @@ class WFOMCContext(object):
         self.problem = deepcopy(problem)
         self.domain: set[Const] = self.problem.domain
         self.sentence: SC2 = self.problem.sentence
-        self.weights: dict[Pred, tuple[Rational, Rational]] = self.problem.weights
+        self.weights: dict[Pred, tuple[RingElement, RingElement]] = self.problem.weights
         self.cardinality_constraint: CardinalityConstraint = self.problem.cardinality_constraint
         self.repeat_factor = 1
         self.unary_evidence = self.problem.unary_evidence
@@ -65,7 +62,7 @@ class WFOMCContext(object):
             return self.weights[pred]
         return (default, default)
 
-    def decode_result(self, res: RingElement):
+    def decode_result(self, res: RingElement) -> Rational:
         if not self.contain_cardinality_constraint():
             res = res / self.repeat_factor
         else:

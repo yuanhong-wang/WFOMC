@@ -1,7 +1,7 @@
-from __future__ import annotations
 from functools import reduce
 import math
 from collections import defaultdict
+
 from .syntax import *
 
 PREDICATES = defaultdict(list)

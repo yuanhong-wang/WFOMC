@@ -1,33 +1,29 @@
-from __future__ import annotations
-
-from typing import List, Set, FrozenSet
-
-from wfomc.fol.syntax import AtomicFormula, QuantifiedFormula, Const, Pred, Var
-from wfomc.fol.utils import pad_vars
+from wfomc.fol import AtomicFormula, QuantifiedFormula, Const, Pred, Var
+from wfomc.fol import pad_vars
 
 
 class MLN(object):
-    def __init__(self, formulas: List[QuantifiedFormula],
-                 weights: List[float] = None,
-                 domain: Set[Const] = None,
-                 predicate_definition: Set[Pred] = None,
-                 unary_evidence: Set[AtomicFormula] = None):
-        self.formulas: List[QuantifiedFormula] = formulas
+    def __init__(self, formulas: list[QuantifiedFormula],
+                 weights: list[float] = None,
+                 domain: set[Const] = None,
+                 predicate_definition: set[Pred] = None,
+                 unary_evidence: set[AtomicFormula] = None):
+        self.formulas: list[QuantifiedFormula] = formulas
         if weights is not None:
             if len(weights) != len(formulas):
                 raise RuntimeError(
                     "Number of weights must match the number of formulas"
                 )
-        self.weights: List[float] = weights
-        self.domain: Set[Const] = domain
-        self.unary_evidence: Set[AtomicFormula] = unary_evidence
+        self.weights: list[float] = weights
+        self.domain: set[Const] = domain
+        self.unary_evidence: set[AtomicFormula] = unary_evidence
 
         # deal with predicate_definition
         preds = set()
         for formula in self.formulas:
             preds.update(formula.preds())
         if predicate_definition is not None:
-            self.predicate_definition: FrozenSet[Pred] = frozenset(
+            self.predicate_definition: frozenset[Pred] = frozenset(
                 predicate_definition)
             # if predicate in formulas is not defined
             for pred in preds:
@@ -61,10 +57,10 @@ class MLN(object):
         else:
             raise StopIteration
 
-    def preds(self) -> FrozenSet[Pred]:
+    def preds(self) -> frozenset[Pred]:
         return self.predicate_definition
 
-    def vars(self) -> FrozenSet[Var]:
+    def vars(self) -> frozenset[Var]:
         variables = set()
         for formula in self.formulas:
             variables.update(formula.vars())
@@ -99,8 +95,8 @@ class MLN(object):
 
 
 class ComplexMLN(MLN):
-    def __init__(self, formulas: List[QuantifiedFormula], weights: List[List[complex]] = None,
-                 domain: Set[Const] = None, predicate_definition: Set[Pred] = None):
+    def __init__(self, formulas: list[QuantifiedFormula], weights: list[list[complex]] = None,
+                 domain: set[Const] = None, predicate_definition: set[Pred] = None):
         super().__init__(formulas, weights, domain, predicate_definition)
 
     def __str__(self):

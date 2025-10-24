@@ -1,13 +1,10 @@
-from __future__ import annotations
-
-from wfomc.fol.sc2 import SC2, to_sc2
-from wfomc.fol.syntax import AtomicFormula, Const, Pred, top, AUXILIARY_PRED_NAME, \
-    Formula, QuantifiedFormula, Universal, Equivalence
-from wfomc.fol.utils import new_predicate
-from wfomc.network.constraint import CardinalityConstraint
-from wfomc.utils.polynomial import Rational
 from fractions import Fraction
 import math
+
+from wfomc.fol import SC2, to_sc2, AtomicFormula, Const, Pred, top, AUXILIARY_PRED_NAME, \
+    Formula, QuantifiedFormula, Universal, Equivalence, new_predicate
+from wfomc.network import CardinalityConstraint
+from wfomc.utils import Rational
 
 
 class WFOMCProblem(object):

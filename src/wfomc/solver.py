@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import argparse
 import logging
@@ -7,15 +5,13 @@ import logzero
 
 from logzero import logger
 from contexttimer import Timer
-from wfomc.network.constraint import UnaryEvidenceEncoding
 
+from wfomc.network import UnaryEvidenceEncoding
 from wfomc.problems import WFOMCProblem
 from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recursive_wfomc
-
 from wfomc.utils import MultinomialCoefficients, Rational, round_rational
 from wfomc.context import WFOMCContext
 from wfomc.parser import parse_input
-from wfomc.utils.polynomial import expand
 
 
 def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,

@@ -1,16 +1,11 @@
 from lark import Lark
-from wfomc.network.mln import MLN
-from wfomc.fol.syntax import Const, Pred
-from wfomc.network.constraint import CardinalityConstraint
-from wfomc.parser.cardinality_constraints_parser import CCTransfomer
-from wfomc.parser.mln_grammar import grammar
-from wfomc.utils import Rational
 
-
-from wfomc.parser.fol_parser import FOLTransformer
+from wfomc.network import CardinalityConstraint
 from wfomc.problems import MLNProblem
-
 from wfomc.fol.syntax import *
+from .cardinality_constraints_parser import CCTransfomer
+from .mln_grammar import grammar
+from .fol_parser import FOLTransformer
 
 class MLNTransformer(FOLTransformer, CCTransfomer):
 

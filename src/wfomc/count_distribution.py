@@ -1,14 +1,11 @@
-from __future__ import annotations
-
 from logzero import logger
 
 from wfomc.problems import WFOMCProblem
 from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc
-
 from wfomc.utils import MultinomialCoefficients, Rational
 from wfomc.context import WFOMCContext
-from wfomc.fol.syntax import Pred
-from wfomc.utils.polynomial import coeff_dict, create_vars, expand
+from wfomc.fol import Pred
+from wfomc.utils import coeff_dict, create_vars, expand
 
 
 def count_distribution(problem: WFOMCProblem, preds: list[Pred],
