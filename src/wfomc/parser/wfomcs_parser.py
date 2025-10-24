@@ -3,15 +3,13 @@ from __future__ import annotations
 from fractions import Fraction
 
 from lark import Lark
-from wfomc.fol.sc2 import SC2, to_sc2
-from wfomc.fol.syntax import Const, Formula, Pred
-from wfomc.network.constraint import CardinalityConstraint
-from wfomc.parser.cardinality_constraints_parser import CCTransfomer
-
-from wfomc.parser.fol_parser import FOLTransformer
-from wfomc.parser.wfomcs_grammar import grammar
+from wfomc.fol import SC2, to_sc2, Const, Pred
+from wfomc.network import CardinalityConstraint
 from wfomc.problems import WFOMCProblem
 from wfomc.utils import Rational
+from .cardinality_constraints_parser import CCTransfomer
+from .fol_parser import FOLTransformer
+from .wfomcs_grammar import grammar
 
 
 class WFOMSTransformer(FOLTransformer, CCTransfomer):

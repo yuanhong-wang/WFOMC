@@ -1,23 +1,18 @@
-from __future__ import annotations
 from collections import defaultdict
-
 import pandas as pd
 import functools
 import networkx as nx
 from itertools import product
-
-from typing import Callable, Dict, FrozenSet, Generator, List, Tuple
+from typing import Callable, Generator
 from logzero import logger
-from sympy import Poly
 from copy import deepcopy
-from wfomc.cell_graph.utils import conditional_on
 
-from wfomc.fol.syntax import AtomicFormula, Const, Pred, QFFormula, a, b, c
-from wfomc.network.constraint import PartitionConstraint
-from wfomc.utils import Rational, RingElement
-from wfomc.utils.multinomial import MultinomialCoefficients
+from wfomc.fol import AtomicFormula, Const, Pred, QFFormula, a, b, c
+from wfomc.network import PartitionConstraint
+from wfomc.utils import Rational, RingElement, MultinomialCoefficients
 
 from .components import Cell, TwoTable
+from .utils import conditional_on
 
 
 class CellGraph(object):
@@ -26,20 +21,20 @@ class CellGraph(object):
     """
 
     def __init__(self, formula: QFFormula,
-                 get_weight: Callable[[Pred], Tuple[RingElement, RingElement]],
+                 get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
                  leq_pred: Pred = None):
         """
         Cell graph that handles cells (1-types) and the WMC between them
 
         :param sentence QFFormula: the sentence in the form of quantifier-free formula
         :param get_weight Callable[[Pred], Tuple[RingElement, RingElement]]: the weighting function
-        :param conditional_formulas List[CNF]: the optional conditional formula appended in WMC computing
+        :param conditional_formulas list[CNF]: the optional conditional formula appended in WMC computing
         """
         self.formula: QFFormula = formula
         self.get_weight: Callable[[Pred],
-                                  Tuple[RingElement, RingElement]] = get_weight
+                                  tuple[RingElement, RingElement]] = get_weight
         self.leq_pred: Pred = leq_pred
-        self.preds: Tuple[Pred] = tuple(self.formula.preds())
+        self.preds: tuple[Pred] = tuple(self.formula.preds())
         logger.debug('prednames: %s', self.preds)
 
         gnd_formula_ab1: QFFormula = self._ground_on_tuple(
@@ -62,15 +57,15 @@ class CellGraph(object):
         logger.info('ground c: %s', self.gnd_formula_cc)
 
         # build cells
-        self.cells: List[Cell] = self._build_cells()
+        self.cells: list[Cell] = self._build_cells()
         # filter cells
         logger.info('the number of valid cells: %s',
                     len(self.cells))
 
         logger.info('computing cell weights')
-        self.cell_weights: Dict[Cell, Poly] = self._compute_cell_weights()
+        self.cell_weights: dict[Cell, RingElement] = self._compute_cell_weights()
         logger.info('computing two table weights')
-        self.two_tables: Dict[Tuple[Cell, Cell],
+        self.two_tables: dict[tuple[Cell, Cell],
                               TwoTable] = self._build_two_tables()
 
     def _ground_on_tuple(self, formula: QFFormula,
@@ -137,13 +132,13 @@ class CellGraph(object):
     def __repr__(self):
         return str(self)
 
-    def get_cells(self, cell_filter: Callable[[Cell], bool] = None) -> List[Cell]:
+    def get_cells(self, cell_filter: Callable[[Cell], bool] = None) -> list[Cell]:
         if cell_filter is None:
             return self.cells
         return list(filter(cell_filter, self.cells))
 
     @functools.lru_cache(maxsize=None, typed=True)
-    def get_cell_weight(self, cell: Cell) -> Poly:
+    def get_cell_weight(self, cell: Cell) -> RingElement:
         if cell not in self.cell_weights:
             logger.warning(
                 "Cell %s not found", cell
@@ -151,41 +146,41 @@ class CellGraph(object):
             return 0
         return self.cell_weights.get(cell)
 
-    def _check_existence(self, cells: Tuple[Cell, Cell]):
+    def _check_existence(self, cells: tuple[Cell, Cell]):
         if cells not in self.two_tables:
             raise ValueError(
                 f"Cells {cells} not found, note that the order of cells matters!"
             )
 
     @functools.lru_cache(maxsize=None, typed=True)
-    def get_two_table_weight(self, cells: Tuple[Cell, Cell],
-                             evidences: FrozenSet[AtomicFormula] = None) -> RingElement:
+    def get_two_table_weight(self, cells: tuple[Cell, Cell],
+                             evidences: frozenset[AtomicFormula] = None) -> RingElement:
         self._check_existence(cells)
         return self.two_tables.get(cells).get_weight(evidences)
 
-    def get_all_weights(self) -> Tuple[List[RingElement], List[RingElement]]:
+    def get_all_weights(self) -> tuple[list[RingElement], list[RingElement]]:
         cell_weights = []
         twotable_weights = []
         for cell_i in self.cells:
-            cell_weights.append(self.get_cell_weight(cell_i))
+            w = self.get_cell_weight(cell_i)
+            cell_weights.append(w)
             twotable_weight = []
             for cell_j in self.cells:
-                twotable_weight.append(self.get_two_table_weight(
-                    (cell_i, cell_j)
-                ))
+                r = self.get_two_table_weight((cell_i, cell_j))
+                twotable_weight.append(r)
             twotable_weights.append(twotable_weight)
         return cell_weights, twotable_weights
 
     @functools.lru_cache(maxsize=None, typed=True)
-    def satisfiable(self, cells: Tuple[Cell, Cell],
-                    evidences: FrozenSet[AtomicFormula] = None) -> bool:
+    def satisfiable(self, cells: tuple[Cell, Cell],
+                    evidences: frozenset[AtomicFormula] = None) -> bool:
         self._check_existence(cells)
         return self.two_tables.get(cells).satisfiable(evidences)
 
     @functools.lru_cache(maxsize=None)
-    def get_two_tables(self, cells: Tuple[Cell, Cell],
-                       evidences: FrozenSet[AtomicFormula] = None) \
-            -> Tuple[FrozenSet[AtomicFormula], RingElement]:
+    def get_two_tables(self, cells: tuple[Cell, Cell],
+                       evidences: frozenset[AtomicFormula] = None) \
+            -> tuple[frozenset[AtomicFormula], RingElement]:
         self._check_existence(cells)
         return self.two_tables.get(cells).get_two_tables(evidences)
 
@@ -257,7 +252,7 @@ class CellGraph(object):
 
 class OptimizedCellGraph(CellGraph):
     def __init__(self, formula: QFFormula,
-                 get_weight: Callable[[Pred], Tuple[RingElement, RingElement]],
+                 get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
                  domain_size: int,
                  modified_cell_symmetry: bool = False):
         """
@@ -289,7 +284,7 @@ class OptimizedCellGraph(CellGraph):
 
         self.term_cache = dict()
 
-    def build_symmetric_cliques(self) -> List[List[Cell]]:
+    def build_symmetric_cliques(self) -> list[list[Cell]]:
         cliques: list[list[Cell]] = []
         cells = deepcopy(self.get_cells())
         while len(cells) > 0:
@@ -485,48 +480,9 @@ class OptimizedCellGraph(CellGraph):
         return ret
 
 
-def build_cell_graphs(formula: QFFormula,
-                      get_weight: Callable[[Pred],
-                                           Tuple[RingElement, RingElement]],
-                      leq_pred: Pred = None,
-                      optimized: bool = False,
-                      domain_size: int = 0,
-                      modified_cell_symmetry: bool = False) \
-        -> Generator[tuple[CellGraph, RingElement]]:
-    nullary_atoms = [atom for atom in formula.atoms() if atom.pred.arity == 0]
-    if len(nullary_atoms) == 0:
-        logger.info('No nullary atoms found, building a single cell graph')
-        if not optimized:
-            yield CellGraph(formula, get_weight, leq_pred), Rational(1, 1)
-        else:
-            yield OptimizedCellGraph(
-                formula, get_weight, domain_size, modified_cell_symmetry
-            ), Rational(1, 1)
-    else:
-        logger.info('Found nullary atoms %s', nullary_atoms)
-        for values in product(*([[True, False]] * len(nullary_atoms))):
-            substitution = dict(zip(nullary_atoms, values))
-            logger.info('Building cell graph with values %s', substitution)
-            subs_formula = formula.sub_nullary_atoms(substitution).simplify()
-            if not subs_formula.satisfiable():
-                logger.info('Formula is unsatisfiable, skipping')
-                continue
-            if not optimized:
-                cell_graph = CellGraph(subs_formula, get_weight, leq_pred)
-            else:
-                cell_graph = OptimizedCellGraph(
-                    subs_formula, get_weight, domain_size,
-                    modified_cell_symmetry
-                )
-            weight = Rational(1, 1)
-            for atom, val in zip(nullary_atoms, values):
-                weight = weight * (get_weight(atom.pred)[0] if val else get_weight(atom.pred)[1])
-            yield cell_graph, weight
-
-
 class OptimizedCellGraphWithPC(CellGraph):
     def __init__(self, formula: QFFormula,
-                 get_weight: Callable[[Pred], Tuple[RingElement, RingElement]],
+                 get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
                  domain_size: int,
                  partition_constraint: PartitionConstraint):
         """
@@ -704,7 +660,7 @@ class OptimizedCellGraphWithPC(CellGraph):
         else:
             # at least two cells in the clique
             r = self.get_two_table_weight((clique[0], clique[1]))
-            sumn = Rational(0, 1)
+            sumn = 0
             for i, n1 in enumerate(clique_config):
                 for j, n2 in enumerate(clique_config):
                     if i < j:
@@ -759,13 +715,13 @@ class OptimizedCellGraphWithPC(CellGraph):
 
 def build_cell_graphs(formula: QFFormula,
                       get_weight: Callable[[Pred],
-                                           Tuple[RingElement, RingElement]],
+                                           tuple[RingElement, RingElement]],
                       leq_pred: Pred = None,
                       optimized: bool = False,
                       domain_size: int = 0,
                       modified_cell_symmetry: bool = False,
                       partition_constraint: PartitionConstraint = None) \
-        -> Generator[tuple[CellGraph, RingElement]]:
+        -> Generator[tuple[CellGraph, RingElement], None, None]:
     nullary_atoms = [atom for atom in formula.atoms() if atom.pred.arity == 0]
     if len(nullary_atoms) == 0:
         logger.info('No nullary atoms found, building a single cell graph')

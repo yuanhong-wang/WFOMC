@@ -1,10 +1,6 @@
-from __future__ import annotations
-from typing import Callable
-
-from wfomc.cell_graph.cell_graph import CellGraph, Cell, build_cell_graphs
-from wfomc.context.wfomc_context import WFOMCContext
+from wfomc.cell_graph import CellGraph, Cell, build_cell_graphs
+from wfomc.context import WFOMCContext
 from wfomc.utils import MultinomialCoefficients, multinomial, RingElement, Rational
-from wfomc.fol.syntax import Const, Pred, QFFormula
 
 def get_config_weight_standard(cell_graph: CellGraph,
                                cell_config: dict[Cell, int]) -> RingElement:

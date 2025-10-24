@@ -1,17 +1,14 @@
-from __future__ import annotations
 from collections import defaultdict
 from itertools import product
-
 from logzero import logger
 from typing import Callable
 from contexttimer import Timer
 
-from wfomc.cell_graph.cell_graph import build_cell_graphs
-from wfomc.context.wfomc_context import WFOMCContext
-from wfomc.network.constraint import PartitionConstraint
+from wfomc.cell_graph import build_cell_graphs
+from wfomc.context import WFOMCContext
+from wfomc.network import PartitionConstraint
 from wfomc.utils import MultinomialCoefficients, multinomial_less_than, RingElement, Rational
-from wfomc.fol.syntax import Const, Pred, QFFormula
-from wfomc.utils.polynomial import expand
+from wfomc.fol import Const, Pred, QFFormula
 
 
 def fast_wfomc(context: WFOMCContext,

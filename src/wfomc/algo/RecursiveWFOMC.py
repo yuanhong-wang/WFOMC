@@ -1,14 +1,11 @@
 import math
 from collections import Counter
-from typing import Callable
 import pynauty
-
 from sympy import factorint, factor_list
-from wfomc.cell_graph import CellGraph, build_cell_graphs
-from wfomc.context.wfomc_context import WFOMCContext
-from wfomc.utils import RingElement, Rational
-from wfomc.utils.polynomial import expand
-from wfomc.fol.syntax import Const, Pred, QFFormula
+
+from wfomc.cell_graph import build_cell_graphs
+from wfomc.context import WFOMCContext
+from wfomc.utils import RingElement, Rational, expand
 
 class TreeNode(object):
     def __init__(self, cell_weights, depth):
@@ -401,6 +398,7 @@ def clean_global_variables():
     FACTOR2INDEX_MAP = {}
     ZERO_FACTOR_INDEX = -1
     FACTOR_ADJ_MAT = []
+
 
 def recursive_wfomc(context: WFOMCContext,
                     real_version: bool = True) -> RingElement:

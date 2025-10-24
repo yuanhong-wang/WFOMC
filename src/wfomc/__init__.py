@@ -1,34 +1,13 @@
-from __future__ import annotations
-import os
-import argparse
-import logging
-import logzero
-
-from logzero import logger
-from contexttimer import Timer
-
-from wfomc.problems import WFOMCProblem
-from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recursive_wfomc
-
-from wfomc.utils import MultinomialCoefficients, Rational, round_rational
-from wfomc.context import WFOMCContext
-from wfomc.parser import parse_input
-from wfomc.fol.syntax import Pred
-
 from .algo import Algo
 from .problems import WFOMCProblem, MLNProblem, MLN_to_WFOMC
 from .parser import parse_input
 from .parser.fol_parser import parse as fol_parse
-from .fol.sc2 import SC2, to_sc2
-from .fol.syntax import *
-from .network.constraint import CardinalityConstraint, UnaryEvidenceEncoding
-from .fol.utils import exactly_one, exactly_one_qf, exclusive_qf, exclusive
+from .fol import *
+from .network import CardinalityConstraint, UnaryEvidenceEncoding
 from .solver import wfomc
 from .count_distribution import count_distribution
-from .utils.polynomial import Rational, var, expand, \
-    coeff_dict, coeff_monomial, round_rational
-from .utils.third_typing import RingElement
-from .utils.multinomial import MultinomialCoefficients, \
+from .utils import Rational, expand, \
+    coeff_dict, coeff_monomial, round_rational, RingElement, MultinomialCoefficients, \
     multinomial, multinomial_less_than
 
 
@@ -46,7 +25,6 @@ __all__ = [
     'to_sc2',
     'fol_parse',
     'Rational',
-    'var',
     'expand',
     'coeff_dict',
     'coeff_monomial',

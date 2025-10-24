@@ -1,10 +1,8 @@
-from __future__ import annotations
-
 from functools import reduce
 from logzero import logger
 from typing import Callable, Union
 
-from wfomc.fol.utils import new_predicate, new_scott_predicate
+from .utils import new_predicate, new_scott_predicate
 from .syntax import *
 from .syntax import FOLSyntaxError
 

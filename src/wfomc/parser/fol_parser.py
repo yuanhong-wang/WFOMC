@@ -1,11 +1,8 @@
 from lark import Transformer, Lark
 from enum import Enum
-from wfomc.fol.sc2 import to_sc2
-from wfomc.fol.syntax import Existential
-from wfomc.fol.utils import exactly_one
 
-from wfomc.parser.fol_grammar import function_free_logic_grammar
-from wfomc.fol.syntax import *
+from wfomc.fol import *
+from .fol_grammar import function_free_logic_grammar
 
 
 QuantifiersEnum = Enum('QuantifiersEnum', ['UNIVERSAL', 'EXISTENTIAL', 'COUNTING'])

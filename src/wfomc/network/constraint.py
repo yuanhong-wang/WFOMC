@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from abc import ABC
 from collections import defaultdict
 from enum import Enum
@@ -8,12 +6,9 @@ from typing import Callable
 from logzero import logger
 from dataclasses import dataclass
 
-from wfomc.fol.syntax import AUXILIARY_PRED_NAME, AtomicFormula, Const, Pred, X, QFFormula, top
-from wfomc.fol.utils import exactly_one_qf, new_predicate
-from wfomc.utils import Rational
-from wfomc.utils.multinomial import MultinomialCoefficients
-from wfomc.utils.polynomial import coeff_dict, create_vars, Symbol, expand
-from wfomc.utils.third_typing import RingElement
+from wfomc.fol import AUXILIARY_PRED_NAME, AtomicFormula, Const, Pred, X, QFFormula, top
+from wfomc.fol import exactly_one_qf, new_predicate
+from wfomc.utils import Rational, Poly, MultinomialCoefficients, coeff_dict, create_vars, expand
 
 
 class Constraint(ABC):
@@ -37,31 +32,27 @@ class CardinalityConstraint(Constraint):
         if self.constraints is None:
             self.constraints = list()
 
-        self.preds: set[Pred] = set()
+        self.preds: list[Pred] = list()
         if self.constraints is not None:
             for constraint in self.constraints:
-                self.preds.update(constraint[0].keys())
+                self.preds = list(set(self.preds).union(constraint[0].keys()))
 
-        self.gen_vars: list[Symbol]
-        self.var2pred: dict[Symbol, Pred] = dict()
+        self.gen_vars: list[Poly]
         self.validator: str = ""
 
     def empty(self) -> bool:
         return len(self.constraints) == 0
 
     def transform_weighting(self, get_weight: Callable[[Pred], tuple[Rational, Rational]]) \
-            -> dict[Pred, tuple[Rational, Rational]]:
-        new_weights: dict[Pred, tuple[RingElement, RingElement]] = {}
-        self.gen_vars = create_vars('x0:{}'.format(
-            len(self.preds))
-        )
+            -> dict[Pred, tuple[Poly, Poly]]:
+        new_weights: dict[Pred, tuple[Poly, Poly]] = {}
+        self.gen_vars = create_vars('x', len(self.preds))
         for sym, pred in zip(self.gen_vars, self.preds):
             weight = get_weight(pred)
             new_weights[pred] = (weight[0] * sym, weight[1])
-            self.var2pred[sym] = pred
         return new_weights
 
-    def decode_poly(self, poly: RingElement) -> RingElement:
+    def decode_poly(self, poly: Poly) -> Rational:
         poly = expand(poly)
         coeffs = coeff_dict(poly, self.gen_vars)
         # logger.debug('coeffs: %s', list(coeffs))
@@ -72,7 +63,7 @@ class CardinalityConstraint(Constraint):
         return res
 
     def valid(self, degrees: list[int]) -> bool:
-        kwargs = zip((self.var2pred[sym].name for sym in self.gen_vars), degrees)
+        kwargs = zip((pred.name for pred in self.preds), degrees)
         return eval(self.validator.format(**dict(kwargs)))
 
     def extend_simple_constraints(self, ccs: list[tuple[Pred, str, int]]):
@@ -84,11 +75,11 @@ class CardinalityConstraint(Constraint):
         Add a constraint of the form |pred| comp card
         """
         self.constraints.append(({pred: 1}, comp, card))
-        self.preds.add(pred)
+        self.preds = list(set(self.preds).union({pred}))
 
     def add(self, expr: dict[Pred, float], comp: str, param: float):
         self.constraints.append((expr, comp, param))
-        self.preds.update(expr.keys())
+        self.preds = list(set(self.preds).union(expr.keys()))
 
     def build(self):
         validator_list: list[str] = []
