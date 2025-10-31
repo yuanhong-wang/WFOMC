@@ -25,19 +25,21 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
                                "incremental and recursive WFOMC algorithms")
 
     if problem.contain_unary_evidence():
-        logger.info(f'Unary evidence is found, using {unary_evidence_encoding} encoding')
+        logger.info(
+            f'Unary evidence is found, using {unary_evidence_encoding} encoding')
         if unary_evidence_encoding == UnaryEvidenceEncoding.PC and \
                 algo != Algo.FASTv2 and algo != Algo.INCREMENTAL:
             raise RuntimeError("Partition constraint is only supported for the "
                                "fastv2 WFOMC and incremental WFOMC algorithms")
 
-    logger.info(f'Invoke WFOMC with {algo} algorithm and {unary_evidence_encoding} encoding')
+    logger.info(
+        f'Invoke WFOMC with {algo} algorithm and {unary_evidence_encoding} encoding')
 
     if algo == Algo.DR:
-        context = DRWFOMCContext(problem) # our INCREMENTALWFOMC3
+        context = DRWFOMCContext(problem)  # our INCREMENTALWFOMC3
     else:
-        context = WFOMCContext(problem) # 旧的encoding
-        # context = WFOMCContextNewEncoding(problem) # new encoding form 论文《Complexity of Weighted First-Order Model Counting in theTwo-Variable Fragment with Counting Quantifiers:A Bound to Beat》
+        context = WFOMCContext(problem)  # old encoding
+        # context = WFOMCContextNewEncoding(problem) # new encoding form 《Complexity of Weighted First-Order Model Counting in theTwo-Variable Fragment with Counting Quantifiers:A Bound to Beat》
     res = Rational(0, 1)
     with Timer() as t:
         if algo == Algo.STANDARD:
@@ -52,9 +54,10 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
             res = recursive_wfomc(context)
         elif algo == Algo.DR:
             res = domain_recursive_wfomc(context)
-            # 由于m-odd 这个输入的例子 需要除以 domain size
+            # Since the example of input "m-odd" requires division by the size of the domain
             if hasattr(context, 'unary_eq_constraints') and context.unary_eq_constraints:
-                constraint_names = {constraint[0].name for constraint in context.unary_eq_constraints}
+                constraint_names = {
+                    constraint[0].name for constraint in context.unary_eq_constraints}
                 if 'Odd' in constraint_names and 'U' in constraint_names:
                     res /= len(context.problem.domain)
     res = context.decode_result(res)

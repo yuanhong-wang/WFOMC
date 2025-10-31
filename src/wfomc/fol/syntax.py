@@ -196,7 +196,6 @@ class QFFormula(Formula):
 
     def atoms(self) -> frozenset[AtomicFormula]:
         # return backend.get_atoms(self.expr)
-        # Top / Bot（expr is None）或简化后是常量 true/false，都没有一阶原子
         import sympy
         if self.expr is None or self.expr in (sympy.true, sympy.false):
             return frozenset()
@@ -233,16 +232,17 @@ class QFFormula(Formula):
 
         for model in backend.get_models(self.expr):
             yield frozenset(
-                backend.get_atom(symbol) if value else ~backend.get_atom(symbol)
+                backend.get_atom(
+                    symbol) if value else ~backend.get_atom(symbol)
                 for symbol, value in model.items()
             )
 
-    def substitute(self, substitution: dict[Term, Term]) -> QFFormula: # TODO 这里好像是binary modk 的时候修改了
+    # TODO 这里好像是binary modk 的时候修改了
+    def substitute(self, substitution: dict[Term, Term]) -> QFFormula:
         # atom_substitutions = OrderedDict()
         # for atom in self.atoms():
         #     atom_substitutions[atom.expr] = atom.substitute(substitution).expr
         # return QFFormula(backend.substitute(self.expr, atom_substitutions))
-        # ⊤ / ⊥ 无需替换，原样返回
         if self.expr is None:
             return self
 
@@ -251,8 +251,10 @@ class QFFormula(Formula):
             for atom in self.atoms()
         )
         return QFFormula(backend.substitute(self.expr, atom_substitutions))
+
     def sub_nullary_atoms(self, substitution: dict[AtomicFormula, bool]) -> QFFormula:
-        substitution = dict((atom.expr, value) for atom, value in substitution.items())
+        substitution = dict((atom.expr, value)
+                            for atom, value in substitution.items())
         return QFFormula(backend.substitute(self.expr, substitution))
 
     def simplify(self) -> QFFormula:
@@ -415,7 +417,6 @@ class Counting(Quantifier):
             r, k = self.count_param
             assert 0 <= r < k, "Require 0 ≤ r < k"
 
-        # 固定写法 '\exists'
         object.__setattr__(self, 'quantifier', '\\exists')
 
     def __str__(self):
@@ -448,7 +449,8 @@ class QuantifiedFormula(Formula):
 
     def rename(self, substitution: dict[Term, Term]) -> QuantifiedFormula:
         # filter out the quantified variable
-        substitution = {k: v for k, v in substitution.items() if k in self.free_vars()}
+        substitution = {k: v for k, v in substitution.items()
+                        if k in self.free_vars()}
         inverse_substitution = {v: k for k, v in substitution.items()}
         if self.quantified_var in inverse_substitution:
             raise FOLSyntaxError('Subsituting variable {} with {} will cause collision in the formula: {}'.format(
@@ -464,7 +466,8 @@ class QuantifiedFormula(Formula):
         elif isinstance(self.quantified_formula, QuantifiedFormula):
             return QuantifiedFormula(quantifier_scope, self.quantified_formula.rename(substitution))
         else:
-            raise FOLSyntaxError('Compound quantified formula is not supported')
+            raise FOLSyntaxError(
+                'Compound quantified formula is not supported')
 
     def consts(self) -> frozenset[Const]:
         return self.quantified_formula.consts()
