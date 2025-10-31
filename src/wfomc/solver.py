@@ -54,12 +54,6 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
             res = recursive_wfomc(context)
         elif algo == Algo.DR:
             res = domain_recursive_wfomc(context)
-            # Since the example of input "m-odd" requires division by the size of the domain
-            if hasattr(context, 'unary_eq_constraints') and context.unary_eq_constraints:
-                constraint_names = {
-                    constraint[0].name for constraint in context.unary_eq_constraints}
-                if 'Odd' in constraint_names and 'U' in constraint_names:
-                    res /= len(context.problem.domain)
     res = context.decode_result(res)
     logger.info('WFOMC time: %s', t.elapsed)
     return res
