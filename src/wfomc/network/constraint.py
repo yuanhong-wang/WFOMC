@@ -6,7 +6,7 @@ from typing import Callable
 from logzero import logger
 from dataclasses import dataclass
 
-from wfomc.fol import AUXILIARY_PRED_NAME, AtomicFormula, Const, Pred, X, QFFormula, top
+from wfomc.fol.syntax import AUXILIARY_PRED_NAME, AtomicFormula, Const, Pred, X, QFFormula, top
 from wfomc.fol import exactly_one_qf, new_predicate
 from wfomc.utils import Rational, Poly, MultinomialCoefficients, coeff_dict, create_vars, expand
 

@@ -6,11 +6,9 @@ from itertools import product
 from typing import Callable, Generator
 from logzero import logger
 from copy import deepcopy
-
 from wfomc.fol import AtomicFormula, Const, Pred, QFFormula, a, b, c
 from wfomc.network import PartitionConstraint
 from wfomc.utils import Rational, RingElement, MultinomialCoefficients
-
 from .components import Cell, TwoTable
 from .utils import conditional_on
 

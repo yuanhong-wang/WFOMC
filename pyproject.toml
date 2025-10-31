@@ -9,7 +9,6 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "contexttimer>=0.3.3",
-    "dataclasses>=0.8",
     "lark>=1.2.2",
     "logzero>=1.7.0",
     "networkx>=3.2.1",

@@ -5,5 +5,5 @@
 \forall X: (\exists Y: (F1(X,Y))) & 
 \forall X: (\exists Y: (F2(X,Y)))
 
-V = 10
-|E| = 20
+V = 4
+|E| = 8

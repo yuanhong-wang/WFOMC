@@ -8,9 +8,9 @@ from contexttimer import Timer
 
 from wfomc.network import UnaryEvidenceEncoding
 from wfomc.problems import WFOMCProblem
-from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recursive_wfomc
+from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recursive_wfomc, domain_recursive_wfomc
 from wfomc.utils import MultinomialCoefficients, Rational, round_rational
-from wfomc.context import WFOMCContext
+from wfomc.context import WFOMCContext, WFOMCContextNewEncoding, DRWFOMCContext
 from wfomc.parser import parse_input
 
 
@@ -33,7 +33,12 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
 
     logger.info(f'Invoke WFOMC with {algo} algorithm and {unary_evidence_encoding} encoding')
 
-    context = WFOMCContext(problem, unary_evidence_encoding)
+    if algo == Algo.DR:
+        context = DRWFOMCContext(problem) # our INCREMENTALWFOMC3
+    else:
+        context = WFOMCContext(problem) # 旧的encoding
+        # context = WFOMCContextNewEncoding(problem) # new encoding form 论文《Complexity of Weighted First-Order Model Counting in theTwo-Variable Fragment with Counting Quantifiers:A Bound to Beat》
+    res = Rational(0, 1)
     with Timer() as t:
         if algo == Algo.STANDARD:
             res = standard_wfomc(context)
@@ -45,6 +50,13 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
             res = incremental_wfomc(context)
         elif algo == Algo.RECURSIVE:
             res = recursive_wfomc(context)
+        elif algo == Algo.DR:
+            res = domain_recursive_wfomc(context)
+            # 由于m-odd 这个输入的例子 需要除以 domain size
+            if hasattr(context, 'unary_eq_constraints') and context.unary_eq_constraints:
+                constraint_names = {constraint[0].name for constraint in context.unary_eq_constraints}
+                if 'Odd' in constraint_names and 'U' in constraint_names:
+                    res /= len(context.problem.domain)
     res = context.decode_result(res)
     logger.info('WFOMC time: %s', t.elapsed)
     return res

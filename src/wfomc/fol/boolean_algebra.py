@@ -7,13 +7,16 @@ import typing
 import sympy
 from sympy import Symbol, satisfiable
 from sympy.logic import boolalg
-from typing import Iterable
+from typing import Dict, Iterable
 
 if typing.TYPE_CHECKING:
     from .syntax import AtomicFormula
 
 
-sym2atom: dict[Symbol, AtomicFormula] = dict()
+Symbol = Symbol
+
+
+sym2atom: Dict[Symbol, AtomicFormula] = dict()
 
 
 def get_symbol(atom: AtomicFormula) -> Symbol:

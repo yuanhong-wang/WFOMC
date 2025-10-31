@@ -3,13 +3,15 @@ from __future__ import annotations
 from fractions import Fraction
 
 from lark import Lark
-from wfomc.fol import SC2, to_sc2, Const, Pred
-from wfomc.network import CardinalityConstraint
+from wfomc.fol.sc2 import SC2, to_sc2
+from wfomc.fol.syntax import Const, Formula, Pred
+from wfomc.network.constraint import CardinalityConstraint
+from wfomc.parser.cardinality_constraints_parser import CCTransfomer
+
+from wfomc.parser.fol_parser import FOLTransformer
+from wfomc.parser.wfomcs_grammar import grammar
 from wfomc.problems import WFOMCProblem
 from wfomc.utils import Rational
-from .cardinality_constraints_parser import CCTransfomer
-from .fol_parser import FOLTransformer
-from .wfomcs_grammar import grammar
 
 
 class WFOMSTransformer(FOLTransformer, CCTransfomer):
@@ -62,7 +64,6 @@ class WFOMSTransformer(FOLTransformer, CCTransfomer):
         domain = args[1][1]
         weightings = args[2]
         cardinality_constraints = args[3]
-        unary_evidence = args[4]
         try:
             sentence = to_sc2(sentence)
         except:
@@ -83,7 +84,7 @@ class WFOMSTransformer(FOLTransformer, CCTransfomer):
         else:
             cardinality_constraint = None
 
-        return sentence, domain, weightings, cardinality_constraint, unary_evidence
+        return sentence, domain, weightings, cardinality_constraint
 
 
 def parse(text: str) -> \
@@ -98,8 +99,7 @@ def parse(text: str) -> \
         sentence,
         domain,
         weightings,
-        cardinality_constraint,
-        unary_evidence
+        cardinality_constraint
     ) = WFOMSTransformer().transform(tree)
     pred_weightings = dict(
         (sentence.pred_by_name(pred), weights)
@@ -109,19 +109,21 @@ def parse(text: str) -> \
         sentence,
         domain,
         pred_weightings,
-        cardinality_constraint,
-        unary_evidence
+        cardinality_constraint
     )
 
 
 if __name__ == '__main__':
-    wfoms = parse(r'''
-\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+    parse(r"""
 \forall X: (~E(X,X)) &
-\forall X: (\exists Y: (E(X,Y)))
-
-vertices = 10
-0.1 1 E
-0.2 2 F
-0.3 3 G
-    ''')
+\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+\forall X: (\exists_{<=3} Y: (E(X,Y)))
+V = 5
+    """)
+#     wfoms = parse(r'''
+# \forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+# \forall X: (~E(X,X)) &
+# \forall X: (\exists Y: (E(X,Y)))
+#
+# v = 10
+#     ''')

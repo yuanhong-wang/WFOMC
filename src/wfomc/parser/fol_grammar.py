@@ -19,18 +19,15 @@ function_free_logic_grammar = r"""
     ?term: constant
         | variable
 
-    unary_evidence: unary_literal* ("," unary_literal)*
-    ?unary_literal: atomic_ffl | negation
-
     left_square_bracket: "["
     right_square_bracket: "]"
     left_parenthesis: "("
     right_parenthesis: ")"
     quantifier_variable: quantifier variable
-    ?quantifier: universal_quantifier | existential_quantifier | counting_quantifier
+    ?quantifier: universal_quantifier | existential_quantifier | counting_quantifier 
     universal_quantifier: "\\forall"
     existential_quantifier: "\\exists"
-    counting_quantifier: "\\exists_{" comparator count_parameter "}"
+    counting_quantifier : "\\exists_{" comparator count_parameter "}" | "\\exists_{" INT "mod" count_parameter "}"    -> mod_quantifier   //  ∃_{r mod k}
     constant: LCASE_CNAME
     variable: UCASE_LETTER
     predicate: CNAME
@@ -47,7 +44,7 @@ function_free_logic_grammar = r"""
     ge: ">="
     lt: "<"
     gt: ">"
-    LCASE_CNAME: LCASE_LETTER ("_"|LCASE_LETTER|UCASE_LETTER|DIGIT)*
+    LCASE_CNAME: LCASE_LETTER ("_"|LCASE_LETTER|DIGIT)*
 
     %import common.LCASE_LETTER
     %import common.UCASE_LETTER
@@ -55,6 +52,8 @@ function_free_logic_grammar = r"""
     %import common.DIGIT
     %import common.FLOAT
     %import common.INT
+    %import common.SIGNED_FLOAT
+    %import common.SIGNED_INT
     %import common.SIGNED_NUMBER
     %import common.NUMBER
     %import common.WS

@@ -13,9 +13,9 @@ domain_grammar = r"""
 
 
 grammar = r"""
-    ?wfomcs: ffl domain weightings cardinality_constraints unary_evidence
+    ?wfomcs: ffl domain weightings cardinality_constraints
     weightings: weighting*
     weighting: weight weight predicate
 
-    weight: FLOAT | INT
+    weight: SIGNED_FLOAT | SIGNED_INT
 """ + domain_grammar + cc_grammar + function_free_logic_grammar
