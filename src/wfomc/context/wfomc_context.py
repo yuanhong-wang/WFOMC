@@ -37,6 +37,8 @@ class WFOMCContext(object):
         self.formula: QFFormula
         # for handling linear order axiom
         self.leq_pred: Pred = None
+        self.predecessor_preds: dict[int, Pred] = None
+        self.circular_predecessor_pred: Pred = None
         # for handling unary evidence
         self.element2evidence: dict[Const, set[AtomicFormula]] = dict()
         self.partition_constraint: PartitionConstraint = None
@@ -169,3 +171,15 @@ class WFOMCContext(object):
 
         if self.problem.contain_linear_order_axiom():
             self.leq_pred = Pred('LEQ', 2)
+        if self.problem.contain_predecessor_axiom():
+            for pred in self.sentence.preds():
+                if pred.name.startswith('PRED'):
+                    if self.predecessor_preds is None:
+                        self.predecessor_preds = {}
+                    self.predecessor_preds[int(pred.name[4:])] = pred
+        if self.problem.contain_circular_predecessor_axiom():
+            if self.predecessor_preds is None:
+                self.predecessor_preds = {
+                    1: Pred('CIRCULAR_PRED', 2)
+                }
+            self.circular_predecessor_pred = Pred('CIRCULAR_PRED', 2)

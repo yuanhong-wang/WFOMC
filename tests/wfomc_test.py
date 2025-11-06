@@ -26,15 +26,27 @@ models_dir2args = {
         (Algo.INCREMENTAL, UnaryEvidenceEncoding.PC),
         (Algo.FASTv2, UnaryEvidenceEncoding.PC),
     ),
+    current_path.parent / 'models' / 'unary_evidence': (
+        (Algo.STANDARD, UnaryEvidenceEncoding.CCS),
+        (Algo.FAST, UnaryEvidenceEncoding.CCS),
+        (Algo.FASTv2, UnaryEvidenceEncoding.CCS),
+        (Algo.INCREMENTAL, UnaryEvidenceEncoding.CCS),
+        (Algo.RECURSIVE, UnaryEvidenceEncoding.CCS),
+        (Algo.INCREMENTAL, UnaryEvidenceEncoding.PC),
+        (Algo.FASTv2, UnaryEvidenceEncoding.PC),
+    ),
     current_path.parent / 'models' / 'linear_order': (
         (Algo.INCREMENTAL, ),
         # (Algo.RECURSIVE, ),
     ),
     current_path.parent / 'models' / 'linear_order_unary_evidence': (
         (Algo.INCREMENTAL, UnaryEvidenceEncoding.CCS),
-        # (Algo.RECURSIVE, UnaryEvidenceEncoding.CCS),
+        (Algo.RECURSIVE, UnaryEvidenceEncoding.CCS),
         (Algo.INCREMENTAL, UnaryEvidenceEncoding.PC),
-    )
+    ),
+    current_path.parent / 'models' / 'linear_order' / 'predk': (
+        (Algo.INCREMENTAL, ),
+    ),
 }
 model_files = list((current_path.parent / 'models').glob('**/*.wfomcs')) + \
     list((current_path.parent / 'models').glob('**/*.mln'))

@@ -1,0 +1,8 @@
+ExactlyOne[Sun, Rain].
+0.5 S(X) -> Rain(X)
+Sun(X) & PRED1(X,Y) -> Rain(X).
+1 S(X) & PRED1(X,Y) -> S(Y)
+0.4 S(X) & PRED2(X,Y) -> S(Y)
+0.1 S(X) & PRED3(X,Y) -> S(Y)
+
+domain = 15

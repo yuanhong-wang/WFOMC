@@ -5,6 +5,7 @@ import logzero
 
 from logzero import logger
 from contexttimer import Timer
+from wfomc.network.constraint import UnaryEvidenceEncoding
 
 from wfomc.network import UnaryEvidenceEncoding
 from wfomc.problems import WFOMCProblem
@@ -23,6 +24,11 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
         if algo != Algo.INCREMENTAL and algo != Algo.RECURSIVE:
             raise RuntimeError("Linear order axiom is only supported by the "
                                "incremental and recursive WFOMC algorithms")
+    if problem.contain_predecessor_axiom():
+        logger.info('Predecessor predicate PRED is found')
+        if algo != Algo.INCREMENTAL:
+            raise RuntimeError("Predecessor axiom is only supported by the "
+                               "incremental WFOMC algorithm")
 
     if problem.contain_unary_evidence():
         logger.info(f'Unary evidence is found, using {unary_evidence_encoding} encoding')
@@ -42,7 +48,7 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
         elif algo == Algo.FASTv2:
             res = fast_wfomc(context, True)
         elif algo == Algo.INCREMENTAL:
-            res = incremental_wfomc(context)
+            res = incremental_wfomc(context, problem.circle_len)
         elif algo == Algo.RECURSIVE:
             res = recursive_wfomc(context)
     res = context.decode_result(res)
