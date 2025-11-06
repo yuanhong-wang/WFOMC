@@ -998,7 +998,7 @@ class OptimizedCellGraphWithPC(CellGraph):
         else:
             # at least two cells in the clique
             r = self.get_two_table_weight((clique[0], clique[1]))
-            sumn = Rational(0, 1)
+            sumn = 0
             for i, n1 in enumerate(clique_config):
                 for j, n2 in enumerate(clique_config):
                     if i < j:

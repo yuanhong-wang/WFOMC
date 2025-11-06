@@ -1,0 +1,6 @@
+\forall X: (\forall Y: ((((p_entity_Jones(X) & p_entity_Smith(Y)) -> p_schedule_LEQ(X,Y)) & (p_schedule_LEQ(X,Y) <-> (LEQ(X,Y) & p_set_lecturers(X) & p_set_lecturers(Y))) & ((p_set_lecturers(X) & ~(p_set_lecturers(Y))) -> LEQ(X,Y)))))
+
+domain = {c_other2, c_other0, c_other3, c_Jones, c_other1, c_Smith}
+
+
+p_set_lecturers(c_other0), p_set_lecturers(c_other2), ~p_entity_Jones(c_other1), p_set_lecturers(c_other3), p_entity_Jones(c_Jones), ~p_entity_Smith(c_other2), p_set_lecturers(c_Smith), ~p_entity_Smith(c_Jones), ~p_entity_Jones(c_other3), ~p_entity_Jones(c_other0), ~p_entity_Smith(c_other1), ~p_entity_Jones(c_other2), p_set_lecturers(c_other1), ~p_entity_Smith(c_other0), p_set_lecturers(c_Jones), ~p_entity_Jones(c_Smith), ~p_entity_Smith(c_other3), p_entity_Smith(c_Smith)

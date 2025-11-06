@@ -1,0 +1,8 @@
+\forall X: (\forall Y: (((p_row_PRED(X,Y) <-> (PRED(X,Y) & p_set_aux_238(X) & p_set_aux_238(Y))) & ((p_set_aux_238(X) & ~(p_set_aux_238(Y))) -> LEQ(X,Y)) & (~(p_daughters_first(X)) | (p_set_daughters(X) & (p_set_daughters(Y) -> ~(p_row_PRED(Y,X))))))))
+& \forall X: (\exists Y: ((p_daughters_first(X) | ~((p_set_daughters(X) & (p_set_daughters(Y) -> ~(p_row_PRED(Y,X))))))))
+
+domain = {c_daughter0, c_daughter2, c_daughter1, c_son3, c_son1, c_son0, c_son2}
+
+1 |p_daughters_first| <= 1
+
+~p_set_daughters(c_son0), p_set_aux_238(c_son2), ~p_set_daughters(c_son3), ~p_set_daughters(c_son1), p_set_daughters(c_daughter1), ~p_set_daughters(c_son2), p_set_aux_238(c_son0), p_set_aux_238(c_son1), p_set_aux_238(c_son3), p_set_daughters(c_daughter0), p_set_aux_238(c_daughter2), p_set_daughters(c_daughter2), p_set_aux_238(c_daughter1), p_set_aux_238(c_daughter0)

@@ -1,0 +1,6 @@
+\forall X: (\forall Y: (((p_arrangement_NEXT_TO(X,Y) <-> (p_arrangement_PRED(X,Y) | p_arrangement_PRED(Y,X))) & ((p_entity_chief(X) & p_entity_wife(Y)) -> p_arrangement_NEXT_TO(X,Y)) & ((p_entity_chief(Y) & p_entity_mother(X)) -> p_arrangement_NEXT_TO(X,Y)) & (p_arrangement_PRED(X,Y) <-> (CIRCULAR_PRED(X,Y) & p_set_tribe(X) & p_set_tribe(Y))) & ((p_set_tribe(X) & ~(p_set_tribe(Y))) -> LEQ(X,Y)))))
+
+domain = {c_other2, c_other0, c_other3, c_wife, c_other1, c_chief, c_mother, c_other4}
+
+
+~p_entity_chief(c_other3), p_entity_chief(c_chief), ~p_entity_wife(c_mother), ~p_entity_mother(c_chief), ~p_entity_chief(c_mother), p_set_tribe(c_chief), p_set_tribe(c_wife), ~p_entity_wife(c_chief), ~p_entity_mother(c_wife), p_set_tribe(c_other0), ~p_entity_mother(c_other0), ~p_entity_mother(c_other1), ~p_entity_chief(c_wife), ~p_entity_wife(c_other0), ~p_entity_chief(c_other0), ~p_entity_wife(c_other1), ~p_entity_mother(c_other4), p_set_tribe(c_other1), ~p_entity_wife(c_other4), p_set_tribe(c_other4), ~p_entity_chief(c_other4), p_set_tribe(c_other2), ~p_entity_chief(c_other1), ~p_entity_mother(c_other3), ~p_entity_wife(c_other2), ~p_entity_wife(c_other3), p_entity_mother(c_mother), ~p_entity_chief(c_other2), ~p_entity_mother(c_other2), p_entity_wife(c_wife), p_set_tribe(c_other3), p_set_tribe(c_mother)

@@ -1,0 +1,8 @@
+\forall X: (\forall Y: (((p_row_PRED(X,Y) <-> (PRED(X,Y) & p_set_aux_70(X) & p_set_aux_70(Y))) & ((p_set_aux_70(X) & ~(p_set_aux_70(Y))) -> LEQ(X,Y)) & (~(p_tomato_plants_first(X)) | (p_set_tomato_plants(X) & (p_set_tomato_plants(Y) -> ~(p_row_PRED(Y,X))))))))
+& \forall X: (\exists Y: ((p_tomato_plants_first(X) | ~((p_set_tomato_plants(X) & (p_set_tomato_plants(Y) -> ~(p_row_PRED(Y,X))))))))
+
+domain = {c_tomato0, c_tomato2, c_tomato1, c_basil2, c_basil3, c_basil1, c_basil0, c_tomato3}
+
+1 |p_tomato_plants_first| <= 1
+
+p_set_aux_70(c_tomato1), p_set_tomato_plants(c_tomato1), p_set_aux_70(c_basil1), ~p_set_tomato_plants(c_basil1), p_set_aux_70(c_basil2), p_set_tomato_plants(c_tomato0), ~p_set_tomato_plants(c_basil3), p_set_aux_70(c_basil0), p_set_aux_70(c_basil3), p_set_aux_70(c_tomato3), p_set_tomato_plants(c_tomato2), p_set_aux_70(c_tomato0), p_set_tomato_plants(c_tomato3), p_set_aux_70(c_tomato2), ~p_set_tomato_plants(c_basil2), ~p_set_tomato_plants(c_basil0)

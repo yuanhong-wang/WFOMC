@@ -1,0 +1,6 @@
+\forall X: (\forall Y: (((p_table_NEXT_TO(X,Y) <-> (p_table_PRED(X,Y) | p_table_PRED(Y,X))) & (p_table_PRED(X,Y) <-> (CIRCULAR_PRED(X,Y) & p_set_aux_155(X) & p_set_aux_155(Y))) & ((p_set_Democrats(X) & p_set_Democrats(Y)) -> ~(p_table_NEXT_TO(X,Y))) & ((p_set_Republicans(X) & p_set_Republicans(Y)) -> ~(p_table_NEXT_TO(X,Y))) & ((p_set_aux_155(X) & ~(p_set_aux_155(Y))) -> LEQ(X,Y)))))
+
+domain = {c_D2, c_D3, c_D1, c_R4, c_D4, c_R0, c_R2, c_R1, c_D0, c_R3}
+
+
+p_set_Republicans(c_R4), ~p_set_Democrats(c_R2), ~p_set_Republicans(c_D3), p_set_Republicans(c_R0), ~p_set_Democrats(c_R0), p_set_Republicans(c_R1), p_set_Democrats(c_D0), p_set_Democrats(c_D1), p_set_aux_155(c_R3), ~p_set_Democrats(c_R4), p_set_aux_155(c_D3), p_set_aux_155(c_R2), ~p_set_Democrats(c_R1), ~p_set_Republicans(c_D2), p_set_aux_155(c_D2), p_set_aux_155(c_R0), p_set_aux_155(c_R4), ~p_set_Republicans(c_D4), ~p_set_Republicans(c_D0), p_set_Democrats(c_D3), p_set_aux_155(c_R1), p_set_Democrats(c_D2), p_set_aux_155(c_D4), p_set_Republicans(c_R3), ~p_set_Republicans(c_D1), p_set_aux_155(c_D0), p_set_aux_155(c_D1), p_set_Republicans(c_R2), ~p_set_Democrats(c_R3), p_set_Democrats(c_D4)

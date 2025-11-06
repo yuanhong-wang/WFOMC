@@ -1,0 +1,6 @@
+\forall X: (\forall Y: (((p_row_PRED(X,Y) <-> (PRED(X,Y) & p_set_aux_204(X) & p_set_aux_204(Y))) & (p_sons_pred_sons(X,Y) <-> (p_row_PRED(X,Y) & p_set_sons(X) & p_set_sons(Y))) & ((p_set_aux_204(X) & ~(p_set_aux_204(Y))) -> LEQ(X,Y)))))
+
+domain = {c_daughter0, c_daughter2, c_daughter1, c_son3, c_son1, c_son0, c_son2}
+
+|p_sons_pred_sons| >= 1
+p_set_aux_204(c_son2), ~p_set_sons(c_daughter2), ~p_set_sons(c_daughter1), ~p_set_sons(c_daughter0), p_set_sons(c_son3), p_set_sons(c_son0), p_set_aux_204(c_daughter2), p_set_aux_204(c_son0), p_set_aux_204(c_son1), p_set_aux_204(c_son3), p_set_sons(c_son2), p_set_aux_204(c_daughter1), p_set_aux_204(c_daughter0), p_set_sons(c_son1)

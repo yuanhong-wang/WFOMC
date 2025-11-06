@@ -1,0 +1,8 @@
+\forall X: (\forall Y: (((p_row_PRED(X,Y) <-> (PRED(X,Y) & p_set_aux_19(X) & p_set_aux_19(Y))) & ((p_set_aux_19(X) & ~(p_set_aux_19(Y))) -> LEQ(X,Y)) & (~(p_boys_first(X)) | (p_set_boys(X) & (p_set_boys(Y) -> ~(p_row_PRED(Y,X))))))))
+& \forall X: (\exists Y: ((p_boys_first(X) | ~((p_set_boys(X) & (p_set_boys(Y) -> ~(p_row_PRED(Y,X))))))))
+
+domain = {c_girl2, c_girl5, c_girl0, c_boy1, c_girl3, c_girl1, c_boy0, c_girl4}
+
+1 |p_boys_first| <= 1
+
+p_set_aux_19(c_girl4), p_set_aux_19(c_girl0), ~p_set_boys(c_girl2), p_set_aux_19(c_boy1), p_set_aux_19(c_boy0), ~p_set_boys(c_girl1), ~p_set_boys(c_girl4), p_set_aux_19(c_girl1), ~p_set_boys(c_girl3), ~p_set_boys(c_girl5), p_set_boys(c_boy0), p_set_boys(c_boy1), p_set_aux_19(c_girl2), ~p_set_boys(c_girl0), p_set_aux_19(c_girl5), p_set_aux_19(c_girl3)
