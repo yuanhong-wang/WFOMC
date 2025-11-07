@@ -1,0 +1,9 @@
+\forall X: (\forall Y: ((~((p_order_catfish(X) & p_order_crocodile(X))) & ~((p_order_catfish(X) & p_order_squid(X))) & ~((p_order_crocodile(X) & p_order_squid(X))) & (p_order_PRED(X,Y) <-> (PRED(X,Y) & p_set_aux_41(X) & p_set_aux_41(Y))) & (p_set_aux_41(X) <-> (p_order_catfish(X) | p_order_crocodile(X) | p_order_squid(X))) & ((p_order_crocodile(X) & p_order_crocodile(Y)) -> ~(p_order_PRED(X,Y))) & ((p_set_aux_41(X) & ~(p_set_aux_41(Y))) -> LEQ(X,Y)))))
+
+domain = {c_idx_0, c_crocodile, c_idx_4, c_idx_6, c_squid, c_idx_3, c_idx_5, c_catfish, c_idx_1, c_idx_2}
+
+|p_order_squid| = 2
+|p_order_crocodile| = 4
+|p_order_catfish| = 1
+
+p_set_aux_41(c_idx_6), p_set_aux_41(c_idx_5), p_set_aux_41(c_idx_4), ~p_set_aux_41(c_squid), ~p_set_aux_41(c_catfish), p_set_aux_41(c_idx_2), ~p_set_aux_41(c_crocodile), p_set_aux_41(c_idx_3), p_set_aux_41(c_idx_1), p_set_aux_41(c_idx_0)

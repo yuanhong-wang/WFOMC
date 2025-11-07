@@ -1,0 +1,6 @@
+\forall X: (\forall Y: ((~((p_word_A(X) & p_word_B(X))) & ~((p_word_A(X) & p_word_C(X))) & ~((p_word_B(X) & p_word_C(X))) & (p_set_aux_246(X) <-> (p_word_A(X) | p_word_B(X) | p_word_C(X))) & (p_word_PRED(X,Y) <-> (PRED(X,Y) & p_set_aux_246(X) & p_set_aux_246(Y))) & ((p_set_aux_246(X) & ~(p_set_aux_246(Y))) -> LEQ(X,Y)) & ((p_word_A(X) & p_word_B(Y)) -> ~(p_word_PRED(X,Y))) & ((p_word_A(Y) & p_word_C(X)) -> ~(p_word_PRED(X,Y))) & ((p_word_B(X) & p_word_C(Y)) -> ~(p_word_PRED(X,Y))))))
+
+domain = {c_idx_0, c_idx_4, c_idx_6, c_B, c_idx_3, c_A, c_C, c_idx_5, c_idx_1, c_idx_2}
+
+
+p_set_aux_246(c_idx_2), ~p_set_aux_246(c_A), p_set_aux_246(c_idx_5), p_set_aux_246(c_idx_4), p_set_aux_246(c_idx_1), p_set_aux_246(c_idx_0), p_set_aux_246(c_idx_3), ~p_set_aux_246(c_B), ~p_set_aux_246(c_C), p_set_aux_246(c_idx_6)

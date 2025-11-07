@@ -1,0 +1,10 @@
+\forall X: (\forall Y: (((p_table_PRED(X,Y) <-> (CIRCULAR_PRED(X,Y) & p_set_aux_13(X) & p_set_aux_13(Y))) & ((p_set_aux_13(X) & ~(p_set_aux_13(Y))) -> LEQ(X,Y)) & (~(p_Democrats_first(X)) | (p_set_Democrats(X) & (p_set_Democrats(Y) -> ~(p_table_PRED(Y,X))))) & (~(p_Republicans_first(X)) | (p_set_Republicans(X) & (p_set_Republicans(Y) -> ~(p_table_PRED(Y,X))))))))
+& \forall X: (\exists Y: ((p_Republicans_first(X) | ~((p_set_Republicans(X) & (p_set_Republicans(Y) -> ~(p_table_PRED(Y,X))))))))
+& \forall X: (\exists Y: ((p_Democrats_first(X) | ~((p_set_Democrats(X) & (p_set_Democrats(Y) -> ~(p_table_PRED(Y,X))))))))
+
+domain = {c_D2, c_D3, c_D1, c_R4, c_D4, c_R0, c_R2, c_R1, c_D0, c_R3}
+
+1 |p_Republicans_first| <= 1
+1 |p_Democrats_first| <= 1
+
+p_set_Republicans(c_R4), ~p_set_Democrats(c_R2), ~p_set_Republicans(c_D3), p_set_Republicans(c_R0), ~p_set_Democrats(c_R0), p_set_aux_13(c_D3), p_set_aux_13(c_R2), p_set_Republicans(c_R1), p_set_Democrats(c_D0), p_set_Democrats(c_D1), ~p_set_Democrats(c_R4), p_set_aux_13(c_D2), p_set_aux_13(c_R3), ~p_set_Democrats(c_R1), p_set_aux_13(c_R0), ~p_set_Republicans(c_D2), p_set_aux_13(c_R4), p_set_aux_13(c_R1), ~p_set_Republicans(c_D4), ~p_set_Republicans(c_D0), p_set_Democrats(c_D3), p_set_aux_13(c_D4), p_set_aux_13(c_D0), p_set_aux_13(c_D1), p_set_Democrats(c_D2), p_set_Republicans(c_R3), ~p_set_Republicans(c_D1), p_set_Republicans(c_R2), ~p_set_Democrats(c_R3), p_set_Democrats(c_D4)

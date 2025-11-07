@@ -1,0 +1,6 @@
+\forall X: (\forall Y: (((p_number_PRED(X,Y) <-> (PRED(X,Y) & p_set_aux_169(X) & p_set_aux_169(Y))) & ((p_set_aux_169(X) & ~(p_set_aux_169(Y))) -> LEQ(X,Y)) & ((p_set_evens(X) & p_set_evens(Y)) -> ~(p_number_PRED(X,Y))) & ((p_set_odds(X) & p_set_odds(Y)) -> ~(p_number_PRED(X,Y))))))
+
+domain = {c_5, c_8, c_7, c_2, c_9, c_1, c_6, c_4, c_3}
+
+
+~p_set_evens(c_9), p_set_odds(c_7), p_set_odds(c_1), ~p_set_evens(c_7), ~p_set_evens(c_1), p_set_evens(c_6), ~p_set_odds(c_2), p_set_odds(c_9), p_set_aux_169(c_6), ~p_set_odds(c_4), p_set_evens(c_2), p_set_aux_169(c_5), p_set_aux_169(c_3), p_set_aux_169(c_2), ~p_set_evens(c_5), ~p_set_evens(c_3), p_set_evens(c_4), p_set_aux_169(c_4), ~p_set_odds(c_8), p_set_odds(c_5), p_set_odds(c_3), p_set_aux_169(c_9), p_set_evens(c_8), p_set_aux_169(c_8), ~p_set_odds(c_6), p_set_aux_169(c_7), p_set_aux_169(c_1)

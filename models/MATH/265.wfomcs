@@ -1,0 +1,6 @@
+\forall X: (\forall Y: ((~((p_shelf_history(X) & p_shelf_math(X))) & ~((p_shelf_history(X) & p_shelf_physics(X))) & ~((p_shelf_math(X) & p_shelf_physics(X))) & (p_set_aux_212(X) <-> (p_shelf_history(X) | p_shelf_math(X) | p_shelf_physics(X))) & (p_shelf_PRED(X,Y) <-> (PRED(X,Y) & p_set_aux_212(X) & p_set_aux_212(Y))) & ((p_set_aux_212(X) & ~(p_set_aux_212(Y))) -> LEQ(X,Y)) & ((p_shelf_history(X) & p_shelf_history(Y)) -> ~(p_shelf_PRED(X,Y))) & ((p_shelf_math(X) & p_shelf_math(Y)) -> ~(p_shelf_PRED(X,Y))) & ((p_shelf_physics(X) & p_shelf_physics(Y)) -> ~(p_shelf_PRED(X,Y))))))
+
+domain = {c_idx_0, c_physics, c_idx_4, c_math, c_idx_6, c_history, c_idx_3, c_idx_7, c_idx_5, c_idx_1, c_idx_2}
+
+
+~p_set_aux_212(c_history), p_set_aux_212(c_idx_6), p_set_aux_212(c_idx_5), ~p_set_aux_212(c_physics), p_set_aux_212(c_idx_2), p_set_aux_212(c_idx_7), p_set_aux_212(c_idx_1), p_set_aux_212(c_idx_0), p_set_aux_212(c_idx_3), ~p_set_aux_212(c_math), p_set_aux_212(c_idx_4)

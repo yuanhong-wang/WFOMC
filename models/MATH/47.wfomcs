@@ -1,0 +1,6 @@
+\forall X: (\forall Y: (((p_table_NEXT_TO(X,Y) <-> (p_table_PRED(X,Y) | p_table_PRED(Y,X))) & (p_table_PRED(X,Y) <-> (CIRCULAR_PRED(X,Y) & p_set_people(X) & p_set_people(Y))) & ((p_set_not_next_to(X) & p_set_not_next_to(Y)) -> ~(p_table_NEXT_TO(X,Y))) & ((p_set_people(X) & ~(p_set_people(Y))) -> LEQ(X,Y)))))
+
+domain = {c_other2, c_other0, c_other3, c_Rosa, c_Pierre, c_Thomas, c_other1}
+
+
+~p_set_not_next_to(c_other0), p_set_not_next_to(c_Thomas), ~p_set_not_next_to(c_other2), p_set_people(c_Pierre), p_set_people(c_other1), ~p_set_not_next_to(c_other3), p_set_not_next_to(c_Pierre), p_set_people(c_Rosa), p_set_people(c_other3), p_set_not_next_to(c_Rosa), p_set_people(c_Thomas), ~p_set_not_next_to(c_other1), p_set_people(c_other0), p_set_people(c_other2)

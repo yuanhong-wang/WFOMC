@@ -29,7 +29,10 @@ class FOLTransformer(Transformer):
         return list(args)
 
     def predicate(self, args):
-        return args[0].value
+        pred_name = args[0].value
+        if pred_name == 'PRED':
+            pred_name = 'PRED1'
+        return pred_name
 
     def atomic_ffl(self, args):
         pred_name, _, terms, _ = args[:]

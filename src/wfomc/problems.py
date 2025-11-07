@@ -16,12 +16,14 @@ class WFOMCProblem(object):
                  domain: set[Const],
                  weights: dict[Pred, tuple[Rational, Rational]],
                  cardinality_constraint: CardinalityConstraint = None,
-                 unary_evidence: set[AtomicFormula] = None):
+                 unary_evidence: set[AtomicFormula] = None,
+                 circle_len: int = None):
         self.domain: set[Const] = domain
         self.sentence: SC2 = sentence
         self.weights: dict[Pred, tuple[Rational, Rational]] = weights
         self.cardinality_constraint: CardinalityConstraint = cardinality_constraint
         self.unary_evidence = unary_evidence
+        self.circle_len = circle_len if circle_len is not None else len(domain)
         if self.unary_evidence is not None:
             # check if the evidence is unary and consistent with the domain
             for atom in self.unary_evidence:
@@ -34,7 +36,16 @@ class WFOMCProblem(object):
                     raise ValueError(f'Evidence must be consistent: {atom} and {~atom} both present.')
 
     def contain_linear_order_axiom(self) -> bool:
-        return Pred('LEQ', 2) in self.sentence.preds()
+        return Pred('LEQ', 2) in self.sentence.preds() or \
+            self.contain_predecessor_axiom()
+
+    def contain_predecessor_axiom(self) -> bool:
+        preds = self.sentence.preds()
+        return any(pred.name.startswith('PRED') for pred in preds) or \
+            self.contain_circular_predecessor_axiom()
+
+    def contain_circular_predecessor_axiom(self) -> bool:
+        return Pred('CIRCULAR_PRED', 2) in self.sentence.preds()
 
     def contain_unary_evidence(self) -> bool:
         return self.unary_evidence is not None and len(self.unary_evidence) > 0

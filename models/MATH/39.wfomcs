@@ -1,0 +1,8 @@
+\forall X: (\forall Y: (((p_table_PRED(X,Y) <-> (CIRCULAR_PRED(X,Y) & p_set_aux_47(X) & p_set_aux_47(Y))) & ((p_set_aux_47(X) & ~(p_set_aux_47(Y))) -> LEQ(X,Y)) & (~(p_together_people_first(X)) | (p_set_together_people(X) & (p_set_together_people(Y) -> ~(p_table_PRED(Y,X))))))))
+& \forall X: (\exists Y: ((p_together_people_first(X) | ~((p_set_together_people(X) & (p_set_together_people(Y) -> ~(p_table_PRED(Y,X))))))))
+
+domain = {c_other2, c_other0, c_other3, c_Rosa, c_Pierre, c_Thomas, c_other1, c_other4}
+
+1 |p_together_people_first| <= 1
+
+p_set_aux_47(c_other1), p_set_aux_47(c_other0), p_set_together_people(c_Rosa), p_set_aux_47(c_Rosa), ~p_set_together_people(c_other1), p_set_aux_47(c_Pierre), ~p_set_together_people(c_other0), p_set_aux_47(c_other2), p_set_aux_47(c_other4), ~p_set_together_people(c_other3), p_set_aux_47(c_other3), ~p_set_together_people(c_other2), p_set_together_people(c_Thomas), ~p_set_together_people(c_other4), p_set_together_people(c_Pierre), p_set_aux_47(c_Thomas)

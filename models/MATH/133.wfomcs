@@ -1,0 +1,6 @@
+\forall X: (\forall Y: ((~((p_integer_1(X) & p_integer_2(X))) & (p_set_aux_142(X) <-> (p_integer_1(X) | p_integer_2(X))) & (p_1_pred_1(X,Y) <-> (p_integer_1(X) & p_integer_1(Y) & p_integer_PRED(X,Y))) & (p_integer_PRED(X,Y) <-> (PRED(X,Y) & p_set_aux_142(X) & p_set_aux_142(Y))) & ((p_set_aux_142(X) & ~(p_set_aux_142(Y))) -> LEQ(X,Y)))))
+
+domain = {c_idx_0, c_idx_8, c_idx_4, c_2, c_1, c_idx_6, c_idx_3, c_idx_7, c_idx_9, c_idx_5, c_idx_1, c_idx_2}
+
+
+~p_set_aux_142(c_1), p_set_aux_142(c_idx_6), ~p_set_aux_142(c_2), p_set_aux_142(c_idx_2), p_set_aux_142(c_idx_9), p_set_aux_142(c_idx_1), p_set_aux_142(c_idx_3), p_set_aux_142(c_idx_7), p_set_aux_142(c_idx_5), p_set_aux_142(c_idx_0), p_set_aux_142(c_idx_8), p_set_aux_142(c_idx_4)

@@ -1,0 +1,6 @@
+\forall X: (\forall Y: (((p_table_NEXT_TO(X,Y) <-> (p_table_PRED(X,Y) | p_table_PRED(Y,X))) & (p_table_PRED(X,Y) <-> (CIRCULAR_PRED(X,Y) & p_set_people(X) & p_set_people(Y))) & ((p_entity_Alice(X) & p_entity_Bob(Y)) -> ~(p_table_NEXT_TO(X,Y))) & ((p_set_people(X) & ~(p_set_people(Y))) -> LEQ(X,Y)))))
+
+domain = {c_other2, c_other0, c_other3, c_Alice, c_other1, c_other5, c_other4, c_Bob}
+
+
+~p_entity_Alice(c_other3), p_set_people(c_other5), p_set_people(c_Alice), ~p_entity_Bob(c_other0), ~p_entity_Bob(c_other1), ~p_entity_Alice(c_Bob), p_set_people(c_Bob), ~p_entity_Alice(c_other0), p_set_people(c_other0), p_set_people(c_other1), ~p_entity_Bob(c_other4), ~p_entity_Bob(c_other5), ~p_entity_Alice(c_other1), p_set_people(c_other4), ~p_entity_Bob(c_other2), ~p_entity_Alice(c_other4), ~p_entity_Bob(c_other3), ~p_entity_Alice(c_other5), p_entity_Alice(c_Alice), p_set_people(c_other3), p_entity_Bob(c_Bob), ~p_entity_Bob(c_Alice), ~p_entity_Alice(c_other2), p_set_people(c_other2)

@@ -1,0 +1,6 @@
+\forall X: (\forall Y: (((p_line_NEXT_TO(X,Y) <-> (p_line_PRED(X,Y) | p_line_PRED(Y,X))) & (p_line_PRED(X,Y) <-> (PRED(X,Y) & p_set_students(X) & p_set_students(Y))) & ((p_entity_student0(X) & p_entity_student1(Y)) -> ~(p_line_NEXT_TO(X,Y))) & ((p_set_students(X) & ~(p_set_students(Y))) -> LEQ(X,Y)))))
+
+domain = {c_student0, c_student2, c_student1, c_student3}
+
+
+~p_entity_student0(c_student3), p_entity_student0(c_student0), ~p_entity_student1(c_student3), ~p_entity_student1(c_student0), p_set_students(c_student2), p_set_students(c_student0), p_set_students(c_student1), ~p_entity_student1(c_student2), p_set_students(c_student3), ~p_entity_student0(c_student2), ~p_entity_student0(c_student1), p_entity_student1(c_student1)

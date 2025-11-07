@@ -1,0 +1,6 @@
+\forall X: (\forall Y: ((~((p_seq_H(X) & p_seq_T(X))) & (p_set_aux_58(X) <-> (p_seq_H(X) | p_seq_T(X))) & (p_H_pred_H(X,Y) <-> (p_seq_H(X) & p_seq_H(Y) & p_seq_PRED(X,Y))) & (p_H_pred_T(X,Y) <-> (p_seq_H(X) & p_seq_PRED(X,Y) & p_seq_T(Y))) & (p_T_pred_H(X,Y) <-> (p_seq_H(Y) & p_seq_PRED(X,Y) & p_seq_T(X))) & (p_T_pred_T(X,Y) <-> (p_seq_PRED(X,Y) & p_seq_T(X) & p_seq_T(Y))) & (p_seq_PRED(X,Y) <-> (PRED(X,Y) & p_set_aux_58(X) & p_set_aux_58(Y))) & ((p_set_aux_58(X) & ~(p_set_aux_58(Y))) -> LEQ(X,Y)))))
+
+domain = {c_idx_12, c_H, c_idx_0, c_idx_11, c_idx_8, c_idx_10, c_T, c_idx_4, c_idx_6, c_idx_13, c_idx_14, c_idx_3, c_idx_7, c_idx_9, c_idx_5, c_idx_1, c_idx_2}
+
+
+p_set_aux_58(c_idx_4), p_set_aux_58(c_idx_7), p_set_aux_58(c_idx_1), p_set_aux_58(c_idx_0), ~p_set_aux_58(c_T), p_set_aux_58(c_idx_3), p_set_aux_58(c_idx_14), p_set_aux_58(c_idx_6), p_set_aux_58(c_idx_8), p_set_aux_58(c_idx_13), p_set_aux_58(c_idx_12), ~p_set_aux_58(c_H), p_set_aux_58(c_idx_11), p_set_aux_58(c_idx_9), p_set_aux_58(c_idx_10), p_set_aux_58(c_idx_2), p_set_aux_58(c_idx_5)

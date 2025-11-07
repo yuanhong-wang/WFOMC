@@ -1,0 +1,12 @@
+\forall X: (\forall Y: (((p_row_PRED(X,Y) <-> (PRED(X,Y) & p_set_aux_119(X) & p_set_aux_119(Y))) & ((p_set_aux_119(X) & ~(p_set_aux_119(Y))) -> LEQ(X,Y)) & (~(p_Cubs_first(X)) | (p_set_Cubs(X) & (p_set_Cubs(Y) -> ~(p_row_PRED(Y,X))))) & (~(p_Red_Sox_first(X)) | (p_set_Red_Sox(X) & (p_set_Red_Sox(Y) -> ~(p_row_PRED(Y,X))))) & (~(p_Yankees_first(X)) | (p_set_Yankees(X) & (p_set_Yankees(Y) -> ~(p_row_PRED(Y,X))))))))
+& \forall X: (\exists Y: ((p_Yankees_first(X) | ~((p_set_Yankees(X) & (p_set_Yankees(Y) -> ~(p_row_PRED(Y,X))))))))
+& \forall X: (\exists Y: ((p_Red_Sox_first(X) | ~((p_set_Red_Sox(X) & (p_set_Red_Sox(Y) -> ~(p_row_PRED(Y,X))))))))
+& \forall X: (\exists Y: ((p_Cubs_first(X) | ~((p_set_Cubs(X) & (p_set_Cubs(Y) -> ~(p_row_PRED(Y,X))))))))
+
+domain = {c_C2, c_C0, c_R0, c_Y0, c_R2, c_R1, c_Y1, c_C1}
+
+1 |p_Yankees_first| <= 1
+1 |p_Red_Sox_first| <= 1
+1 |p_Cubs_first| <= 1
+
+~p_set_Yankees(c_C2), ~p_set_Red_Sox(c_C2), ~p_set_Yankees(c_C1), ~p_set_Red_Sox(c_C1), p_set_aux_119(c_Y0), p_set_Cubs(c_C2), ~p_set_Cubs(c_R2), p_set_Cubs(c_C1), ~p_set_Cubs(c_R0), p_set_aux_119(c_C1), ~p_set_Cubs(c_Y1), ~p_set_Cubs(c_R1), p_set_aux_119(c_C2), p_set_Red_Sox(c_R2), ~p_set_Cubs(c_Y0), ~p_set_Yankees(c_C0), ~p_set_Red_Sox(c_C0), p_set_Cubs(c_C0), p_set_Yankees(c_Y1), p_set_Red_Sox(c_R0), p_set_Red_Sox(c_R1), p_set_aux_119(c_C0), ~p_set_Yankees(c_R2), p_set_Yankees(c_Y0), p_set_aux_119(c_R2), ~p_set_Yankees(c_R0), p_set_aux_119(c_R0), ~p_set_Yankees(c_R1), p_set_aux_119(c_Y1), ~p_set_Red_Sox(c_Y1), ~p_set_Red_Sox(c_Y0), p_set_aux_119(c_R1)
