@@ -34,6 +34,13 @@ For the `head-tail` example in [Lifted Inference with Linear Order Axiom.](https
 \forall X: (\forall Y: (T(X) & LEQ(X, Y) -> T(Y))) &
 ```
 
+The $k$-th predecessors are predifined as `PREk`, e.g., `PRE2(X, Y)` means `Y` is the 2nd predecessor of `X` in the linear order.
+See [predk](models/predk/) for more examples.
+The circular predecessor `CIRCULAR_PRED` is also predefined with `CIRCULAR_PRED(X, Y)` means `Y` is the predecessor of `X` in a circular order.
+The output count of circular order is always divided by the domain size to avoid overcounting.
+
+> **Note: To use linear order constraint, you must use the `incremental` or `recursive` algorithm. To use $k$-th predecessor or circular predecessor, you must use the `incremental` algorithm.**
+
 
 ### Example input file
 
