@@ -50,9 +50,6 @@ class WFOMCProblem(object):
     def contain_unary_evidence(self) -> bool:
         return self.unary_evidence is not None and len(self.unary_evidence) > 0
 
-    def contain_unary_evidence(self) -> bool:
-        return self.unary_evidence is not None and len(self.unary_evidence) > 0
-
     def __str__(self) -> str:
         s = ''
         s += 'Domain: \n'

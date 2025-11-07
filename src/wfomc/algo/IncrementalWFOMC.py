@@ -97,9 +97,10 @@ def incremental_wfomc(context: WFOMCContext,
 
                     w_new = w_old * w
                     # for cycular predecessor
+                    # NOTE: only support either circular predecessor or predecessors but not both
                     if cur_idx == circle_len - 2 and first_cell is not None:
                         w_new = w_new * cell_graph.get_two_table_with_pred_weight(
-                            (first_cell, cell), pred_idx
+                            (first_cell, cell), 1
                         )
                         old_ivec[cells.index(first_cell)] -= 1
                     # for predecessors

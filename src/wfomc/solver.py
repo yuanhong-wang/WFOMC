@@ -5,7 +5,6 @@ import logzero
 
 from logzero import logger
 from contexttimer import Timer
-from wfomc.network.constraint import UnaryEvidenceEncoding
 
 from wfomc.network import UnaryEvidenceEncoding
 from wfomc.problems import WFOMCProblem
