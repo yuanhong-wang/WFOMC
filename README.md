@@ -2,6 +2,34 @@
 
 This tool is for counting the models (or combinatorical structures) from the two-variable fragment of first-order logic and extensions.
 
+### Installation
+
+Install UV via:
+[github](https://github.com/astral-sh/uv) or
+```
+pip install uv
+```
+
+Sync the dependencies:
+```
+uv sync
+```
+
+### How to use
+```
+$ uv run wfomc -i [input] -a [algo] -e [unary_evidence_encoding]
+```
+where
+- `input` is the input file with the suffix `.wfomcs` or `.mln`
+- `algo` is the algorithm to use, including:
+  - `standard`: the standard WFOMC algorithm in Beame et al. (2015)
+  - `fast`: the fast WFOMC algorithm in Timothy van Bremen and Ondrej Kuzelka (2021)
+  - `fastv2` (default): the optimized fast WFOMC algorithm
+  - `incremental`: the incremental WFOMC algorithm for linear order axiom in Toth and Kuzelka (2022)
+  - `recursive`: the recursive WFOMC algorithm for linear order axiom in Meng et al. (2024)
+- `unary_evidence_encoding` is the encoding for unary evidence, including:
+  - `ccs` (default): using cardinality constraints to encode unary evidence, see Wang et al. (2024)
+  - `pc`: **only work for the algorithms `fast`, `fastv2` and `incremental`**
 
 ## Input format
 
@@ -112,36 +140,6 @@ smokes(alice), ~smokes(bob)
 ``` 
 
 More examples are in [models](models/)
-
-
-### Installation
-
-Install UV via:
-[github](https://github.com/astral-sh/uv) or
-```
-pip install uv
-```
-
-Sync the dependencies:
-```
-uv sync
-```
-
-### How to use
-```
-$ uv run wfomc -i [input] -a [algo] -e [unary_evidence_encoding]
-```
-where
-- `input` is the input file with the suffix `.wfomcs` or `.mln`
-- `algo` is the algorithm to use, including:
-  - `standard`: the standard WFOMC algorithm in Beame et al. (2015)
-  - `fast`: the fast WFOMC algorithm in Timothy van Bremen and Ondrej Kuzelka (2021)
-  - `fastv2` (default): the optimized fast WFOMC algorithm
-  - `incremental`: the incremental WFOMC algorithm for linear order axiom in Toth and Kuzelka (2022)
-  - `recursive`: the recursive WFOMC algorithm for linear order axiom in Meng et al. (2024)
-- `unary_evidence_encoding` is the encoding for unary evidence, including:
-  - `ccs` (default): using cardinality constraints to encode unary evidence, see Wang et al. (2024)
-  - `pc`: **only work for `fast` and `fastv2`**
 
 ## References
 
