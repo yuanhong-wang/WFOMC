@@ -125,6 +125,7 @@ class CNFContext:
             for atom in grounded.atoms():
                 self._register_atom(atom)
             expr &= grounded.expr
+            logger.info(f"\n{uni_qf}\n {'-' * 100} \n {grounded.expr}\n")
         return expr
 
     def _ground_extensions(self, expr):
@@ -138,6 +139,7 @@ class CNFContext:
                         self._register_atom(atom)
                     disjunction |= grounded.expr
                 expr &= disjunction
+                logger.info(f"Expression after grounding extension formulas: {disjunction}")
         return expr
 
     def _ground_cardinality_constraints(self):
@@ -230,7 +232,6 @@ class CNFContext:
         """将 self.clauses 中的所有子句写入CNF文件。"""
         num_vars = self.next_var_id 
         num_clauses = len(self.clauses)
-        
         with open(self.cnf_path, 'w', encoding='utf-8') as f:
             f.write(f"p cnf {num_vars} {num_clauses}\n")
             for clause in self.clauses:
@@ -299,12 +300,12 @@ def main():
     logfile(log_path, maxBytes=1e6, backupCount=3)
     logger.setLevel(logging.INFO)
 
-    file_name = "2-regular-graph.wfomcs"
-    # file_name = "m-odd-degree-graph-sc2.wfomcs"
+    # file_name = "2-regular-graph.wfomcs"
+    file_name = "m-odd-degree-graph-cc.wfomcs"
     # file_name= "2-regular-graph-sc2.wfomcs"
     # file_name = "universal_quantifier_example.wfomcs"
     # file_name = "cardinality_constraints_example.wfomcs"
-    domain_size = 5
+    domain_size = 3
     counters = ["ganak"]
     # counters = ["ganak", "pysat", "approxmc"]
     for counter in counters:

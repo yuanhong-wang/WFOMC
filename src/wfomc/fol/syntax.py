@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Iterable, Any
 from collections import OrderedDict
 from PrettyPrint import PrettyPrintTree
-
+import sympy
 from . import boolean_algebra as backend
 
 __all__ = [
@@ -152,21 +152,21 @@ class Formula(object):
 @dataclass(frozen=True)
 class QFFormula(Formula):
     """
-    Quantifier-free formula
+    Quantifier-free formula 例如，简单的原子公式 R(X, Y)，或者更复杂的组合 (P(X) & Q(Y)) | ~R(Z) 都属于无量词公式。
     """
-    expr: backend.Expr
+    expr: backend.Expr  # 这个属性以后端库中的符号表达式形式，保存了该公式的表示。所有的逻辑操作、组合和简化都在这个 expr 对象上执行。QFFormula 类本质上是这个强大后端对象的包装器（wrapper），在您的一阶逻辑框架内提供了一致的API。
 
-    def __invert__(self) -> QFFormula:
+    def __invert__(self) -> QFFormula:  # 创建一个 QFFormula 的逻辑“非”
         return QFFormula(backend.Not(self.expr))
 
-    def __or__(self, other: Formula) -> Formula:
+    def __or__(self, other: Formula) -> Formula:  # 使用逻辑“或”连接两个 QFFormula
         if isinstance(other, (Top, Bot)):
             return other | self
         if isinstance(other, QFFormula):
             return QFFormula(backend.Or(self.expr, other.expr))
         return other | self
 
-    def __and__(self, other: Formula) -> Formula:
+    def __and__(self, other: Formula) -> Formula:  # 使用逻辑“与”连接两个 QFFormula
         if isinstance(other, (Top, Bot)):
             return other & self
         if isinstance(other, QFFormula):
@@ -196,7 +196,7 @@ class QFFormula(Formula):
 
     def atoms(self) -> frozenset[AtomicFormula]:
         # return backend.get_atoms(self.expr)
-        import sympy
+        # Top / Bot（expr is None）或简化后是常量 true/false，都没有一阶原子 。它会遍历内部的 expr，并返回一个集合，其中包含了构成该公式的所有 AtomicFormula 对象（例如 P(c1, c2)）。
         if self.expr is None or self.expr in (sympy.true, sympy.false):
             return frozenset()
         return backend.get_atoms(self.expr)
@@ -206,6 +206,7 @@ class QFFormula(Formula):
             for term in atom.args:
                 yield term
 
+    # vars(), consts(), preds(): 这些是辅助方法，它们首先调用 atoms()，然后从这些原子中收集所有的变量、常量或谓词。
     def vars(self) -> frozenset[Var]:
         return frozenset(filter(lambda x: isinstance(x, Var), self.terms()))
 

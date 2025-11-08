@@ -1,0 +1,9 @@
+\forall X: (\exists_{=4} Y: (E(X,Y))) &
+\forall X: (\forall Y: ((E(X,Y) -> E(Y,X)) &
+                        (R(X) | B(X) | W(X)) &
+                        (~R(X) | ~B(X)) &
+                        (~R(X) | ~W(X)) &
+                        (~B(X) | ~W(X)) &
+                        (E(X,Y) -> ~(R(X) & R(Y)) & ~(B(X) & B(Y)) & ~(W(X) & W(Y)))))
+
+V = 5

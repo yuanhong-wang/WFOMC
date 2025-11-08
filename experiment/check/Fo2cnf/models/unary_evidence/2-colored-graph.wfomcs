@@ -1,0 +1,9 @@
+\forall X: (\forall Y: ((E(X,Y) -> E(Y,X)) &
+                        (R(X) | B(X)) &
+                        (~R(X) | ~B(X)) &
+                        (E(X,Y) -> ~(R(X) & R(Y)) & ~(B(X) & B(Y)))))
+
+vertex = 10
+
+R(vertex1), B(vertex2), B(vertex3), B(vertex4), R(vertex5),
+R(vertex0), B(vertex6), B(vertex7), B(vertex8)

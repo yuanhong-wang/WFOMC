@@ -130,4 +130,4 @@ def domain_recursive_wfomc(context: DRWFOMCContext) -> RingElement:
                     MultinomialCoefficients.coef(
                         config) * W * dr_res * graph_weight
                 )
-    return result
+    return expand(result)

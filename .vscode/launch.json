@@ -1,0 +1,47 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+    
+
+            {
+            "name": "dr",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/wfomc/solver.py",
+            "console": "integratedTerminal",
+            "args": ["-i", "/home/sunshixin/pycharm_workspace/WFOMC/models/m-odd-degree-graph-sc2.wfomcs", "-a", "dr"],
+            "python":"${workspaceFolder}/wfomc/bin/python",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+
+        {
+            "name": "BA_CC",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/wfomc/solver.py",
+            "console": "integratedTerminal",
+            "args": ["-i", "/home/sunshixin/pycharm_workspace/WFOMC/models/BA_CC.wfomcs", "-a", "dr"],
+            "python":"${workspaceFolder}/wfomc/bin/python",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+        {
+            "name": "check",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/experiment/check/fo2ex2cnf.py",
+            "console": "integratedTerminal",
+            "args": ["-i", "/home/sunshixin/pycharm_workspace/WFOMC/models/2-regular-graph.wfomcs",],
+            "python":"${workspaceFolder}/wfomc/bin/python",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+    ]
+}

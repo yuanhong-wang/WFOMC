@@ -1,0 +1,5 @@
+\forall X: (~perm(X, X)) &
+\forall X: (\exists_{=1} Y: (perm(X,Y))) &
+\forall Y: (\exists_{=1} X: (perm(X,Y)))
+
+domain = 5

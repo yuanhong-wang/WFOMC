@@ -1,0 +1,10 @@
+C(X) | H(X).
+~C(X) | ~H(X).
+~SingleBond(X,X).
+(H(X) & SingleBond(X,Y)) -> ~H(Y).
+SingleBond(X,Y) -> SingleBond(Y,X).
+AuxBond(X,Y) <-> (SingleBond(X,Y) & H(Y)).
+0.1 AuxBond(X,Y)
+
+atoms = 5
+|AuxBond| - |H| = 0

@@ -1,0 +1,9 @@
+\forall X: (~E(X,X)) &
+\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+\forall X: ((Odd(X) -> (\exists_{1 mod 2} Y: (E(X, Y)))) & ((\exists_{1 mod 2} Y: (E(X, Y))) -> Odd(X))) &
+\exists_{=2} X: (Odd(X)) 
+
+n = 3
+|E| = 2
+
+

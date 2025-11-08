@@ -1,0 +1,9 @@
+\forall X: (~Perm(X,X)) &
+\forall X: (\exists Y: (Perm(X, Y))) &
+\forall Y: (\exists X: (Perm(X, Y))) &
+\forall X: (\forall Y: (Pred(X,Y) -> Perm(X,Y))) &
+\forall X: (\forall Y: (Pred(X,Y) -> LEQ(X,Y)))
+
+domain = 4
+|Perm| = 4
+|Pred| = 3

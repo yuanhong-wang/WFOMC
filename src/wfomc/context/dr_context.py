@@ -25,12 +25,17 @@ from wfomc.fol.syntax import *
 from wfomc.problems import WFOMCProblem
 from wfomc.utils.polynomial_flint import RingElement, Rational
 from itertools import product
+from flint import fmpq, fmpq_poly
 
 
 class DRWFOMCContext(object):
 
     def __init__(self, problem: WFOMCProblem):
-
+        """
+        Args:
+            problem (WFOMCProblem): WFOMC问题实例
+        """
+        # 域、句子、权重和基数约束
         self.problem = deepcopy(problem)
         self.domain: set[Const] = problem.domain
         self.sentence: SC2 = problem.sentence
@@ -47,7 +52,8 @@ class DRWFOMCContext(object):
             logger.info("%s: %s", pred, w)
         logger.info("cardinality constraint: %s", self.cardinality_constraint)
 
-        self.formula: QFFormula
+        self.formula: QFFormula  # 无量词公式
+        # 处理线性序公理
         if problem.contain_linear_order_axiom():
             self.leq_pred: Pred = Pred("LEQ", 2)
         else:
@@ -56,20 +62,27 @@ class DRWFOMCContext(object):
         self.uni_formula: QuantifiedFormula = Top
         self.ext_preds: list[QuantifiedFormula] = []
 
-        self.cnt_preds: list[QuantifiedFormula] = []
-        self.cnt_params: list[int] = []
-        self.cnt_remainder: list[int] = []
+        # 单双层
+        # 每层是mod = <=
+        # 单层，谓词是一元
+        # 双层 谓词是二元
+        # 计数
+        self.cnt_preds: list[QuantifiedFormula] = []  # 计数谓词列表
+        self.cnt_params: list[int] = []  # 计数参数 k (int)
+        self.cnt_remainder: list[int] = []  # 余数 r (int)
+        # unary
+        self.mod_pred_index = []  # 模运算谓词索引
+        self.exist_mod = False  # 是否存在模运算
+        self.unary_mod_constraints = []  # 一元模约束 [(Pred, r, k), …]
+        self.unary_eq_constraints: list[tuple] = []  # [(pred, k), ...]
+        self.unary_le_constraints = []  # [(pred, k_max), ...]
 
-        self.mod_pred_index = []
-        self.exist_mod = False
-        self.unary_mod_constraints = []
-        self.unary_eq_constraints: list[tuple] = []
-        self.unary_le_constraints = []
-
-        self.exist_le = False
-        self.le_pred = []
-        self.le_index = []
-        self.comparator_handlers = {
+        # <=
+        self.exist_le = False  # "是否有<="
+        self.le_pred = []  # 小于等于谓词列表
+        self.le_index = []  # 小于等于谓词索引
+        # 比较器处理函数映射
+        self.comparator_handlers = {  # 比较器处理函数映射
             "mod": self._handle_mod,
             "=": self._handle_eq,
             "<=": self._handle_le,
@@ -83,10 +96,20 @@ class DRWFOMCContext(object):
         self.binary_evidence = []
         self.get_binary_evidence()
 
+        # binary cardinality_constraints is underconstruction 这部分采用的是symbolic weight
         self.card_preds = []
         self.card_ccs = []
         self.card_vars = []
         self.build_cardinality_constraints()
+        self.update_repeat_factor() # 更新 repeat factor, 比如 m-odd 这个输入的例子 需要除以 domain size，也就是n choose 1。
+
+    def update_repeat_factor(self):
+        # 由于m-odd 这个输入的例子 需要除以 domain size
+        if hasattr(self, 'unary_eq_constraints') and self.unary_eq_constraints:
+            constraint_names = {constraint[0].name for constraint in self.unary_eq_constraints}
+            if 'Odd' in constraint_names and 'U' in constraint_names:
+                self.repeat_factor = len(self.problem.domain)
+                print("change repeat factor to:", self.repeat_factor)
 
     def stop_condition(self, last_target_c):
         """
@@ -139,6 +162,8 @@ class DRWFOMCContext(object):
 
         r, k = param
 
+        # unary mod
+        # unary is under construction
         if (
             type == "unary"
             and isinstance(inner_formula, AtomicFormula)
@@ -150,7 +175,7 @@ class DRWFOMCContext(object):
             )
             return
         elif type == "binary":
-
+            # binary mod
             self.exist_mod = True
             self.mod_pred_index.append(idx)
             self.cnt_remainder.append(r)
@@ -158,7 +183,17 @@ class DRWFOMCContext(object):
             self._add_aux_equiv(inner_formula)
 
     def _handle_eq(self, type, idx, inner_formula, qscope, param, comparator):
-
+        """
+        处理等号量词 ∃_{=m}
+        Args:
+            type: unary 还是 binary
+            idx: 索引
+            inner_formula: 内部公式
+            qscope: 量词作用域
+            param: 参数 k
+            comparator: 比较器
+        """
+        # unary ∃_{=k} X  A(X)
         if (
             type == "unary"
             and isinstance(inner_formula, AtomicFormula)
@@ -194,26 +229,36 @@ class DRWFOMCContext(object):
             self.exist_le = True
 
     def _build(self):
-
+        """
+        预处理逻辑公式，将其转换为可处理的无量词形式，并引入辅助谓词
+        """
+        # 提取全称公式
         self.uni_formula = self.sentence.uni_formula
         while not isinstance(self.uni_formula, QFFormula):
             self.uni_formula = self.uni_formula.quantified_formula
-        ext_formulas = self.sentence.ext_formulas
-        cnt_formulas = self.sentence.cnt_formulas
+        ext_formulas = self.sentence.ext_formulas  # 存在量词公式
+        cnt_formulas = self.sentence.cnt_formulas  # 计数量词公式
+
+        # 处理存在公式
         for (
             formula
         ) in (
             ext_formulas
-        ):
+        ):  # 这里我们在处理计数量词之前，处理存在量词，来实现UFO2。而把计数量词的处理和这部分分开，也就是对应于论文
             self.uni_formula = self.uni_formula & self._skolemize_one_formula(
                 formula)
+
+        # 处理计数公式
         for idx, formula in enumerate(cnt_formulas):
             type, inner_formula, qscope = self._extract_formula(
                 formula
-            )
-            comparator = qscope.comparator
-            cnt_param_raw = qscope.count_param
-            idx = len(self.cnt_preds)
+            )  # 因为可能是双层或单层，所以需要拆分
+            comparator = qscope.comparator  # 'mod' / '=' / '<=' / ...
+            cnt_param_raw = qscope.count_param  # (r,k) 或 int
+
+            # 根据 comparator 分派到对应的 handler
+            idx = len(self.cnt_preds)  # 用当前 cnt_preds 长度算下标
+            # 也就是说，cnt_formulas 和 cnt_preds的长度是不同的。unary mod不会添加进cnt_preds中。为了跳过unary mod,不采用手动累加 idx = idx + 1。是因为idx 必须始终与 cnt_preds 的当前长度保持同步，保持新谓词下标依然连续、正确，
             self.comparator_handlers[comparator](
                 type, idx, inner_formula, qscope, cnt_param_raw, comparator
             )
@@ -235,6 +280,7 @@ class DRWFOMCContext(object):
             quantified_formula = quantified_formula.quantified_formula
             quantifier_num += 1
         skolem_formula: QFFormula = top
+        # ext_formula 指的是存在量词内核的无量词公式部分，例如 f(X,Y)
         ext_formula = quantified_formula
         if not isinstance(
             ext_formula, AtomicFormula
@@ -314,7 +360,7 @@ class DRWFOMCContext(object):
                 )
             )
 
-    def decode_result(self, res: RingElement):
+    def decode_result(self, res: RingElement) -> Rational:
         if not self.contain_cardinality_constraint():
             res = res / self.repeat_factor
         else:
@@ -413,17 +459,19 @@ class DRWFOMCContext(object):
         )
         r = defaultdict(
             lambda: defaultdict(lambda: Rational(0, 1))
-        )
-        for i in range(n_cells):
-            cell_weight = cell_graph.get_cell_weight(cells[i])
-            t = list()
+        )  # 初始化关系字典r，使用两层defaultdict确保默认值为Rational(0, 1)
+        for i in range(n_cells):  # 遍历所有单元格
+            cell_weight = cell_graph.get_cell_weight(cells[i])  # 获取当前单元格的权重
+            t = list()  # # 初始化状态列表t，用于存储谓词状态 (1=true, 0=false)
+            # 存在谓词
             for (
                 pred
             ) in self.ext_preds:
                 if cells[i].is_positive(pred):
                     t.append(0)
                 else:
-                    t.append(1)
+                    t.append(1)  # 添加状态0
+            # 计数谓词
             for idx, (pred, param) in enumerate(zip(self.cnt_preds, self.cnt_params)):
                 if cells[i].is_positive(pred):
                     if (
@@ -478,8 +526,23 @@ class DRWFOMCContext(object):
                             t.append(0)
                     r[(i, j)][
                         (tuple(t), tuple(reverse_t))
-                    ] = two_table_weight
-        return w2t, w, r
+                    ] = two_table_weight  # 使用谓词状态组合存储关系权重
+        #         # --- START: 添加这段调试代码 ---
+        # import logging
+        # logging.basicConfig(level=logging.INFO) # 确保INFO级别的日志能被打印
+        # logging.info("--- DEBUG: Two-table 'r' dictionary ---")
+        # # 对 r 字典的键（cell对）进行排序，以保证打印顺序一致
+        # for cell_pair, transitions in sorted(r.items()):
+        #     # 只打印有内容的条目
+        #     if transitions:
+        #         logging.info(f"Cell Pair {cell_pair}:")
+        #         # 对内部字典的键（状态转移）也排序
+        #         for transition, weight in sorted(transitions.items()):
+        #             if weight != 0: # 只打印非零权重的转移
+        #                 logging.info(f"  Transition: {transition} -> Weight: {weight}")
+        # logging.info("--- END DEBUG ---")
+        # # --- END: 调试代码结束 ---
+        return w2t, w, r  # 返回映射字典、权重字典和关系字典
 
     def get_weight(self, pred: Pred) -> tuple[RingElement, RingElement]:
         default = Rational(1, 1)

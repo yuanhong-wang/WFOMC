@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import random
 from itertools import accumulate, repeat
-from typing import Iterable, Generator, TypeAlias
+try:
+    from typing import Iterable, Generator, TypeAlias
+except ImportError:
+    from typing_extensions import TypeAlias
+    from typing import Iterable, Generator
 from functools import reduce
 from collections import defaultdict
-
 from flint import fmpq, fmpq_mpoly_ctx, fmpq_mpoly
 from decimal import Decimal
 from bisect import bisect_left

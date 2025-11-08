@@ -1,0 +1,5 @@
+\forall X: (~E(X,X)) &
+\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+\forall X: (\exists_{=4} Y: (E(X,Y)))
+
+V = 5

@@ -1,0 +1,14 @@
+\forall X: (~E(X,X)) &
+\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) 
+\forall X: (P(X) <-> (~Odd(X) & A(X) & C(X))) &
+\forall X: (\forall Y: (P(X) & B(X,Y) -> U(Y))) &
+\forall X: (\forall Y:(~P(X) -> (B(X,Y) <-> E(X,Y)))) &
+\forall X: (Odd(X) | A(X)) &
+\forall X: (A(X) | C(X)) 
+\forall X: (\exists_{1 mod 2} Y: (B(X, Y))) &
+\exists_{=2} X: (Odd(X)) &
+\exists_{=1} X: (U(X)) 
+
+n = 3
+1 -1 C
+|E| = 2
