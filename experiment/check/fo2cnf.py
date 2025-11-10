@@ -153,14 +153,14 @@ class CNFContext:
 
     def _ground_cardinality_constraints(self):
         """直接生成基数约束的CNF子句并添加到self.clauses中。"""
-        for pred_map, op, bound in self.problem.cardinality_constraint.constraints:
+        for pred_map, op, bound in self.problem.cardinality_constraint.constraints: # ({Eq: 1.0}, '=', 5.0)
             for pred, _ in pred_map.items():
                 pred_name = str(pred)
                 k = int(bound)
 
                 related_vars = [
-                    v for ksym, v in self.sym_to_id.items() if pred_name in str(ksym)]
-                if not related_vars:
+                    v for ksym, v in self.sym_to_id.items() if pred_name in str(ksym)] # 获取所有与该谓词相关的变量ID。related_vars = [3, 8, 13, 19, 23, 25, 28, 33, 
+                if not related_vars: # 没有相关变量，跳过
                     continue
 
                 # 使用pysat生成CNF子句
@@ -172,13 +172,13 @@ class CNFContext:
                         lits=related_vars, bound=k, top_id=self.next_var_id - 1)
                 elif op == "=":
                     cnf_cc = CardEnc.equals(
-                        lits=related_vars, bound=k, top_id=self.next_var_id - 1)
+                        lits=related_vars, bound=k, top_id=self.next_var_id - 1) # # top_id=4 表示新引入的辅助变量将从5开始
                 else:
                     raise RuntimeError(f"Unknown operator: {op}")
 
-                # **关键修复**: 直接将生成的子句添加到self.clauses，并更新变量计数器
+                # 直接将生成的子句添加到self.clauses，并更新变量计数器
                 self.clauses.extend(cnf_cc.clauses)
-                self.next_var_id = cnf_cc.nv + 1
+                self.next_var_id = cnf_cc.nv + 1 # cnf_cc.nv 是编码后的总变量数目，更新下一个可用变量ID
 
     def _is_single_layer(self, formula):
         """检查计数公式是否为单层计数公式。"""
@@ -544,7 +544,7 @@ def parse_and_run():
         if os.path.exists(ganak_path):
             logger.debug(f"Using default Ganak path: {ganak_path}")
         else:
-            logger.error(f"Ganak path does not exist: {ganak_path}")
+            logger.error(f"Ganak path does not exist: {ganak_path}, you can specify it using --ganak_path")
             sys.exit(1)
     if args.approxmc_path:
         approxmc_path = args.approxmc_path
@@ -552,7 +552,7 @@ def parse_and_run():
         if os.path.exists(approxmc_path):
             logger.debug(f"Using default ApproxMC path: {approxmc_path}")
         else:
-            logger.error(f"ApproxMC path does not exist: {approxmc_path}")
+            logger.error(f"ApproxMC path does not exist: {approxmc_path}, you can specify it using --approxmc_path")
             sys.exit(1)
 
     Fo2Counter(args.input, args.domain, [args.counter])
