@@ -80,8 +80,6 @@ class WFOMCContext(object):
             res = self.cardinality_constraint.decode_poly(res) / self.repeat_factor
         if self.leq_pred is not None:
             res *= Rational(math.factorial(len(self.domain)), 1)
-        if self.circular_predecessor_pred is not None:
-            res /= Rational(len(self.domain), 1)
         return res
 
     def _skolemize_one_formula(self, formula: QuantifiedFormula) -> QFFormula:
