@@ -35,6 +35,21 @@ class WFOMCProblem(object):
             for atom in self.unary_evidence:
                 if ~atom in self.unary_evidence:
                     raise ValueError(f'Evidence must be consistent: {atom} and {~atom} both present.')
+        # simplify expressions in weights
+        for pred in self.weights:
+            w_pos, w_neg = self.weights[pred]
+            self.weights[pred] = (self._simplify_expr(w_pos), self._simplify_expr(w_neg))
+
+    def _simplify_expr(self, expr):
+        if isinstance(expr, Expr):
+            return expr.simplify()
+        elif isinstance(expr, int):
+            return Rational(expr, 1)
+        elif isinstance(expr, float):
+            frac = Fraction(expr)
+            return Rational(frac.numerator, frac.denominator)
+        else:
+            raise ValueError(f'Unsupported expression type: {type(expr)}')
 
     def contain_linear_order_axiom(self) -> bool:
         return Pred('LEQ', 2) in self.sentence.preds() or \
