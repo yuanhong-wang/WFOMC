@@ -3,16 +3,16 @@ from functools import reduce
 from wfomc.cell_graph import build_cell_graphs
 from wfomc.context import WFOMCContext
 from wfomc.network import UnaryEvidenceEncoding
-from wfomc.utils import RingElement, Rational, MultinomialCoefficients
+from wfomc.utils import RingElement, MultinomialCoefficients
 
 
 def incremental_wfomc(context: WFOMCContext,
                       circle_len: int = None) -> RingElement:
     formula = context.formula
     domain = context.domain
-    get_weight = context.get_weight
+    get_weight = context._get_weight
     leq_pred = context.leq_pred
-    res = Rational(0, 1)
+    res = 0
     predecessor_preds = context.predecessor_preds
     pred_orders = None
     pred_max_order = 0
@@ -129,7 +129,7 @@ def incremental_wfomc(context: WFOMCContext,
                     )
                     w_new = w_new + table.get(
                         (ivec, new_last_cells, first_cell),
-                        (Rational(0, 1), ())
+                        (0, ())
                     )[0]
                     table[(tuple(ivec), new_last_cells, first_cell)] = (
                         w_new, new_ccs

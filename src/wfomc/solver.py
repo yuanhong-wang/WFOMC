@@ -9,13 +9,13 @@ from contexttimer import Timer
 from wfomc.network import UnaryEvidenceEncoding
 from wfomc.problems import WFOMCProblem
 from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recursive_wfomc
-from wfomc.utils import MultinomialCoefficients, Rational, round_rational
+from wfomc.utils import MultinomialCoefficients, Rational, round_rational, Poly
 from wfomc.context import WFOMCContext
 from wfomc.parser import parse_input
 
 
 def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
-          unary_evidence_encoding: UnaryEvidenceEncoding = UnaryEvidenceEncoding.CCS) -> Rational:
+          unary_evidence_encoding: UnaryEvidenceEncoding = UnaryEvidenceEncoding.CCS) -> Poly:
     MultinomialCoefficients.setup(len(problem.domain))
 
     if problem.contain_linear_order_axiom():
@@ -23,6 +23,7 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
         if algo != Algo.INCREMENTAL and algo != Algo.RECURSIVE:
             raise RuntimeError("Linear order axiom is only supported by the "
                                "incremental and recursive WFOMC algorithms")
+
     if problem.contain_predecessor_axiom():
         logger.info('Predecessor predicate PRED is found')
         if algo != Algo.INCREMENTAL:
@@ -95,5 +96,6 @@ def main() -> None:
         unary_evidence_encoding=args.unary_evidence_encoding
     )
     logger.info('WFOMC (arbitrary precision): %s', res)
-    round_val = round_rational(res)
-    logger.info('WFOMC (round): %s (exp(%s))', round_val, round_val.ln())
+    if isinstance(res, Rational):
+        round_val = round_rational(res)
+        logger.info('WFOMC (round): %s (exp(%s))', round_val, round_val.ln())

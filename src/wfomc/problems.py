@@ -1,10 +1,11 @@
+from copy import deepcopy
 from fractions import Fraction
 import math
 
 from wfomc.fol import SC2, to_sc2, AtomicFormula, Const, Pred, top, AUXILIARY_PRED_NAME, \
     Formula, QuantifiedFormula, Universal, Equivalence, new_predicate
 from wfomc.network import CardinalityConstraint
-from wfomc.utils import Rational
+from wfomc.utils import Rational, Expr
 
 
 class WFOMCProblem(object):
@@ -14,13 +15,13 @@ class WFOMCProblem(object):
 
     def __init__(self, sentence: SC2,
                  domain: set[Const],
-                 weights: dict[Pred, tuple[Rational, Rational]],
+                 weights: dict[Pred, tuple[Expr, Expr]],
                  cardinality_constraint: CardinalityConstraint = None,
                  unary_evidence: set[AtomicFormula] = None,
                  circle_len: int = None):
         self.domain: set[Const] = domain
         self.sentence: SC2 = sentence
-        self.weights: dict[Pred, tuple[Rational, Rational]] = weights
+        self.weights: dict[Pred, tuple[Expr, Expr]] = weights
         self.cardinality_constraint: CardinalityConstraint = cardinality_constraint
         self.unary_evidence = unary_evidence
         self.circle_len = circle_len if circle_len is not None else len(domain)
@@ -50,6 +51,7 @@ class WFOMCProblem(object):
     def contain_unary_evidence(self) -> bool:
         return self.unary_evidence is not None and len(self.unary_evidence) > 0
 
+
     def __str__(self) -> str:
         s = ''
         s += 'Domain: \n'
@@ -78,13 +80,15 @@ class MLNProblem(object):
     def __init__(self, rules: tuple[list[tuple[Rational, Rational]], list[Formula]],
                  domain: set[Const],
                  cardinality_constraint: CardinalityConstraint = None,
-                 unary_evidence: set[AtomicFormula] = None):
+                 unary_evidence: set[AtomicFormula] = None,
+                 circle_len: int = None):
         self.rules = rules
         # self.formulas: rules[1]
         # self.formula_weights: = dict(zip(rules[1], rules[0]))
         self.domain: set[Const] = domain
         self.cardinality_constraint: CardinalityConstraint = cardinality_constraint
         self.unary_evidence: set[AtomicFormula] = unary_evidence
+        self.circle_len = circle_len if circle_len is not None else len(domain)
 
 
 def MLN_to_WFOMC(mln: MLNProblem):
@@ -107,4 +111,5 @@ def MLN_to_WFOMC(mln: MLNProblem):
         raise ValueError('Sentence must be a valid SC2 formula.')
     return WFOMCProblem(sentence, mln.domain, weightings,
                         mln.cardinality_constraint,
-                        mln.unary_evidence)
+                        mln.unary_evidence,
+                        mln.circle_len)

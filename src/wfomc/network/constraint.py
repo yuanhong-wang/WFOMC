@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from wfomc.fol import AUXILIARY_PRED_NAME, AtomicFormula, Const, Pred, X, QFFormula, top
 from wfomc.fol import exactly_one_qf, new_predicate
-from wfomc.utils import Rational, Poly, MultinomialCoefficients, coeff_dict, create_vars, expand
+from wfomc.utils import Rational, Poly, Expr, MultinomialCoefficients, coeff_dict, create_vars
 
 
 class Constraint(ABC):
@@ -37,27 +37,25 @@ class CardinalityConstraint(Constraint):
             for constraint in self.constraints:
                 self.preds = list(set(self.preds).union(constraint[0].keys()))
 
-        self.gen_vars: list[Poly]
+        self.gen_vars: list[Expr] = list()
         self.validator: str = ""
 
     def empty(self) -> bool:
         return len(self.constraints) == 0
 
-    def transform_weighting(self, get_weight: Callable[[Pred], tuple[Rational, Rational]]) \
-            -> dict[Pred, tuple[Poly, Poly]]:
-        new_weights: dict[Pred, tuple[Poly, Poly]] = {}
-        self.gen_vars = create_vars('x', len(self.preds))
-        for sym, pred in zip(self.gen_vars, self.preds):
+    def transform_weighting(self, get_weight: Callable[[Pred], tuple[Expr, Expr]]) \
+            -> dict[Pred, tuple[Expr, Expr]]:
+        new_weights: dict[Pred, tuple[Expr, Expr]] = {}
+        gen_vars = create_vars('x', len(self.preds))
+        for sym, pred in zip(gen_vars, self.preds):
             weight = get_weight(pred)
             new_weights[pred] = (weight[0] * sym, weight[1])
+            self.gen_vars.append(sym)
         return new_weights
 
-    def decode_poly(self, poly: Poly) -> Rational:
-        poly = expand(poly)
-        coeffs = coeff_dict(poly, self.gen_vars)
-        # logger.debug('coeffs: %s', list(coeffs))
+    def decode_poly(self, poly: Poly) -> Expr:
         res = Rational(0, 1)
-        for degrees, coeff in coeffs:
+        for degrees, coeff in coeff_dict(poly, self.gen_vars):
             if self.valid(degrees):
                 res += coeff
         return res

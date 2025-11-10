@@ -7,7 +7,7 @@ from contexttimer import Timer
 from wfomc.cell_graph import build_cell_graphs
 from wfomc.context import WFOMCContext
 from wfomc.network import PartitionConstraint
-from wfomc.utils import MultinomialCoefficients, multinomial_less_than, RingElement, Rational
+from wfomc.utils import MultinomialCoefficients, multinomial_less_than, RingElement
 from wfomc.fol import Const, Pred, QFFormula
 
 
@@ -15,7 +15,7 @@ def fast_wfomc(context: WFOMCContext,
                modified_cell_symmetry: bool = False) -> RingElement:
     formula = context.formula
     domain = context.domain
-    get_weight = context.get_weight
+    get_weight = context._get_weight
     partition_constraint = context.partition_constraint
     if partition_constraint is None:
         return _fast_wfomc(
@@ -32,7 +32,7 @@ def _fast_wfomc(formula: QFFormula,
                get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
                modified_cell_symmetry: bool = False) -> RingElement:
     domain_size = len(domain)
-    res = Rational(0, 1)
+    res = 0
     for opt_cell_graph, weight in build_cell_graphs(
         formula, get_weight, optimized=True,
         domain_size=domain_size,
@@ -43,14 +43,14 @@ def _fast_wfomc(formula: QFFormula,
         i2_ind = opt_cell_graph.i2_ind
         nonind_map = opt_cell_graph.nonind_map
 
-        res_ = Rational(0, 1)
+        res_ = 0
         with Timer() as t:
             for partition in multinomial_less_than(len(nonind), domain_size):
                 mu = tuple(partition)
                 if sum(partition) < domain_size:
                     mu = mu + (domain_size - sum(partition),)
                 coef = MultinomialCoefficients.coef(mu)
-                body = Rational(1, 1)
+                body = 1
 
                 for i, clique1 in enumerate(cliques):
                     for j, clique2 in enumerate(cliques):
@@ -85,7 +85,7 @@ def _fast_wfomc_with_pc(formula: QFFormula,
                          partition_constraint: PartitionConstraint) -> RingElement:
     logger.info('Invoke faster WFOMC with partition constraint')
     logger.info('Partition constraint: %s', partition_constraint)
-    res = Rational(0, 1)
+    res = 0
     domain_size = len(domain)
     for opt_cell_graph, weight in build_cell_graphs(
         formula, get_weight,
@@ -101,13 +101,13 @@ def _fast_wfomc_with_pc(formula: QFFormula,
         # partition to cliques
         partition_cliques: dict[int, list[int]] = opt_cell_graph.partition_cliques
 
-        res_ = Rational(0, 1)
+        res_ = 0
         with Timer() as t:
             for configs in product(
                 *(list(multinomial_less_than(len(partition_cliques[idx]), constrained_num)) for
                   idx, constrained_num in enumerate(pred_partitions))
             ):
-                coef = Rational(1, 1)
+                coef = 1
                 remainings = list()
                 # config for the cliques
                 overall_config = list(0 for _ in range(len(cliques)))
