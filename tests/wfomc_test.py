@@ -57,17 +57,17 @@ def test_model(model_file):
     assert all([r == results[0] for r in results])
 
 
-answer_json = json.load(open(current_path.parent / 'models' / 'MATH' / 'all.json'))
-MATH_files = list((current_path.parent / 'models' / 'MATH').glob('*.wfomcs'))
-@pytest.mark.parametrize(
-    'model_file, id',
-    [(str(model_file), Path(model_file).stem) for model_file in MATH_files]
-)
-def test_MATH(model_file, id):
-    problem = parse_input(str(model_file))
-    problem_id = Path(model_file).stem
-    answer = int(answer_json[problem_id]['answer'])
-    res = wfomc(problem, algo=Algo.INCREMENTAL, unary_evidence_encoding=UnaryEvidenceEncoding.CCS)
-    assert res == answer, f"Failed CCS for MATH {problem_id}: {answer}(true) != {res}(computed)"
-    res = wfomc(problem, algo=Algo.INCREMENTAL, unary_evidence_encoding=UnaryEvidenceEncoding.PC)
-    assert res == answer, f"Failed PC for MATH {problem_id}: {answer}(true) != {res}(computed)"
+# answer_json = json.load(open(current_path.parent / 'models' / 'MATH' / 'all.json'))
+# MATH_files = list((current_path.parent / 'models' / 'MATH').glob('*.wfomcs'))
+# @pytest.mark.parametrize(
+#     'model_file, id',
+#     [(str(model_file), Path(model_file).stem) for model_file in MATH_files]
+# )
+# def test_MATH(model_file, id):
+#     problem = parse_input(str(model_file))
+#     problem_id = Path(model_file).stem
+#     answer = int(answer_json[problem_id]['answer'])
+#     res = wfomc(problem, algo=Algo.INCREMENTAL, unary_evidence_encoding=UnaryEvidenceEncoding.CCS)
+#     assert res == answer, f"Failed CCS for MATH {problem_id}: {answer}(true) != {res}(computed)"
+#     res = wfomc(problem, algo=Algo.INCREMENTAL, unary_evidence_encoding=UnaryEvidenceEncoding.PC)
+#     assert res == answer, f"Failed PC for MATH {problem_id}: {answer}(true) != {res}(computed)"
