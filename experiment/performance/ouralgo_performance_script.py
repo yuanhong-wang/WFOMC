@@ -35,30 +35,30 @@ class Config:
     #     "3-regular-graph-sc2": "3-regular-graph-sc2.wfomcs",
     # }
     ALGORITHMS = ["dr"]  # 预留参数，未用
-    TIMEOUT_SECONDS = 20000  # 单个实验超时时间（秒）
+    TIMEOUT_SECONDS = 15000  # 单个实验超时时间（秒）
     # TIMEOUT_SECONDS = 100  # 单个实验超时时间（秒）
     GROUPS = [
-        {
-            "name": "regular-graphs",
-            "domain_size": list(range(2, 101, 3)),
-            # "domain_size": list(range(5, 8, 1)),  # 测试
-            "algorithms": ["fast", "dr", "recursive"],
-            "models": {
-                "3-regular-graph": "3-regular-graph.wfomcs",
-                "4-regular-graph": "4-regular-graph.wfomcs",
-                "5-regular-graph": "5-regular-graph.wfomcs",
-            }
-        },
+        # {
+        #     "name": "regular-graphs",
+        #     "domain_size": list(range(2, 101, 3)),
+        #     # "domain_size": list(range(5, 8, 1)),  # 测试
+        #     "algorithms": ["fast", "dr", "recursive"],
+        #     "models": {
+        #         "3-regular-graph": "3-regular-graph.wfomcs",
+        #         "4-regular-graph": "4-regular-graph.wfomcs",
+        #         "5-regular-graph": "5-regular-graph.wfomcs",
+        #     }
+        # },
         {
             "name": "colored-graphs",
             "domain_size": list(range(2, 101, 3)),
             # "domain_size": list(range(5, 8, 1)),  # 测试
             "algorithms": ["fast", "dr", "recursive"],
             "models": {
-                "3-regular-graph-2-colored": "3-regular-graph-2-colored.wfomcs",
+                # "3-regular-graph-2-colored": "3-regular-graph-2-colored.wfomcs",
                 # "3-regular-graph-3-colored": "3-regular-graph-3-colored.wfomcs",
                 # "3-regular-graph-4-colored": "3-regular-graph-4-colored.wfomcs",
-                "4-regular-graph-2-colored": "4-regular-graph-2-colored.wfomcs",
+                # "4-regular-graph-2-colored": "4-regular-graph-2-colored.wfomcs",
                 "4-regular-graph-3-colored": "4-regular-graph-3-colored.wfomcs",
                 "5-regular-graph-2-colored": "5-regular-graph-2-colored.wfomcs"
             }
