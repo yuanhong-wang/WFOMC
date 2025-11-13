@@ -51,71 +51,71 @@ class Config:
         # },
         {
             "name": "colored-graphs",
-            "domain_size": list(range(2, 101, 3)),
+            "domain_size": list(range(92, 101, 3)),
             # "domain_size": list(range(5, 8, 1)),  # 测试
             "algorithms": ["fast", "dr", "recursive"],
             "models": {
                 # "3-regular-graph-2-colored": "3-regular-graph-2-colored.wfomcs",
                 # "3-regular-graph-3-colored": "3-regular-graph-3-colored.wfomcs",
                 # "3-regular-graph-4-colored": "3-regular-graph-4-colored.wfomcs",
-                # "4-regular-graph-2-colored": "4-regular-graph-2-colored.wfomcs",
-                "4-regular-graph-3-colored": "4-regular-graph-3-colored.wfomcs",
-                "5-regular-graph-2-colored": "5-regular-graph-2-colored.wfomcs"
+                "4-regular-graph-2-colored": "4-regular-graph-2-colored.wfomcs",
+                # "4-regular-graph-3-colored": "4-regular-graph-3-colored.wfomcs",
+                # "5-regular-graph-2-colored": "5-regular-graph-2-colored.wfomcs"
             }
         },
-        # 由于下面这几个domain更加细致，所以单独测试
-        {
-            "name": "3-regular-graph-3-colored",
-            "domain_size": list(range(2, 50, 1)),
-            "algorithms": ["fast", "dr", "recursive"],
-            "models": {
-                "3-regular-graph-3-colored": "3-regular-graph-3-colored.wfomcs",
-            }
-        },
-        {
-            "name": "3-regular-graph-4-colored",
-            "domain_size": list(range(2, 50, 1)),
-            "algorithms": ["fast", "dr", "recursive"],
-            "models": {
-                "3-regular-graph-4-colored": "3-regular-graph-4-colored.wfomcs",
-            }
-        },
-        {
-            "name": "4-regular-graph-3-colored",
-            "domain_size": list(range(2, 50, 1)),
-            "algorithms": ["fast", "dr", "recursive"],
-            "models": {
-                "4-regular-graph-3-colored": "4-regular-graph-3-colored.wfomcs",
-            }
-        },
-        {
-            "name": "5-regular-graph-2-colored",
-            "domain_size": list(range(2, 101, 3)),
-            "algorithms": ["fast", "dr", "recursive"],
-            "models": {
-                "5-regular-graph-2-colored": "5-regular-graph-2-colored.wfomcs"
-            }
-        },
-        {
-            "name": "directed-graphs",
-            "domain_size": list(range(2, 101, 3)),
-            # "domain_size": list(range(5, 8, 1)),  # 测试
-            "algorithms": ["fast", "dr", "recursive"],
-            "models": {
-                "2-regular-directed-graph": "2-regular-directed-graph.wfomcs",
-                "3-regular-directed-graph": "3-regular-directed-graph.wfomcs",
-            }
-        },
-        {
-            "name": "BA",  # 实验组名称
-            "domain_size": list(range(2, 101, 3)),  # 域大小范围
-            # "domain_size": list(range(5, 8, 1)),  # 测试
-            "algorithms": ["dr", "incremental", "recursive"],  # fast 没有实现Linear order
-            "models": {  # 要测试的模型
-                "BA_CC": "BA_CC.wfomcs",
-                "BA": "BA.wfomcs",
-            },
-        },
+        # # 由于下面这几个domain更加细致，所以单独测试
+        # {
+        #     "name": "3-regular-graph-3-colored",
+        #     "domain_size": list(range(2, 50, 1)),
+        #     "algorithms": ["fast", "dr", "recursive"],
+        #     "models": {
+        #         "3-regular-graph-3-colored": "3-regular-graph-3-colored.wfomcs",
+        #     }
+        # },
+        # {
+        #     "name": "3-regular-graph-4-colored",
+        #     "domain_size": list(range(2, 50, 1)),
+        #     "algorithms": ["fast", "dr", "recursive"],
+        #     "models": {
+        #         "3-regular-graph-4-colored": "3-regular-graph-4-colored.wfomcs",
+        #     }
+        # },
+        # {
+        #     "name": "4-regular-graph-3-colored",
+        #     "domain_size": list(range(2, 50, 1)),
+        #     "algorithms": ["fast", "dr", "recursive"],
+        #     "models": {
+        #         "4-regular-graph-3-colored": "4-regular-graph-3-colored.wfomcs",
+        #     }
+        # },
+        # {
+        #     "name": "5-regular-graph-2-colored",
+        #     "domain_size": list(range(2, 101, 3)),
+        #     "algorithms": ["fast", "dr", "recursive"],
+        #     "models": {
+        #         "5-regular-graph-2-colored": "5-regular-graph-2-colored.wfomcs"
+        #     }
+        # },
+        # {
+        #     "name": "directed-graphs",
+        #     "domain_size": list(range(2, 101, 3)),
+        #     # "domain_size": list(range(5, 8, 1)),  # 测试
+        #     "algorithms": ["fast", "dr", "recursive"],
+        #     "models": {
+        #         "2-regular-directed-graph": "2-regular-directed-graph.wfomcs",
+        #         "3-regular-directed-graph": "3-regular-directed-graph.wfomcs",
+        #     }
+        # },
+        # {
+        #     "name": "BA",  # 实验组名称
+        #     "domain_size": list(range(2, 101, 3)),  # 域大小范围
+        #     # "domain_size": list(range(5, 8, 1)),  # 测试
+        #     "algorithms": ["dr", "incremental", "recursive"],  # fast 没有实现Linear order
+        #     "models": {  # 要测试的模型
+        #         "BA_CC": "BA_CC.wfomcs",
+        #         "BA": "BA.wfomcs",
+        #     },
+        # },
         # {
         #     "name": "m-odd-degree-graph-sc2",
         #     "domain_size": list(range(6,18,2)), # 固定n， k 作为变量
@@ -226,7 +226,8 @@ def plot_comparison(
     # 创建一个新的图表，设置尺寸
     plt.figure(figsize=(12, 8))
     # 定义图例中各个算法的显示名称
-    legend_labels = {"dr": "Ours", "fast": "Fast",
+    legend_labels = {"dr": "Ours", 
+                     "fast": "Fast",
                      "incremental": "Incremental"}
     # 定义不同算法在图上的标记样式
     markers = {

@@ -39,13 +39,15 @@ def plot_performance(csv_file_name: str, metric: str, ylabel: str, output_suffix
         "dr": "Ours",
         "fast": "Fast",
         "incremental": "Incremental",
+        "recursive":"Recursive"
     }
 
     # 定义不同算法的标记样式
     markers = {
-        "dr": "s",  # 圆形标记
-        "fast": "o",  # 正方形标记
-        "incremental": "s"  # 三角形标记
+        "dr": "o",  # 圆形标记
+        "fast": "s",  # 正方形标记
+        "recursive": "p",  # 菱形标记
+        "incremental": "^"  # 三角形标记
     }
 
     # for algo in algorithms:
@@ -79,9 +81,10 @@ def plot_performance(csv_file_name: str, metric: str, ylabel: str, output_suffix
         ]
         
         colors = {
-            "dr": "tab:blue",    # "Ours" 算法现在是蓝色
-            "fast": "tab:orange", # "Fast" 算法现在是橙色
-            "incremental": "tab:green" # 为 "Incremental" 也指定一个颜色以备用
+            "dr": "tab:orange",    
+            "fast": "tab:green", 
+            "recursive": "tab:blue" ,
+            "incremental": "tab:brown"
         }
             
         plt.plot(domain_sizes, values, marker=markers.get(algo, "o"),
@@ -140,13 +143,13 @@ def plot_memory_comparison(csv_file_name: str):
 if __name__ == '__main__':
     # DIR_PATH = os.path.dirname(os.path.abspath(__file__))
     # print(f"当前目录: {DIR_PATH}")
-    # RESULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results","regular-graphs")
-    # plot_runtime_comparison("3-regular-graph.csv")
-    # plot_memory_comparison("3-regular-graph.csv")
-    # plot_runtime_comparison("4-regular-graph.csv")
-    # plot_memory_comparison("4-regular-graph.csv")
-    # plot_runtime_comparison("5-regular-graph.csv")
-    # plot_memory_comparison("5-regular-graph.csv")
+    RESULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results","regular-graphs")
+    plot_runtime_comparison("3-regular-graph.csv")
+    plot_memory_comparison("3-regular-graph.csv")
+    plot_runtime_comparison("4-regular-graph.csv")
+    plot_memory_comparison("4-regular-graph.csv")
+    plot_runtime_comparison("5-regular-graph.csv")
+    plot_memory_comparison("5-regular-graph.csv")
     # plot_runtime_comparison("baseline_4-regular-graph.csv")
     # plot_runtime_comparison("baseline_5-regular-graph.csv")
 
@@ -159,12 +162,12 @@ if __name__ == '__main__':
     # plot_runtime_comparison("m-odd-degree-graph-sc2.csv")
     # plot_memory_comparison("m-odd-degree-graph-sc2.csv")
 
-    RESULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results","colored-graphs")
+    # RESULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results","colored-graphs")
     # plot_runtime_comparison("3-regular-graph-2-colored.csv")
     # plot_runtime_comparison("3-regular-graph-3-colored.csv")
     # plot_runtime_comparison("3-regular-graph-4-colored.csv")
     # plot_runtime_comparison("4-regular-graph-2-colored.csv")
-    plot_runtime_comparison("4-regular-graph-3-colored.csv")
+    # plot_runtime_comparison("4-regular-graph-3-colored.csv")
     # plot_runtime_comparison("4-regular-graph-4-colored.csv")
 
 
