@@ -25,7 +25,6 @@ from wfomc.fol.syntax import *
 from wfomc.problems import WFOMCProblem
 from wfomc.utils.polynomial_flint import RingElement, Rational
 from itertools import product
-from flint import fmpq, fmpq_poly
 
 
 class DRWFOMCContext(object):
@@ -451,6 +450,26 @@ class DRWFOMCContext(object):
         return t_updates
 
     def build_weight(self, cells, cell_graph):
+        """
+        构建权重和关系字典 r
+
+        该函数根据给定的单元格和单元格图计算权重字典和关系字典，
+        用于后续的状态转移计算
+
+        Args:
+            cells: 单元格类型列表
+            self.ext_preds: 存在量词谓词列表
+            self.cnt_preds: 计数谓词列表
+            self.cnt_params: 计数参数列表
+            self.binary_evidence: 二元证据列表
+            bui: 单元格图对象
+
+        Returns:
+            tuple: (w2t 字典, w 权重字典, r 关系字典)
+                   w2t: 从单元格索引到谓词状态字典的映射, 例如 {0: (1, 0, 1, 2), 1: (0, 1, 0, 1)}, 值代表需要满足的数量
+                   w: 每个单元格类型的权重字典，例如 {0: Rational(1, 1), 1: Rational(2, 1)}, 键是单元格索引，值是权重
+                   r: 单元格对之间的关系字典，
+        """
 
         n_cells = len(cells)
         w2t = dict()
@@ -527,21 +546,21 @@ class DRWFOMCContext(object):
                     r[(i, j)][
                         (tuple(t), tuple(reverse_t))
                     ] = two_table_weight  # 使用谓词状态组合存储关系权重
-        #         # --- START: 添加这段调试代码 ---
-        # import logging
-        # logging.basicConfig(level=logging.INFO) # 确保INFO级别的日志能被打印
-        # logging.info("--- DEBUG: Two-table 'r' dictionary ---")
-        # # 对 r 字典的键（cell对）进行排序，以保证打印顺序一致
-        # for cell_pair, transitions in sorted(r.items()):
-        #     # 只打印有内容的条目
-        #     if transitions:
-        #         logging.info(f"Cell Pair {cell_pair}:")
-        #         # 对内部字典的键（状态转移）也排序
-        #         for transition, weight in sorted(transitions.items()):
-        #             if weight != 0: # 只打印非零权重的转移
-        #                 logging.info(f"  Transition: {transition} -> Weight: {weight}")
-        # logging.info("--- END DEBUG ---")
-        # # --- END: 调试代码结束 ---
+                # --- START: 添加这段调试代码 ---
+        import logging
+        logging.basicConfig(level=logging.INFO) # 确保INFO级别的日志能被打印
+        logging.info("--- DEBUG: Two-table 'r' dictionary ---")
+        # 对 r 字典的键（cell对）进行排序，以保证打印顺序一致
+        for cell_pair, transitions in sorted(r.items()):
+            # 只打印有内容的条目
+            if transitions:
+                logging.info(f"Cell Pair {cell_pair}:")
+                # 对内部字典的键（状态转移）也排序
+                for transition, weight in sorted(transitions.items()):
+                    if weight != 0: # 只打印非零权重的转移
+                        logging.info(f"  Transition: {transition} -> Weight: {weight}")
+        logging.info("--- END DEBUG ---")
+        # --- END: 调试代码结束 ---
         return w2t, w, r  # 返回映射字典、权重字典和关系字典
 
     def get_weight(self, pred: Pred) -> tuple[RingElement, RingElement]:

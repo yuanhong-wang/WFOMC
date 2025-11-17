@@ -6,5 +6,5 @@
 \forall X: (\forall Y: ((K(X) & ~K(Y)) -> LEQ(X,Y)))
 # \forall X: (\forall Y: (Eq(X,Y) <->  (LEQ(X,Y) & LEQ(Y,X))))
 
-domain = 4
-|Eq| = 4
+domain = 5
+|Eq| = 5

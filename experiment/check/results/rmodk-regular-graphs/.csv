@@ -1,0 +1,16 @@
+timestamp,formula,domain_size,algorithm,result,time_sec,memory_bytes,memory_kb,memory_mb,status,dr_within_approx_confidence
+2025-09-18T09:21:57.463544,0mod2-regular-graph,0,dr,210,0.07416176795959473,147456,144.0,0.1406,completed,
+2025-09-18T09:21:57.558845,0mod2-regular-graph-sc2,0,ganak,210,0.09193611145019531,0,0.0,0.0,completed,
+2025-09-18T09:21:57.646548,0mod2-regular-graph-sc2,0,approxmc,210,0.08598971366882324,0,0.0,0.0,completed,True
+2025-09-18T09:21:57.773311,0mod2-regular-graph,2,dr,4760,0.06616759300231934,0,0.0,0.0,completed,
+2025-09-18T09:21:57.865566,0mod2-regular-graph-sc2,2,ganak,4760,0.09069943428039551,0,0.0,0.0,completed,
+2025-09-18T09:21:57.950643,0mod2-regular-graph-sc2,2,approxmc,4760,0.08345413208007812,0,0.0,0.0,completed,True
+2025-09-18T09:21:58.078307,0mod2-regular-graph,4,dr,11200,0.06621694564819336,0,0.0,0.0,completed,
+2025-09-18T09:21:58.159856,0mod2-regular-graph-sc2,4,ganak,11200,0.08014392852783203,0,0.0,0.0,completed,
+2025-09-18T09:21:58.241496,0mod2-regular-graph-sc2,4,approxmc,11200,0.08014822006225586,0,0.0,0.0,completed,True
+2025-09-18T09:21:58.368578,0mod2-regular-graph,6,dr,4200,0.06689739227294922,0,0.0,0.0,completed,
+2025-09-18T09:21:58.547614,0mod2-regular-graph-sc2,6,ganak,4200,0.17750024795532227,0,0.0,0.0,completed,
+2025-09-18T09:21:58.637184,0mod2-regular-graph-sc2,6,approxmc,4200,0.08795642852783203,0,0.0,0.0,completed,True
+2025-09-18T09:21:58.767707,0mod2-regular-graph,8,dr,105,0.06848716735839844,0,0.0,0.0,completed,
+2025-09-18T09:21:58.881447,0mod2-regular-graph-sc2,8,ganak,105,0.11227703094482422,0,0.0,0.0,completed,
+2025-09-18T09:21:58.991369,0mod2-regular-graph-sc2,8,approxmc,105,0.10807013511657715,0,0.0,0.0,completed,True

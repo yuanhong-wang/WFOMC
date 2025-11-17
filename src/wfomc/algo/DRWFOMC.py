@@ -3,8 +3,7 @@ from collections import Counter, defaultdict
 from wfomc.cell_graph.cell_graph import build_cell_graphs
 from wfomc.context.dr_context import DRWFOMCContext, ConfigUpdater, HashableArrayWrapper
 from wfomc.fol import Const, Pred
-from wfomc.utils import multinomial, MultinomialCoefficients
-from wfomc.utils.polynomial_flint import Rational, coeff_dict, expand, RingElement
+from wfomc.utils import multinomial, MultinomialCoefficients, Rational, coeff_dict, expand, RingElement
 
 
 def domain_recursive_wfomc(context: DRWFOMCContext) -> RingElement:

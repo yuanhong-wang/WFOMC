@@ -53,8 +53,8 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
             res = recursive_wfomc(context)
         elif algo == Algo.DR:
             res = domain_recursive_wfomc(context)
-            # print("Domain Recursive WFOMC Result:", res)
-    res = context.decode_result(res)
+            print("Domain Recursive WFOMC Result:", res)
+    # res = context.decode_result(res)
     # print("Decoded Result:", res)
     logger.info('WFOMC time: %s', t.elapsed)
     return res
@@ -98,9 +98,9 @@ def main() -> None:
         problem, algo=args.algo,
         unary_evidence_encoding=args.unary_evidence_encoding
     )
-    logger.info('WFOMC (arbitrary precision): %s', res)
-    round_val = round_rational(res)
-    logger.info('WFOMC (round): %s (exp(%s))', round_val, round_val.ln())
+    # logger.info('WFOMC (arbitrary precision): %s', res)
+    # round_val = round_rational(res)
+    # logger.info('WFOMC (round): %s (exp(%s))', round_val, round_val.ln())
 
 
 if __name__ == '__main__':
