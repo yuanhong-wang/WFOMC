@@ -54,13 +54,15 @@ class CardinalityConstraint(Constraint):
 
     def decode_poly(self, poly: Poly) -> Rational:
         poly = expand(poly)
-        coeffs = coeff_dict(poly, self.gen_vars)
-        # logger.debug('coeffs: %s', list(coeffs))
-        res = Rational(0, 1)
-        for degrees, coeff in coeffs:
-            if self.valid(degrees):
-                res += coeff
-        return res
+        if isinstance(poly, Poly):
+            coeffs = coeff_dict(poly, self.gen_vars)
+            # logger.debug('coeffs: %s', list(coeffs))
+            res = Rational(0, 1)
+            for degrees, coeff in coeffs:
+                if self.valid(degrees):
+                    res += coeff
+            return res
+        return poly
 
     def valid(self, degrees: list[int]) -> bool:
         kwargs = zip((pred.name for pred in self.preds), degrees)
