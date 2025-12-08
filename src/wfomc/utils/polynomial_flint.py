@@ -88,7 +88,7 @@ def filter_poly(p: EPoly, corr_vars: list[Expr],
         if filter_func(selected_degrees):
             filtered[degrees] = coeff
     filtered_poly = p.context().from_dict(filtered)
-    return filtered_poly.subs(
+    ret = filtered_poly.subs(
         {str(v): 1 for v in corr_vars}
     ).project_to_context(
         fmpq_mpoly_ctx.get(
@@ -96,3 +96,6 @@ def filter_poly(p: EPoly, corr_vars: list[Expr],
             'lex'
         )
     )
+    if ret.is_constant():
+        ret = ret.leading_coefficient()
+    return ret
