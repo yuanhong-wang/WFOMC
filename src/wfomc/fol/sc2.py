@@ -421,26 +421,26 @@ def to_sc2(formula: Formula) -> SC2:
 
     logger.debug("Before standardize: %s", formula)
     formula = standardize(formula)
-    logger.debug("After standardize: \n%s", pretty_print(formula))
+    # logger.debug("After standardize: \n%s", pretty_print(formula))
     formula, additional_formulas = dfs(formula, replace_disjunction)
     for additional_formula in additional_formulas:
         formula = formula & additional_formula
     formula = standardize(formula)
-    logger.debug("After replace disjunction: \n%s", pretty_print(formula))
+    # logger.debug("After replace disjunction: \n%s", pretty_print(formula))
     formula, additional_formulas = dfs(formula, remove_existential_quantifier)
     scott_formula = formula # top
     for additional_formula in additional_formulas:
         scott_formula = scott_formula & additional_formula
-    logger.debug("After remove existential quantifier: \n%s", pretty_print(scott_formula))
+    # logger.debug("After remove existential quantifier: \n%s", pretty_print(scott_formula))
     formula = standardize(scott_formula)
-    logger.debug("After standardize: \n%s", pretty_print(formula))
+    # logger.debug("After standardize: \n%s", pretty_print(formula))
     formula = rename_variables(
         formula, 0, [U, V, W], {}
     )
     formula = rename_variables(
         formula, 0, [X, Y, Z], {}
     )
-    logger.debug("After rename variables: \n%s", pretty_print(formula))
+    # logger.debug("After rename variables: \n%s", pretty_print(formula))
     # TODO: disable due to https://github.com/lucienwang1009/lifted_sampling_fo2/issues/8
     # formula = pop_quantifier(formula)
     # logger.debug("After pop quantifier: \n%s", pretty_print(formula))
