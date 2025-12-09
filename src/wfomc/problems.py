@@ -66,6 +66,163 @@ class WFOMCProblem(object):
     def contain_unary_evidence(self) -> bool:
         return self.unary_evidence is not None and len(self.unary_evidence) > 0
 
+    def _formula_to_wfomcs_syntax(self, formula: Formula) -> str:
+        """
+        Convert a formula to .wfomcs syntax string.
+        Handles proper formatting for operators like ->, <->, &, |, ~
+        """
+        from wfomc.fol import QuantifiedFormula, QFFormula, Counting, Implication, Equivalence, Conjunction, Disjunction, Negation, BinaryFormula, CompoundFormula
+        import sympy
+        
+        if isinstance(formula, QuantifiedFormula):
+            # Handle quantified formulas
+            if isinstance(formula.quantifier_scope, Counting):
+                quant_str = str(formula.quantifier_scope)
+            else:
+                quant_str = str(formula.quantifier_scope)
+            inner_str = self._formula_to_wfomcs_syntax(formula.quantified_formula)
+            return f'{quant_str}: ({inner_str})'
+        elif isinstance(formula, QFFormula):
+            # Convert QFFormula - need to handle sympy boolean expressions
+            # Parse the sympy expression and convert it properly
+            return self._sympy_to_fol(formula.expr)
+        elif isinstance(formula, Implication):
+            left_str = self._formula_to_wfomcs_syntax(formula.left_formula)
+            right_str = self._formula_to_wfomcs_syntax(formula.right_formula)
+            return f'({left_str} -> {right_str})'
+        elif isinstance(formula, Equivalence):
+            left_str = self._formula_to_wfomcs_syntax(formula.left_formula)
+            right_str = self._formula_to_wfomcs_syntax(formula.right_formula)
+            return f'({left_str} <-> {right_str})'
+        elif isinstance(formula, Conjunction):
+            left_str = self._formula_to_wfomcs_syntax(formula.left_formula)
+            right_str = self._formula_to_wfomcs_syntax(formula.right_formula)
+            return f'({left_str} & {right_str})'
+        elif isinstance(formula, Disjunction):
+            left_str = self._formula_to_wfomcs_syntax(formula.left_formula)
+            right_str = self._formula_to_wfomcs_syntax(formula.right_formula)
+            return f'({left_str} | {right_str})'
+        elif isinstance(formula, Negation):
+            inner_str = self._formula_to_wfomcs_syntax(formula.sub_formula)
+            return f'~{inner_str}'
+        elif isinstance(formula, BinaryFormula):
+            left_str = self._formula_to_wfomcs_syntax(formula.left_formula)
+            right_str = self._formula_to_wfomcs_syntax(formula.right_formula)
+            return f'({left_str} {formula.op_name} {right_str})'
+        elif isinstance(formula, CompoundFormula):
+            # Generic compound formula
+            return str(formula)
+        else:
+            return str(formula)
+    
+    def _sympy_to_fol(self, expr) -> str:
+        """
+        Convert a sympy boolean expression to FOL syntax.
+        """
+        import sympy
+        from sympy.logic import boolalg
+        
+        if isinstance(expr, boolalg.Implies):
+            left = self._sympy_to_fol(expr.args[0])
+            right = self._sympy_to_fol(expr.args[1])
+            return f'{left} -> {right}'
+        elif isinstance(expr, boolalg.Equivalent):
+            left = self._sympy_to_fol(expr.args[0])
+            right = self._sympy_to_fol(expr.args[1])
+            return f'{left} <-> {right}'
+        elif isinstance(expr, boolalg.And):
+            parts = [self._sympy_to_fol(arg) for arg in expr.args]
+            return ' & '.join(f'({part})' if ' ' in part else part for part in parts)
+        elif isinstance(expr, boolalg.Or):
+            parts = [self._sympy_to_fol(arg) for arg in expr.args]
+            return ' | '.join(f'({part})' if ' ' in part else part for part in parts)
+        elif isinstance(expr, boolalg.Not):
+            inner = self._sympy_to_fol(expr.args[0])
+            if ' ' in inner:
+                return f'~({inner})'
+            else:
+                return f'~{inner}'
+        elif isinstance(expr, sympy.Symbol):
+            # This is an atomic formula
+            return str(expr)
+        else:
+            return str(expr)
+
+    def export_wfomcs(self, filepath: str = None) -> str:
+        """
+        Export the WFOMC problem to a .wfomcs file format.
+        
+        :param filepath: Optional path to save the file. If not provided, returns the string.
+        :return: String representation in .wfomcs format
+        """
+        lines = []
+        
+        # 1. Export the sentence (formula)
+        # For SC2, we need to combine the universal and existential formulas
+        from wfomc.fol import SC2
+        if isinstance(self.sentence, SC2):
+            # Combine all formulas with &
+            formulas = []
+            if self.sentence.uni_formula is not None:
+                formulas.append(self._formula_to_wfomcs_syntax(self.sentence.uni_formula))
+            for ext_formula in self.sentence.ext_formulas:
+                formulas.append(self._formula_to_wfomcs_syntax(ext_formula))
+            for cnt_formula in self.sentence.cnt_formulas:
+                formulas.append(self._formula_to_wfomcs_syntax(cnt_formula))
+            lines.append(' &\n'.join(formulas))
+        else:
+            lines.append(self._formula_to_wfomcs_syntax(self.sentence))
+        lines.append('')
+        
+        # 2. Export the domain
+        # Check if domain elements follow a pattern
+        domain_list = sorted(self.domain, key=lambda c: c.name)
+        
+        # Try to determine if domain is numeric pattern
+        domain_names = [c.name for c in domain_list]
+        if len(domain_names) > 0:
+            # Output as set notation
+            lines.append('domain = {' + ', '.join(domain_names) + '}')
+        
+        # 3. Export weightings (if any non-default weights exist)
+        if self.weights:
+            for pred, (w_pos, w_neg) in sorted(self.weights.items(), key=lambda x: x[0].name):
+                # Format weights - convert Rational to string
+                w_pos_str = str(w_pos) if hasattr(w_pos, '__str__') else str(float(w_pos))
+                w_neg_str = str(w_neg) if hasattr(w_neg, '__str__') else str(float(w_neg))
+                lines.append(f'{w_pos_str} {w_neg_str} {pred.name}')
+        
+        # 4. Export cardinality constraints (if any)
+        if self.cardinality_constraint is not None and not self.cardinality_constraint.empty():
+            lines.append('')
+            for expr, comp, param in self.cardinality_constraint.constraints:
+                # Build the constraint expression
+                terms = []
+                for pred, coef in expr.items():
+                    if coef == 1:
+                        terms.append(f'|{pred.name}|')
+                    else:
+                        terms.append(f'{coef} |{pred.name}|')
+                constraint_str = ' + '.join(terms) if len(terms) > 1 else terms[0]
+                lines.append(f'{constraint_str} {comp} {param}')
+        
+        # 5. Export unary evidence (if any)
+        if self.unary_evidence is not None and len(self.unary_evidence) > 0:
+            lines.append('')
+            evidence_strs = []
+            for atom in sorted(self.unary_evidence, key=lambda a: (a.pred.name, a.args[0].name, not a.positive)):
+                evidence_strs.append(str(atom))
+            lines.append(', '.join(evidence_strs))
+        
+        # Join all lines
+        result = '\n'.join(lines)
+        
+        # Save to file if filepath is provided
+        if filepath is not None:
+            with open(filepath, 'w') as f:
+                f.write(result)
+        
+        return result
 
     def __str__(self) -> str:
         s = ''
