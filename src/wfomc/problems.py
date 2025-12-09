@@ -2,8 +2,12 @@ from copy import deepcopy
 from fractions import Fraction
 import math
 
+import sympy
+from sympy.logic import boolalg
+
 from wfomc.fol import SC2, to_sc2, AtomicFormula, Const, Pred, top, AUXILIARY_PRED_NAME, \
-    Formula, QuantifiedFormula, Universal, Equivalence, new_predicate
+    Formula, QuantifiedFormula, Universal, Equivalence, new_predicate, QFFormula, Counting, \
+    Implication, Conjunction, Disjunction, Negation, BinaryFormula, CompoundFormula
 from wfomc.network import CardinalityConstraint
 from wfomc.utils import Rational, Expr
 
@@ -70,16 +74,13 @@ class WFOMCProblem(object):
         """
         Convert a formula to .wfomcs syntax string.
         Handles proper formatting for operators like ->, <->, &, |, ~
-        """
-        from wfomc.fol import QuantifiedFormula, QFFormula, Counting, Implication, Equivalence, Conjunction, Disjunction, Negation, BinaryFormula, CompoundFormula
-        import sympy
         
+        :param formula: The formula to convert
+        :return: String representation in .wfomcs FOL syntax
+        """
         if isinstance(formula, QuantifiedFormula):
             # Handle quantified formulas
-            if isinstance(formula.quantifier_scope, Counting):
-                quant_str = str(formula.quantifier_scope)
-            else:
-                quant_str = str(formula.quantifier_scope)
+            quant_str = str(formula.quantifier_scope)
             inner_str = self._formula_to_wfomcs_syntax(formula.quantified_formula)
             return f'{quant_str}: ({inner_str})'
         elif isinstance(formula, QFFormula):
@@ -115,13 +116,13 @@ class WFOMCProblem(object):
         else:
             return str(formula)
     
-    def _sympy_to_fol(self, expr) -> str:
+    def _sympy_to_fol(self, expr: sympy.Basic) -> str:
         """
         Convert a sympy boolean expression to FOL syntax.
-        """
-        import sympy
-        from sympy.logic import boolalg
         
+        :param expr: The sympy expression to convert
+        :return: String representation in FOL syntax
+        """
         if isinstance(expr, boolalg.Implies):
             left = self._sympy_to_fol(expr.args[0])
             right = self._sympy_to_fol(expr.args[1])
@@ -148,6 +149,18 @@ class WFOMCProblem(object):
         else:
             return str(expr)
 
+    def _weight_to_string(self, weight) -> str:
+        """
+        Convert a weight value to string representation.
+        
+        :param weight: Weight value (Rational, Expr, or numeric)
+        :return: String representation of the weight
+        """
+        if isinstance(weight, (Rational, Expr)):
+            return str(weight)
+        else:
+            return str(float(weight))
+    
     def export_wfomcs(self, filepath: str = None) -> str:
         """
         Export the WFOMC problem to a .wfomcs file format.
@@ -159,7 +172,6 @@ class WFOMCProblem(object):
         
         # 1. Export the sentence (formula)
         # For SC2, we need to combine the universal and existential formulas
-        from wfomc.fol import SC2
         if isinstance(self.sentence, SC2):
             # Combine all formulas with &
             formulas = []
@@ -188,8 +200,8 @@ class WFOMCProblem(object):
         if self.weights:
             for pred, (w_pos, w_neg) in sorted(self.weights.items(), key=lambda x: x[0].name):
                 # Format weights - convert Rational to string
-                w_pos_str = str(w_pos) if hasattr(w_pos, '__str__') else str(float(w_pos))
-                w_neg_str = str(w_neg) if hasattr(w_neg, '__str__') else str(float(w_neg))
+                w_pos_str = self._weight_to_string(w_pos)
+                w_neg_str = self._weight_to_string(w_neg)
                 lines.append(f'{w_pos_str} {w_neg_str} {pred.name}')
         
         # 4. Export cardinality constraints (if any)
