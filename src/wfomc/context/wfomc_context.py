@@ -8,7 +8,7 @@ from wfomc.network import CardinalityConstraint, PartitionConstraint, UnaryEvide
     unary_evidence_to_ccs, unary_evidence_to_pc
 from wfomc.fol.syntax import *
 from wfomc.problems import WFOMCProblem
-from wfomc.utils import Rational, RingElement
+from wfomc.utils import Rational, Expr, RingElement, to_ringelements, to_symexpr
 
 
 class WFOMCContext(object):
@@ -20,7 +20,11 @@ class WFOMCContext(object):
         self.problem = deepcopy(problem)
         self.domain: set[Const] = self.problem.domain
         self.sentence: SC2 = self.problem.sentence
-        self.weights: dict[Pred, tuple[RingElement, RingElement]] = self.problem.weights
+        # input weight, should be represented as sympy Expr
+        self.weights: dict[Pred, tuple[Expr, Expr]] = self.problem.weights
+        # internal weight, represented as ring elements for efficient computation
+        self._weights: dict[Pred, tuple[RingElement, RingElement]] = dict()
+        self.ring_element_one: RingElement = to_ringelements([Rational(1, 1)])[0]
         self.cardinality_constraint: CardinalityConstraint = self.problem.cardinality_constraint
         self.repeat_factor = 1
         self.unary_evidence = self.problem.unary_evidence
@@ -58,21 +62,22 @@ class WFOMCContext(object):
     def contain_existential_quantifier(self) -> bool:
         return self.sentence.contain_existential_quantifier()
 
-    def get_weight(self, pred: Pred) -> tuple[RingElement, RingElement]:
-        default = Rational(1, 1)
+    def get_weight(self, pred: Pred) -> tuple[Expr, Expr]:
         if pred in self.weights:
             return self.weights[pred]
-        return (default, default)
+        return (Rational(1, 1), Rational(1, 1))
 
-    def decode_result(self, res: RingElement) -> Rational:
-        if not self.contain_cardinality_constraint():
-            res = res / self.repeat_factor
-        else:
-            res = self.cardinality_constraint.decode_poly(res) / self.repeat_factor
+    def _get_weight(self, pred: Pred) -> tuple[RingElement, RingElement]:
+        if pred in self._weights:
+            return self._weights[pred]
+        return (self.ring_element_one, self.ring_element_one)
+
+    def decode_result(self, res: RingElement) -> RingElement:
         if self.leq_pred is not None:
-            res *= Rational(math.factorial(len(self.domain)), 1)
-        if self.circular_predecessor_pred is not None:
-            res /= Rational(len(self.domain), 1)
+            res *= math.factorial(len(self.domain))
+        res = res / self.repeat_factor
+        if self.contain_cardinality_constraint():
+            res = self.cardinality_constraint.decode_poly(res)
         return res
 
     def _skolemize_one_formula(self, formula: QuantifiedFormula) -> QFFormula:
@@ -167,7 +172,7 @@ class WFOMCContext(object):
         if self.contain_cardinality_constraint():
             self.weights.update(
                 self.cardinality_constraint.transform_weighting(
-                    self.get_weight,
+                    self.get_weight
                 )
             )
 
@@ -185,3 +190,14 @@ class WFOMCContext(object):
                     1: Pred('CIRCULAR_PRED', 2)
                 }
             self.circular_predecessor_pred = Pred('CIRCULAR_PRED', 2)
+
+        # weights to flint ring elements for efficient computation
+        weights = list()
+        preds = list()
+        for pred, (w_true, w_false) in self.weights.items():
+            preds.append(pred)
+            weights.append(w_true)
+            weights.append(w_false)
+        ring_elements = to_ringelements(weights)
+        for i, pred in enumerate(preds):
+            self._weights[pred] = (ring_elements[2 * i], ring_elements[2 * i + 1])

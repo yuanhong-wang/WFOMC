@@ -1,10 +1,10 @@
 from wfomc.cell_graph import CellGraph, Cell, build_cell_graphs
 from wfomc.context import WFOMCContext
-from wfomc.utils import MultinomialCoefficients, multinomial, RingElement, Rational
+from wfomc.utils import MultinomialCoefficients, multinomial, RingElement
 
 def get_config_weight_standard(cell_graph: CellGraph,
                                cell_config: dict[Cell, int]) -> RingElement:
-    res = Rational(1, 1)
+    res = 1
     for cell, n in cell_config.items():
         if n > 0:
             # NOTE: nullary weight is multiplied once
@@ -33,11 +33,11 @@ def standard_wfomc(context: WFOMCContext) -> RingElement:
     # cell_graph.show()
     formula = context.formula
     domain = context.domain
-    get_weight = context.get_weight
-    res = Rational(0, 1)
+    get_weight = context._get_weight
+    res = 0
     domain_size = len(domain)
     for cell_graph, weight in build_cell_graphs(formula, get_weight):
-        res_ = Rational(0, 1)
+        res_ = 0
         cells = cell_graph.get_cells()
         n_cells = len(cells)
         for partition in multinomial(n_cells, domain_size):

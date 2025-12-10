@@ -6,9 +6,9 @@ from .fol import *
 from .network import CardinalityConstraint, UnaryEvidenceEncoding
 from .solver import wfomc
 from .count_distribution import count_distribution
-from .utils import Rational, expand, \
-    coeff_dict, coeff_monomial, round_rational, RingElement, MultinomialCoefficients, \
+from .utils import Rational, Expr, Poly, round_rational, MultinomialCoefficients, \
     multinomial, multinomial_less_than
+from .network.constraint import UnaryEvidenceEncoding
 
 
 __all__ = [
@@ -25,11 +25,10 @@ __all__ = [
     'to_sc2',
     'fol_parse',
     'Rational',
-    'expand',
-    'coeff_dict',
-    'coeff_monomial',
     'round_rational',
-    'RingElement',
+    'Rational',
+    'Expr',
+    'Poly',
     'MultinomialCoefficients',
     'multinomial',
     'multinomial_less_than',
@@ -67,4 +66,5 @@ __all__ = [
     'U', 'V', 'W',
     'top', 'bot',
     'CardinalityConstraint',
+    'UnaryEvidenceEncoding',
 ]

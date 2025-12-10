@@ -4,7 +4,7 @@ import functools
 from dataclasses import dataclass, field
 from typing import Callable, Iterable
 from collections import OrderedDict
-from PrettyPrint import PrettyPrintTree
+# from PrettyPrint import PrettyPrintTree
 
 from . import boolean_algebra as backend
 
@@ -35,7 +35,7 @@ __all__ = [
     'SKOLEM_PRED_NAME',
     'EVIDOM_PRED_NAME',
     'PREDS_FOR_EXISTENTIAL',
-    'pretty_print',
+    # 'pretty_print',
     'X', 'Y', 'Z',
     'U', 'V', 'W',
     'top', 'bot',

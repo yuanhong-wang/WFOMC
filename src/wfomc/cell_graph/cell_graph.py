@@ -11,7 +11,7 @@ from copy import deepcopy
 
 from wfomc.fol import AtomicFormula, Const, Pred, QFFormula, a, b, c, top
 from wfomc.network import PartitionConstraint
-from wfomc.utils import Rational, RingElement, MultinomialCoefficients
+from wfomc.utils import RingElement, MultinomialCoefficients
 
 from .components import Cell, TwoTable
 from .utils import conditional_on
@@ -247,7 +247,7 @@ class CellGraph(object):
     def _compute_cell_weights(self):
         weights = dict()
         for cell in self.cells:
-            weight = Rational(1, 1)
+            weight = 1
             for i, pred in zip(cell.code, cell.preds):
                 assert pred.arity > 0, "Nullary predicates should have been removed"
                 if i:
@@ -259,7 +259,7 @@ class CellGraph(object):
 
     @functools.lru_cache(maxsize=None)
     def get_nullary_weight(self, cell: Cell) -> RingElement:
-        weight = Rational(1, 1)
+        weight = 1
         for i, pred in zip(cell.code, cell.preds):
             if pred.arity == 0:
                 if i:
@@ -276,7 +276,7 @@ class CellGraph(object):
             frozenset(map(lambda x: ~x, gnd_lits))
         )
         for model in gnd_formula_ab.models():
-            weight = Rational(1, 1)
+            weight = 1
             for lit in model:
                 # ignore the weight appearing in cell weight
                 if (not (len(lit.args) == 1 or all(arg == lit.args[0]
@@ -382,12 +382,12 @@ class OptimizedCellGraph(CellGraph):
             for j in range(i + 1, len(self.cells)):
                 if self.get_two_table_weight(
                         (self.cells[i], self.cells[j])
-                ) != Rational(1, 1):
+                ) != 1:
                     g.add_edge(i, j)
 
         self_loop = set()
         for i in range(len(self.cells)):
-            if self.get_two_table_weight((self.cells[i], self.cells[i])) != Rational(1, 1):
+            if self.get_two_table_weight((self.cells[i], self.cells[i])) != 1:
                 self_loop.add(i)
 
         non_self_loop = g.nodes - self_loop
@@ -410,13 +410,13 @@ class OptimizedCellGraph(CellGraph):
             for j in range(i + 1, len(self.cliques)):
                 if self.get_two_table_weight(
                         (self.cliques[i][0], self.cliques[j][0])
-                ) != Rational(1, 1):
+                ) != 1:
                     g.add_edge(i, j)
 
         self_loop = set()
         for i in range(len(self.cliques)):
             for j in range(1, self.domain_size + 1):
-                if self.get_J_term(i, j) != Rational(1, 1):
+                if self.get_J_term(i, j) != 1:
                     self_loop.add(i)
                     break
 
@@ -460,7 +460,7 @@ class OptimizedCellGraph(CellGraph):
             return self.term_cache[(iv, bign)]
 
         if iv == 0:
-            accum = Rational(0, 1)
+            accum = 0
             for j in self.i1_ind:
                 tmp = self.get_cell_weight(self.cliques[j][0])
                 for i in self.nonind:
@@ -614,12 +614,12 @@ class OptimizedCellGraphWithPC(CellGraph):
             for j in range(i + 1, len(self.cells)):
                 if self.get_two_table_weight(
                         (self.cells[i], self.cells[j])
-                ) != Rational(1, 1):
+                ) != 1:
                     g.add_edge(i, j)
 
         self_loop = set()
         for i in range(len(self.cells)):
-            if self.get_two_table_weight((self.cells[i], self.cells[i])) != Rational(1, 1):
+            if self.get_two_table_weight((self.cells[i], self.cells[i])) != 1:
                 self_loop.add(i)
 
         non_self_loop = g.nodes - self_loop
@@ -679,12 +679,12 @@ class OptimizedCellGraphWithPC(CellGraph):
 
     def get_i1_weight(self, i1_config: tuple[int],
                       config: tuple[int]) -> RingElement:
-        ret = Rational(1, 1)
+        ret = 1
         for i1_inds, num in zip(self.i1_partition, i1_config):
             # NOTE: it means the config is not valid
             if len(i1_inds) == 0 and num > 0:
                 return 0
-            accum = Rational(0, 1)
+            accum = 0
             for i in i1_inds:
                 tmp = self.get_cell_weight(self.cells[i])
                 for j in self.nonind:
@@ -700,7 +700,7 @@ class OptimizedCellGraphWithPC(CellGraph):
         """
         clique_config: the partition config in the clique l
         """
-        ret = Rational(1, 1)
+        ret = 1
         clique = self.cliques[l]
         clique_partition = self.clique_partitions[l]
         # the clique belongs to one pred
@@ -780,16 +780,16 @@ def build_cell_graphs(formula: QFFormula,
         if not optimized:
             yield CellGraph(
                 formula, get_weight, leq_pred, predecessor_preds
-            ), Rational(1, 1)
+            ), 1
         else:
             if partition_constraint is None:
                 yield OptimizedCellGraph(
                     formula, get_weight, domain_size, modified_cell_symmetry
-                ), Rational(1, 1)
+                ), 1
             else:
                 yield OptimizedCellGraphWithPC(
                     formula, get_weight, domain_size, partition_constraint
-                ), Rational(1, 1)
+                ), 1
     else:
         logger.info('Found nullary atoms %s', nullary_atoms)
         for values in product(*([[True, False]] * len(nullary_atoms))):
@@ -812,7 +812,7 @@ def build_cell_graphs(formula: QFFormula,
                     cell_graph = OptimizedCellGraphWithPC(
                         subs_formula, get_weight, domain_size, partition_constraint
                     )
-            weight = Rational(1, 1)
+            weight = 1
             for atom, val in zip(nullary_atoms, values):
                 weight = weight * (get_weight(atom.pred)[0] if val else get_weight(atom.pred)[1])
             yield cell_graph, weight
