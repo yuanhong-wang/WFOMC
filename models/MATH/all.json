@@ -112,7 +112,7 @@
         "level": "Level 5",
         "type": "Counting & Probability",
         "solution": "Choose any 5 consecutive seats in which to place the Democrats -- it doesn't matter which 5 consecutive seats that we choose, since we can rotate the table.  Then there are $5!$ ways to place the Democrats in their seats, and $5!$ ways to place the Republicans in their seats, for a total of $5! \\times 5! = \\boxed{14,\\!400}$ arrangements.",
-        "answer": "14400",
+        "answer": "144000",
         "tags": [
             "set",
             "circle",
@@ -434,7 +434,7 @@
         "level": "Level 5",
         "type": "Counting & Probability",
         "solution": "Solution 1: We choose any seat for Pierre, and then seat everyone else relative to Pierre.  There are 2 choices for Thomas; to the right or left of Pierre.  Then, there are 4 possible seats for Rosa that aren't adjacent to Pierre or Thomas. The five remaining people can be arranged in any of $5!$ ways, so there are a total of $2\\cdot 4\\cdot 5!=960$ valid ways to arrange the people around the table.\n\nSolution 2: The total number of ways in which Pierre and Thomas sit together is $6! \\cdot 2 = 1440$. The number of ways in which Pierre and Thomas sit together and Rosa sits next to one of them is $5! \\cdot 2 \\cdot 2 = 480$. So the answer is the difference $1440 - 480 = \\boxed{960}$.",
-        "answer": "960",
+        "answer": "7680",
         "tags": [
             "set",
             "circle",
@@ -514,7 +514,7 @@
         "level": "Level 4",
         "type": "Counting & Probability",
         "solution": "First choose three consecutive seats for Pierre, Rosa, and Thomas.  It doesn't matter which three consecutive seats that we choose, since any three such seats can be rotated to any other such seats.  Once the three seats are chosen, there are $3!$ ways to seat the three friends there.  The other five seats are for the other five people, so there are $5!$ ways to seat them there.  The answer is $3! \\times 5! = \\boxed{720}$.",
-        "answer": "720",
+        "answer": "5760",
         "tags": [
             "set",
             "circle",
@@ -624,7 +624,7 @@
         "level": "Level 5",
         "type": "Counting & Probability",
         "solution": "After Pierre sits, we can place Rosa either two seats from Pierre (that is, with one seat between them) or three seats from Pierre. We tackle these two cases separately:\n\nCase 1: Rosa is two seats from Pierre. There are $2$ such seats. For either of these, there are then four empty seats in a row, and one empty seat between Rosa and Pierre. Thomas can sit in either of the middle two of the four empty seats in a row. So, there are $2\\cdot 2 = 4$ ways to seat Rosa and Thomas in this case. There are then $4$ seats left, which the others can take in $4! = 24$ ways. So, there are $4\\cdot 24 = 96$ seatings in this case.\n\nCase 2: Rosa is three seats from Pierre (that is, there are $2$ seats between them). There are $2$ such seats. Thomas can't sit in either of the $2$ seats directly between them, but after Rosa sits, there are $3$ empty seats in a row still, and Thomas can only sit in the middle seat of these three. Once again, there are $4$ empty seats remaining, and the $4$ remaining people can sit in them in $4! = 24$ ways. So, we have $2\\cdot 24 = 48$ seatings in this case.\n\nPutting our two cases together gives a total of $96+48 = \\boxed{144}$ seatings.",
-        "answer": "144",
+        "answer": "1008",
         "tags": [
             "set",
             "circle",
@@ -698,7 +698,7 @@
         "level": "Level 5",
         "type": "Counting & Probability",
         "solution": "Choose any seat in which to place the Independent -- it doesn't matter which seat that we choose, since we can rotate the table. Once the Independent's seat has been chosen, either all the Democrats sit to their left and all the Republicans sit to their right, or the other way around. Either way, there are $5!$ ways to put the Democrats in their seats, and $5!$ ways to put the Republicans in their seats. So, the total number of ways to seat the people around the table is $2\\cdot5!\\cdot5!=2\\cdot120\\cdot120=\\boxed{28800}$.",
-        "answer": "28800",
+        "answer": "316800",
         "tags": [
             "set",
             "circle",
@@ -1082,7 +1082,7 @@
         "level": "Level 4",
         "type": "Counting & Probability",
         "solution": "To take care of rotations, we can fix John at the topmost seat.  We then have two choices for Sam: either side of John. The other four may sit anywhere in the other four seats. Thus there are $2\\times 4! = \\boxed{48}$ ways.",
-        "answer": "48",
+        "answer": "288",
         "tags": [
             "set",
             "circle",
@@ -1794,7 +1794,7 @@
         "level": "Level 4",
         "type": "Counting & Probability",
         "solution": "There are 8 choices for seats for Alice to sit in.  Once Alice is seated, there are 5 seats left for Bob, since he won't sit in either seat immediately next to Alice.  This leaves 6 people to place in the remaining 6 seats, which can be done in $6!$ ways.  However, we must divide by 8 to account for the 8 rotations of the table.  So the number of arrangements is $\\dfrac{8 \\times 5 \\times 6!}{8} = 5 \\times 6! = \\boxed{3600}$. Alternatively, we can account for the rotations at the beginning, by fixing the table around Alice.  Bob can't sit in her seat, or the two seats next to her.  This leaves 5 places for him to sit.  Then, this leaves 6 unique seats for the 6 remaining people, so there are 6! ways to sit them after Bob is sitting.  So the answer is $5 \\times 6! = \\boxed{3600}$.",
-        "answer": "3600",
+        "answer": "28800",
         "tags": [
             "set",
             "circle",
@@ -1949,7 +1949,7 @@
         "level": "Level 5",
         "type": "Counting & Probability",
         "solution": "The only way that the Senators can be seated is if the seats alternate by party.  Fix the rotation by placing the youngest Democrat in the top seat, so that we have removed the overcounting of rotations of the same arrangement.  Now there are $4!$ ways to place the remaining Democrats in the other Democratic seats, and $5!$ ways to place the Republicans in the Republican seats, for a total of $5! \\times 4! = \\boxed{2,\\!880}$ arrangements.",
-        "answer": "2880",
+        "answer": "28800",
         "tags": [
             "set",
             "circle",
@@ -3558,7 +3558,7 @@
         "level": "Level 4",
         "type": "Counting & Probability",
         "solution": "We first consider the possible neighbors of the chief's mother. One must be the chief (and the chief's wife sits on the other side of the chief), the other is one of the remaining 5 natives. That native can, in turn, have one of 4 neighbors in addition to the chief's mother. Continuing around, there are $5\\cdot4\\cdot3\\cdot2\\cdot1={120}$ possible arrangements.  The chief can be on his mother's left or right, for a total of $2\\cdot 120 = \\boxed{240}$ arrangements.\n\nAlternatively, we know that the seating arrangement is the same if it is rotated. Once the chief's spot is chosen, the rotations are eliminated.  There are 2 ways to seat his wife and his mother, and then there are 5 distinct positions for the remaining 5 natives, which makes for $2\\cdot 5!=\\boxed{240}$ possible arrangements.",
-        "answer": "240",
+        "answer": "1920",
         "tags": [
             "set",
             "circle",
@@ -3759,7 +3759,7 @@
         "level": "Level 5",
         "type": "Counting & Probability",
         "solution": "First choose a seat for Alice. It doesn't matter what seat we choose because we can rotate the table to move Alice's seat to wherever we want. After Alice's seat has been chosen, there are five seats Bob is willing to sit in. Of these seats, 2 are two seats away from Alice, and 3 are not. If Bob sits in either of the locations two seats away from Alice, there will be 3 places left Eve is willing to sit. If he sits in one of the other seats, there will be 2 places left Eve is willing to sit. Once Alice, Bob, and Eve's seats have been chosen, the remaining people can be placed in $5!$ ways. Therefore, the total number of ways for the 8 people to sit around the table is $2\\cdot3\\cdot5!+3\\cdot2\\cdot5!=\\boxed{1440}$.",
-        "answer": "1440",
+        "answer": "11520",
         "tags": [
             "set",
             "circle",
@@ -4089,7 +4089,7 @@
             "level": "Level 4",
             "type": "Counting & Probability",
             "solution": "First, put the house key and car key next to each other on the keychain. It doesn't matter where they are put, because the keychain can be rotated and reflected to move them to any other pair of adjacent locations. The remaining three keys can be put on the keychain in $3!=\\boxed{6}$ ways.",
-            "answer": "12",
+            "answer": "60",
             "tags": [
                 "set",
                 "circle",

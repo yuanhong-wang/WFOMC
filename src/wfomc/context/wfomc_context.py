@@ -65,14 +65,11 @@ class WFOMCContext(object):
         return (default, default)
 
     def decode_result(self, res: RingElement) -> Rational:
-        if not self.contain_cardinality_constraint():
-            res = res / self.repeat_factor
-        else:
-            res = self.cardinality_constraint.decode_poly(res) / self.repeat_factor
         if self.leq_pred is not None:
-            res *= Rational(math.factorial(len(self.domain)), 1)
-        if self.circular_predecessor_pred is not None:
-            res /= Rational(len(self.domain), 1)
+            res = res * Rational(math.factorial(len(self.domain)), 1)
+        res = res / self.repeat_factor
+        if self.contain_cardinality_constraint():
+            res = self.cardinality_constraint.decode_poly(res)
         return res
 
     def _skolemize_one_formula(self, formula: QuantifiedFormula) -> QFFormula:
