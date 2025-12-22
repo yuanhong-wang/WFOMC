@@ -209,7 +209,7 @@ class CellGraph(object):
         self._check_existence(cells)
         return self.two_tables_with_preds[index].get(cells).get_weight(evidences)
 
-    def get_all_weights(self) -> tuple[list[RingElement], list[RingElement]]:
+    def get_all_weights(self) -> tuple[list[RingElement], list[list[RingElement]]]:
         cell_weights = []
         twotable_weights = []
         for cell_i in self.cells:
@@ -231,7 +231,7 @@ class CellGraph(object):
     @functools.lru_cache(maxsize=None)
     def get_two_tables(self, cells: tuple[Cell, Cell],
                        evidences: frozenset[AtomicFormula] = None) \
-            -> tuple[frozenset[AtomicFormula], RingElement]:
+            -> tuple[tuple[frozenset[AtomicFormula], RingElement], ...]:
         self._check_existence(cells)
         return self.two_tables.get(cells).get_two_tables(evidences)
 

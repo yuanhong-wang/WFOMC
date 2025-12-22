@@ -96,7 +96,7 @@ class TwoTable(object):
         return ret
 
     def get_two_tables(self, evidence: frozenset[AtomicFormula] = None) \
-            -> tuple[frozenset[AtomicFormula], RingElement]:
+            -> tuple[tuple[frozenset[AtomicFormula], RingElement], ...]:
         if not self.satisfiable(evidence):
             return tuple()
         conditional_models = conditional_on(self.models, self.gnd_lits, evidence)

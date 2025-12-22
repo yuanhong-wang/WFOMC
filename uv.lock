@@ -687,6 +687,7 @@ name = "wfomc"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cmd2" },
     { name = "contexttimer" },
     { name = "dataclasses" },
     { name = "lark" },
@@ -711,6 +712,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cmd2", specifier = "==2.7.0" },
     { name = "contexttimer", specifier = ">=0.3.3" },
     { name = "dataclasses", specifier = ">=0.8" },
     { name = "lark", specifier = ">=1.2.2" },
@@ -718,7 +720,7 @@ requires-dist = [
     { name = "networkx", specifier = ">=3.2.1" },
     { name = "numpy", specifier = ">=2.0.2" },
     { name = "pandas", specifier = ">=2.3.1" },
-    { name = "prettyprinttree", specifier = ">=2.0.1" },
+    { name = "prettyprinttree", specifier = "==2.0.1" },
     { name = "pynauty", specifier = "==2.8.6" },
     { name = "python-flint", specifier = ">=0.8.0" },
     { name = "python-sat", specifier = ">=1.8.dev17" },

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import random
 from itertools import accumulate, repeat
-from typing import Iterable, Generator, TypeAlias
+import typing
+from typing import Iterable, Generator, Union, TypeAlias
 from functools import reduce
 from collections import defaultdict
+from math import lcm
 
 from flint import fmpq, fmpq_mpoly_ctx, fmpq_mpoly
 from decimal import Decimal
@@ -16,7 +18,7 @@ Poly: TypeAlias = fmpq_mpoly
 RingElement: TypeAlias = Rational | Poly
 
 
-def create_vars(var_name: str, count: int = 1) -> list[Poly]:
+def create_vars(var_name: str, count: int = 1) -> Union[Poly, list[Poly]]:
     """ Create polynomial variables.
 
     :param var_name: The base name for the variables
@@ -28,7 +30,7 @@ def create_vars(var_name: str, count: int = 1) -> list[Poly]:
     return gens if count > 1 else [gens[0]]
 
 
-def expand(polynomial: Poly) -> Poly:
+def expand(polynomial: RingElement) -> RingElement:
     return polynomial
 
 
@@ -57,7 +59,7 @@ def _get_degrees(monomial: Poly):
         )
 
 
-def coeff_dict(p: Poly, gens: list[Poly]) -> Generator[tuple[int], Rational, None]:
+def coeff_dict(p: Poly, gens: list[Poly]) -> Generator[tuple[tuple[int, ...], Rational], None, None]:
     p_gens = p.context().gens()
     coeffs = defaultdict(lambda: Rational(0, 1))
     gens_map = {i: p_gens.index(g) for i, g in enumerate(gens)}
@@ -68,7 +70,7 @@ def coeff_dict(p: Poly, gens: list[Poly]) -> Generator[tuple[int], Rational, Non
         yield degrees, coeff
 
 
-def _choices_int_weights(population: Iterable, weights: Iterable[int], k=1):
+def _choices_int_weights(population: Iterable, weights: Iterable[int], k=1) -> list:
     n = len(population)
     cum_weights = list(accumulate(weights))
     total = cum_weights[-1]
@@ -88,6 +90,16 @@ def choices(population: Iterable, weights: Iterable[Rational], k=1) -> list:
         w.p * lcm_val // w.q for w in weights
     ]
     return _choices_int_weights(population, weights, k)
+
+    
+def bernoulli_trial(p: Rational) -> bool:
+    """
+    Perform a Bernoulli trial with success probability p.
+    """
+    denominator, numerator = p.q, p.p
+    rand_int = random.randint(1, denominator)
+    return rand_int <= numerator
+
 
 # from gmpy2 import mpq
 # from sympy import Poly, symbols

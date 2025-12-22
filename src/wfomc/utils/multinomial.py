@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import functools
+from typing import Generator
 
 
-def multinomial(length: int, total_sum: int) -> tuple[int]:
+def multinomial(length: int, total_sum: int) -> Generator[tuple[int], None, None]:
     """
     Generate a list of numbers, whose size is `length` and sum is `total_sum`
 
@@ -19,7 +20,7 @@ def multinomial(length: int, total_sum: int) -> tuple[int]:
                 yield (value, ) + permutation
 
 
-def multinomial_less_than(length: int, total_sum: int) -> tuple[int]:
+def multinomial_less_than(length: int, total_sum: int) -> Generator[tuple[int], None, None]:
     """
     Generate a list of numbers, whose size is `length` and sum is less than `total_sum`
 

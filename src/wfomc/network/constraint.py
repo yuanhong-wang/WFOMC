@@ -2,7 +2,7 @@ from abc import ABC
 from collections import defaultdict
 from enum import Enum
 from functools import reduce
-from typing import Callable
+from typing import Callable, Iterable
 from logzero import logger
 from dataclasses import dataclass
 
@@ -43,8 +43,8 @@ class CardinalityConstraint(Constraint):
     def empty(self) -> bool:
         return len(self.constraints) == 0
 
-    def transform_weighting(self, get_weight: Callable[[Pred], tuple[Rational, Rational]]) \
-            -> dict[Pred, tuple[Poly, Poly]]:
+    def transform_weighting(self, get_weight: Callable[[Pred], tuple[Poly, Poly]]) \
+            -> Iterable[tuple[Pred, tuple[Poly, Poly]]]:
         new_weights: dict[Pred, tuple[Poly, Poly]] = {}
         self.gen_vars = create_vars('x', len(self.preds))
         for sym, pred in zip(self.gen_vars, self.preds):
@@ -53,8 +53,8 @@ class CardinalityConstraint(Constraint):
         return new_weights
 
     def decode_poly(self, poly: Poly) -> Rational:
-        poly = expand(poly)
         if isinstance(poly, Poly):
+            poly = expand(poly)
             coeffs = coeff_dict(poly, self.gen_vars)
             # logger.debug('coeffs: %s', list(coeffs))
             res = Rational(0, 1)
