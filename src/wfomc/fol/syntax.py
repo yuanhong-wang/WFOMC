@@ -240,17 +240,16 @@ class QFFormula(Formula):
 
     # TODO 这里好像是binary modk 的时候修改了
     def substitute(self, substitution: dict[Term, Term]) -> QFFormula:
-        # atom_substitutions = OrderedDict()
-        # for atom in self.atoms():
-        #     atom_substitutions[atom.expr] = atom.substitute(substitution).expr
-        # return QFFormula(backend.substitute(self.expr, atom_substitutions))
-        if self.expr is None:
+        if self.expr is None: # 如果公式的内部表达式为 None（通常表示 Top 或 Bot），则无法替换，直接返回自身。
             return self
 
+        # 这一步是核心准备工作。它创建一个有序字典 `atom_substitutions`。字典的键是公式中原始原子公式的后端表达式（例如，P(x) 的符号表示）。字典的值是该原子公式在执行项替换后，新生成的原子公式的后端表达式（例如，P(a) 的符号表示）。
         atom_substitutions = OrderedDict(
             (atom.expr, atom.substitute(substitution).expr)
             for atom in self.atoms()
         )
+        
+        # 调用后端库的 `substitute` 函数。它会遍历整个公式的符号表达式 `self.expr`， 并将所有出现的旧原子表达式（`atom_substitutions` 的键）替换为对应的新原子表达式（值）。最后，用返回的新表达式创建一个新的 QFFormula 对象。
         return QFFormula(backend.substitute(self.expr, atom_substitutions))
 
     def sub_nullary_atoms(self, substitution: dict[AtomicFormula, bool]) -> QFFormula:

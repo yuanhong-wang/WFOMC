@@ -155,25 +155,28 @@ if __name__ == '__main__':
 
     # plot_memory_comparison("baseline_4-regular-graph.csv")
     # plot_memory_comparison("baseline_5-regular-graph.csv")
-    # plot_runtime_comparison("BA.csv")
     # plot_memory_comparison("BA.csv")
     
     # RESULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results","m-odd-degree-graph-sc2")
     # plot_runtime_comparison("m-odd-degree-graph-sc2.csv")
     # plot_memory_comparison("m-odd-degree-graph-sc2.csv")
 
-    RESULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results","colored-graphs")
+    # RESULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results","colored-graphs")
     # plot_runtime_comparison("3-regular-graph-2-colored.csv")
-    plot_runtime_comparison("3-regular-graph-3-colored.csv")
+    # plot_runtime_comparison("3-regular-graph-3-colored.csv")
     # plot_runtime_comparison("3-regular-graph-4-colored.csv")
     # plot_runtime_comparison("4-regular-graph-2-colored.csv")
     # plot_runtime_comparison("4-regular-graph-3-colored.csv")
     # plot_runtime_comparison("5-regular-graph-2-colored.csv")
 
 
-    # RESULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results","directed-graphs")
-    # plot_runtime_comparison("2-regular-directed-graph.csv")
-    # plot_runtime_comparison("3-regular-directed-graph.csv")
+    RESULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results","directed-graphs")
+    plot_runtime_comparison("2-regular-directed-graph.csv")
+    plot_runtime_comparison("3-regular-directed-graph.csv")
+    
+    # RESULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results","BA")
+    # plot_runtime_comparison("BA_CC.csv")
+    # plot_runtime_comparison("BA.csv")
     #======================================================
 
 

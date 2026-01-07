@@ -6,7 +6,6 @@ from typing import Literal
 from multiprocessing import Process, Queue
 from zoneinfo import ZoneInfo
 from tqdm import tqdm
-
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -16,9 +15,6 @@ import time
 import threading
 import multiprocessing as mp
 
-global use_julia  # 使用一个全局变量，来控制新引入的代码
-# use_julia = False
-use_julia = True # ------------------------->>>>>>>>>>>>>> 首先修改这个变量，控制是否使用 Julia 代码 <<<<<<<<<<<<------------------------
 
 
 class Config:
@@ -47,8 +43,8 @@ class Config:
         {
             "name": "m-odd-degree-graph-sc2-heatmap",
             "domain_size": [10,],  # 域大小的遍历范围
-            "k_values": list(range(4, 15, 1)), # k 的遍历范围
-            "m_values": [0, 2, 4, 6, 8], # m 的遍历范围
+            "k_values": list(range(45)), # k 的遍历范围
+            "m_values": [4,], # m 的遍历范围
             "algorithms": ["dr"], #, "fast"], # 如果 fast 也需要测试，在这里加入
             "models": {
                 "m-odd-degree-graph-sc2": "m-odd-degree-graph-sc2.wfomcs",
@@ -245,109 +241,8 @@ def plot_metric(
 
 
 
-def julia_worker(q, model_name, domain_size):
-    """这个函数在独立的子进程中运行，负责调用 Julia。"""
-    try:
-        import os
-        import sys
-        
-        # 从 sys.modules 中卸载 symengine，防止其 C 库被加载。这是解决 libflint 冲突的最强力手段。
-        if 'symengine' in sys.modules:
-            del sys.modules['symengine'] # 在初始化 Julia 前清理环境变量
-        if 'LD_LIBRARY_PATH' in os.environ:
-            # 从 LD_LIBRARY_PATH 中移除所有包含 'symengine' 的路径
-            # 这可以防止 Julia 找到 Python 的 libflint.so
-            original_path = os.environ['LD_LIBRARY_PATH'].split(os.pathsep)
-            filtered_path = [p for p in original_path if 'symengine' not in p]
-            os.environ['LD_LIBRARY_PATH'] = os.pathsep.join(filtered_path)
-        
-        #  在子进程中导入和初始化 Julia
-        from julia.api import Julia
-        jl = Julia(compiled_modules=False)
-        from julia import Pkg
-        from julia import Main
-        import os
 
-        # 2. 激活项目并加载脚本
-        fast_wfomc_project_path = "/home/sunshixin/pycharm_workspace/fast-wfomc-main" # 目录，我写的是绝对路径
-        Pkg.activate(fast_wfomc_project_path) # 激活指定的 Julia 项目环境。
-        Main.include(os.path.join(fast_wfomc_project_path, "scripts", "run_from_python.jl")) # 在 Julia 主命名空间中加载并执行 run_from_python.jl 脚本
-        
-        # 3. 调用 Julia 函数
-        res = Main.run_experiment_by_name(model_name, domain_size) # 调用 Julia 脚本中定义的 run_experiment_by_name 函数，传入模型名称和域大小，获取计算结果。 
-        q.put(res) # 将 Julia 的计算结果放入进程队列，传回主进程。
-    except Exception as e:
-        q.put({"status": "error", "result": f"PyJulia call failed: {e}"}) # 将错误信息以字典形式放入队列，主进程可以据此判断并处理错误。
-        
-
-        
-def run_julia_single(model_name, domain_size, algo, model_csv_name=None):
-    """
-    运行单个实验配置。
-    - Python 仅作为安全超时包装器。
-    - 性能数据（时间、内存）和状态（完成、超时、错误）均由 Julia 返回。
-    """
-    q = Queue() # 使用 Queue 进程间通信，Process 启动子进程。  
-    p = Process(target=julia_worker, args=(q, model_name, domain_size))
-    p.start()
-
-    # Python 的 join 仅作为防止进程卡死的“硬超时”安全网
-    p.join(Config.TIMEOUT_SECONDS + 60) # 等待子进程结束，最长等待时间为逻辑超时+60秒。
-    final_result_dict = {} # 初始化结果字典
-    # 如果进程还活着，说明超时了，强制终止并标记为硬超时。
-    if p.is_alive(): # 如果进程在安全超时后仍未结束，则强制终止
-        p.terminate()
-        p.join()
-        final_result_dict = { # 这是一个硬超时，意味着 Julia 完全卡死，没有返回任何信息
-            "status": "hard_timeout",
-            "result": "Process terminated by Python wrapper",
-            "time_sec": Config.TIMEOUT_SECONDS,
-            "memory_bytes": 0,
-        }
-    else: # 进程正常结束，从队列中获取 Julia 返回的完整结果
-        if q.empty():
-            final_result_dict = {
-                "status": "error",
-                "result": "Process exited without returning data",
-                "time_sec": 0,
-                "memory_bytes": 0,
-            }
-        else:
-            julia_result = q.get()
-            
-            # --- 核心逻辑：根据 Julia 返回的时间判断是否“逻辑超时” ---
-            if julia_result.get("status") == "completed":
-                julia_time = julia_result.get("julia_time_sec", 0)
-                if julia_time > Config.TIMEOUT_SECONDS:
-                    # 虽然 Julia 完成了计算，但其用时超过了我们设定的阈值
-                    julia_result["status"] = "timeout"
-                    julia_result["result"] = "Exceeded logical time limit"
-
-            # 直接使用 Julia 返回的数据
-            final_result_dict = {
-                "status": julia_result.get("status", "error"),
-                "result": julia_result.get("result", "N/A"),
-                "time_sec": julia_result.get("julia_time_sec", 0),
-                "memory_bytes": julia_result.get("julia_memory_bytes", 0),
-            }
-
-    # 组装最终要写入 CSV 的完整字典
-    return {
-        "timestamp": datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y%m%d_%H%M%S"),
-        "formula": model_name,
-        "domain_size": domain_size,
-        "algorithm": algo,
-        "result": final_result_dict["result"],
-        "time_sec": final_result_dict["time_sec"],
-        "memory_bytes": final_result_dict["memory_bytes"],
-        "memory_kb": final_result_dict["memory_bytes"] / 1024,
-        "memory_mb": final_result_dict["memory_bytes"] / (1024 * 1024),
-        "status": final_result_dict["status"],
-    }
-
-
-
-def python_worker(q, model_name, model_csv_name, k_value, m_value, algo):
+def python_worker(q, model_name, model_csv_name, domain_size, k_value, m_value, algo):
     """这个函数在独立的子进程中运行，负责调用 Python 的 wfomc。"""
     try:
         from wfomc import wfomc, parse_input, Const, Algo
@@ -355,11 +250,25 @@ def python_worker(q, model_name, model_csv_name, k_value, m_value, algo):
         file_path = os.path.join(Config.MODELS_PATH, model_csv_name)
                 
         # 这段代码用了测试odd 中固定domain, 但是odd 里面的 m 是变量，这里用domain_size 替换掉 m
-        with open(file_path, 'r') as f:
-            model_template_string = f.read()
-        final_model_string = model_template_string
+
         # 2. 如果是特定模型，则进行字符串替换
         if model_name == "m-odd-degree-graph-sc2":
+            final_model_string = r"""
+            \forall X: (~E(X,X)) &
+            \forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+            \forall X: (P(X) <-> (~Odd(X) & A(X) & C(X))) &
+            \forall X: (\forall Y: (P(X) & B(X,Y) -> U(Y))) &
+            \forall X: (\forall Y:(~P(X) -> (B(X,Y) <-> E(X,Y)))) &
+            \forall X: (Odd(X) | A(X)) &
+            \forall X: (A(X) | C(X)) &
+            \forall X: (\exists_{1 mod 2} Y: (B(X, Y))) &
+            \exists_{=m} X: (Odd(X)) &
+            \exists_{=1} X: (U(X)) 
+
+            n = 3
+            1 -1 C
+            |E| = k
+            """
             # 使用 domain_size 变量的值替换模板中的 {m} 占位符
             # 使用 re.sub 替换 m 和 k 的值
             # 匹配 \exists_{=m} 并替换为 \exists_{=<m_value>}
@@ -367,12 +276,12 @@ def python_worker(q, model_name, model_csv_name, k_value, m_value, algo):
             final_model_string = re.sub(r'\\exists_{=m}', fr'\\exists_{{={m_value}}}', final_model_string)
             # 匹配 |E| = k 并替换为 |E| = <k_value>
             final_model_string = re.sub(r'\|E\| = k', fr'|E| = {k_value}', final_model_string)
-            print(final_model_string)
+            
         # 3. 使用 wfomcs_parse API 解析最终构建好的字符串
         from wfomc.parser.wfomcs_parser import parse as wfomcs_parse
         problem = wfomcs_parse(final_model_string)
         
-        # problem.domain = {Const(f"d{i}") for i in range(domain_size)} # --------------注意绝大部分例子是需要这句话，但是m odd,为了输入变量为m ,需要注释
+        problem.domain = {Const(f"d{i}") for i in range(domain_size)} # --------------注意绝大部分例子是需要这句话，但是m odd,为了输入变量为m ,需要注释
         
         # 这里是为了测试m-odd degree, 因为 |E| = 2n。也就是(总边数，随 n 动态变化)。确保了图随着 n 的增长而不会变得过于稀疏或稠密。
         # if model_name == "m-odd-degree-graph-sc2":
@@ -399,7 +308,7 @@ def python_worker(q, model_name, model_csv_name, k_value, m_value, algo):
         q.put(f"python_error: {e}")
 
 # 这里是不包含Julia的原始版本
-def run_python_single(model_name, model_csv_name, k_value, m_value, algo):
+def run_python_single(model_name, model_csv_name, n, m, k, algo):
     """
     运行单个实验配置。使用子进程来执行，以便于设置超时和监控资源。
     :return: 一个包含实验结果的字典。
@@ -407,7 +316,7 @@ def run_python_single(model_name, model_csv_name, k_value, m_value, algo):
     start_time = time.time()
     q = Queue()
     # target 现在是顶层的 python_worker 函数 ---
-    p = Process(target=python_worker, args=(q, model_name, model_csv_name, k_value, m_value, algo))
+    p = Process(target=python_worker, args=(q, model_name, model_csv_name, n, k, m, algo))
     p.start()
     # 创建并启动内存监控线程
     peak_mem = mp.Value(
@@ -449,8 +358,9 @@ def run_python_single(model_name, model_csv_name, k_value, m_value, algo):
             "%Y%m%d_%H%M%S"
         ),  # 当前时间戳
         "formula": model_name,
-        "k_value": k_value,
-        "m_value": m_value,
+        "domain_size": n,
+        "k_value": k,
+        "m_value": m,
         "algorithm": algo,
         "result": result,
         "time_sec": round(end_time - start_time, 4),
@@ -470,6 +380,7 @@ def run_experiment(FLUSH_EVERY: int = 20, repeated_run_time: int = 1):
     fieldnames = [
         "timestamp",
         "formula",
+        "domain_size",
         "k_value",
         "m_value",
         "algorithm",
@@ -526,38 +437,39 @@ def run_experiment(FLUSH_EVERY: int = 20, repeated_run_time: int = 1):
                     for algo in [a for a in Algo if str(a) in algorithms]:
                         k_values = group.get("k_values", [])
                         m_values = group.get("m_values", [])
+                        domain_size = group["domain_size"]
                         
+                        for n in domain_size:
+                            for k in k_values:
+                                skip = False  # 标记是否跳过该算法（当算法超时时）
+                                for m in m_values:
+                                    if (
+                                        skip
+                                    ):  # 如果该算法已超时，则跳过剩余的domain_size
+                                        pbar.update(1)  # 更新总体进度条
+                                        continue
+                                    
+                                    single_result = run_python_single(
+                                        model_name, model_csv_name, n, m, k, algo
+                                    )  # 运行单个实验，读取model文件，运行wfomc，返回结果
+                                    # print(f"算法在域大小 {n} 的运行结果: {single_result}")
 
-                        for k in k_values:
-                            skip = False  # 标记是否跳过该算法（当算法超时时）
-                            for m in m_values:
-                                if (
-                                    skip
-                                ):  # 如果该算法已超时，则跳过剩余的domain_size
-                                    pbar.update(1)  # 更新总体进度条
-                                    continue
-                                
-                                single_result = run_python_single(
-                                    model_name, model_csv_name, k, m, algo
-                                )  # 运行单个实验，读取model文件，运行wfomc，返回结果
-                                # print(f"算法在域大小 {n} 的运行结果: {single_result}")
+                                    if (
+                                        single_result["status"] == "timeout" or single_result["status"] == "hard_timeout" or single_result["status"] == "error"
+                                    ):  # 如果任何一次运行超时，则标记跳过该算法
+                                        skip = True
+                                        print(f"算法在域大小 {n} 时超时，跳过剩余的域大小")
 
-                            if (
-                                single_result["status"] == "timeout" or single_result["status"] == "hard_timeout" or single_result["status"] == "error"
-                            ):  # 如果任何一次运行超时，则标记跳过该算法
-                                skip = True
-                                print(f"算法在域大小 {n} 时超时，跳过剩余的域大小")
-
-                            result_data = single_result  # 保存最后一次运行结果
-                            # 保存结果到文件
-                            if result_data:  # 如果有结果数据则写入文件
-                                writer.writerow(
-                                    result_data
-                                )  # 将结果数据写入CSV文件的一行
-                                pbar.update(1)  # 更新总体进度条
-                                if pbar.n % FLUSH_EVERY == 0:
-                                    csvfile.flush()  # 定期强制刷新文件缓冲区
-                                print_result(result_data)  # 打印当前结果
+                                    result_data = single_result  # 保存最后一次运行结果
+                                    # 保存结果到文件
+                                    if result_data:  # 如果有结果数据则写入文件
+                                        writer.writerow(
+                                            result_data
+                                        )  # 将结果数据写入CSV文件的一行
+                                        pbar.update(1)  # 更新总体进度条
+                                        if pbar.n % FLUSH_EVERY == 0:
+                                            csvfile.flush()  # 定期强制刷新文件缓冲区
+                                        print_result(result_data)  # 打印当前结果
 
                 # 绘图
                 for m in (
@@ -569,12 +481,6 @@ def run_experiment(FLUSH_EVERY: int = 20, repeated_run_time: int = 1):
 
 
 if __name__ == "__main__":
-    
-    # --- 核心修复：设置 multiprocessing 的启动方式为 'spawn' ---
-    # 这必须在任何 Process 对象被创建之前，在 __main__ 保护块内完成。
-    mp.set_start_method('spawn', force=True)
-    
-    
     # 2. 创建唯一的、本次实验的文件夹
     timestamp = datetime.now(ZoneInfo('Asia/Shanghai')).strftime('%Y%m%d_%H%M%S')
     Config.RESULTS_PATH = os.path.join(Config.DIR_PATH, f"results_{timestamp}")

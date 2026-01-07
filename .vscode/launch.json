@@ -4,7 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-    
+        
 
             {
             "name": "dr",
@@ -32,12 +32,12 @@
             }
         },
         {
-            "name": "check",
+            "name": "nonisolated_graph",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/experiment/check/fo2ex2cnf.py",
+            "program": "${workspaceFolder}/src/wfomc/solver.py",
             "console": "integratedTerminal",
-            "args": ["-i", "/home/sunshixin/pycharm_workspace/WFOMC/models/2-regular-graph.wfomcs",],
+            "args": ["-i", "/home/sunshixin/pycharm_workspace/WFOMC/models/nonisolated_graph.wfomcs", "-a", "dr"],
             "python":"${workspaceFolder}/wfomc/bin/python",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/src"

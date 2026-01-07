@@ -6,9 +6,9 @@
 \forall X: (Odd(X) | A(X)) &
 \forall X: (A(X) | C(X)) &
 \forall X: (\exists_{1 mod 2} Y: (B(X, Y))) &
-\exists_{=2} X: (Odd(X)) &
+\exists_{=0} X: (Odd(X)) &
 \exists_{=1} X: (U(X)) 
 
-n = 3
+n = 4
 1 -1 C
-|E| = 2
+|E| = 6
