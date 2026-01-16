@@ -1,0 +1,7 @@
+\forall X: (\exists_{=5} Y: (E(X,Y))) &
+\forall X: (\forall Y: ((E(X,Y) -> E(Y,X)) &
+                        (R(X) | B(X)) &
+                        (~R(X) | ~B(X)) &
+                        (E(X,Y) -> ~(R(X) & R(Y)) & ~(B(X) & B(Y)))))
+
+V = 10

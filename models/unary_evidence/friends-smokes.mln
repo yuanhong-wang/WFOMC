@@ -1,0 +1,13 @@
+~friends(X,X).
+friends(X,Y) -> friends(Y,X).
+2.7 friends(X,Y) & smokes(X) -> smokes(Y)
+
+# a existential quantified formula
+# -1 \exists Y: (friends(X,Y))
+# write a hard rule by the same syntax as a WFOMC sentence
+\forall X: (\exists Y: (friends(X,Y))).
+
+person = 6
+# optional cardinality constraint
+# |smokes| = 1
+smokes(person0), ~smokes(person1), smokes(person2)
