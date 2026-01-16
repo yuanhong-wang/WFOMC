@@ -1,5 +1,0 @@
-\exists Y: (boss(Y) | workfor(X, Y)).
-
-person = 6
-
-~boss(person0), ~boss(person1), boss(person2)

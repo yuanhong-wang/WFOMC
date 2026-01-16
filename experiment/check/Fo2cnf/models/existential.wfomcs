@@ -1,4 +1,0 @@
-\forall X: (\exists Y: (R1(X, Y))) &
-\forall X: (\exists Y: (R2(X, Y)))
-
-domain = 7
