@@ -8,129 +8,128 @@ from logzero import logger
 
 
 def domain_recursive_wfomc(context: DRWFOMCContext) -> RingElement:
-    # 从 context 中取出域、权重函数、线性序谓词和公式
-    domain: set[Const] = context.domain # 获取问题的域
-    get_weight = context.get_weight # 获取谓词权重函数
-    leq_pred: Pred = context.leq_pred # 获取线性序谓词（如果存在）
-    formula = context.uni_formula # 获取一阶逻辑公式
-    c_type_shape = context.c_type_shape # 获取 c type 的形状信息
-    WFOMC_result = Rational(0, 1)  # 初始化最终结果 WFOMC_result 为0。
-    domain_size = len(domain)  # 获取域的大小
-    # --- 遍历所有 cell graph
-    MultinomialCoefficients.setup(domain_size) # 初始化多项式系数计算器，预先计算阶乘等，用于后续快速计算组合数。
+    # Extract the domain, weight function, linear order predicate and formula from the context.
+    domain: set[Const] = context.domain # Obtain the domain of the problem
+    get_weight = context.get_weight # Obtain the predicate weight function
+    leq_pred: Pred = context.leq_pred # Obtain the linear order predicate (if any)
+    formula = context.uni_formula # Obtain the first-order logic formula
+    c_type_shape = context.c_type_shape # Obtain the shape information of c type
+    WFOMC_result = Rational(0, 1)  # Initialize the final result WFOMC_result to 0.
+    domain_size = len(domain)  # Obtain the size of the domain
+    # --- Iterate over all cell graphs
+    MultinomialCoefficients.setup(domain_size) # Initialize the multinomial coefficients calculator, precompute factorials, etc., for fast combination calculations later.
     for cell_graph, graph_weight in build_cell_graphs(formula, get_weight, leq_pred):
-        cells = cell_graph.get_cells()  # 获取当前图中的所有单元格（Cell）及其数量
-        n_cells = len(cells)  # 1-type cell 数
+        cells = cell_graph.get_cells()  # Obtain all cells in the current graph and their count
+        n_cells = len(cells)  # Number of 1-type cells
         w2t, w, r = context.build_weight(
             cells, cell_graph
-        )  # w2t: 从单元格索引到谓词状态字典的字典，值代表需要满足的数量。w: 每个单元格类型的权重字典。r: 单元格对之间的关系字典。
+        )  # w2t: dictionary from cell index to predicate state dictionary, values represent required counts. w: weight dictionary for each cell type. r: relationship dictionary between cell pairs.
         logger.debug("Weight mapping w2t: %s", w2t)
         logger.debug("Weight w: %s", w)
         # logger.debug("Weight r: %s", r)
-        # 处理一元约束
-        # 为一元约束（如 ∃=k X: P(X)）构建掩码，用于后续快速检查。
+        # Handle unary constraints
+        # Build masks for unary constraints (e.g., ∃=k X: P(X)) for fast checking later.
         unary_mask = context.build_unary_mask(cells)
         t_update_dict = context.build_t_update_dict(
             r, n_cells
-        )  # 构建 t_update_dict 预计算当两个元素配对时，它们的状态会如何更新。这相当于一个巨大的状态转移查找表。
+        )  # Build t_update_dict to precompute how states update when two elements are paired. This acts as a large state transition lookup table.
         c1_type_shape = (n_cells,) + tuple(
             c_type_shape
-        )  # c1 type 的维度: (cell 数) × (扩展谓词维度) × (计数约束维度)
-        Cache_H = dict()   # 缓存 ConfigUpdater 的内部计算结果。
+        )  # Dimension of c1 type: (number of cells) × (extended predicate dimension) × (count constraint dimension)
+        Cache_H = dict()   # Cache internal computation results of ConfigUpdater.
         config_updater = ConfigUpdater(
             t_update_dict, c1_type_shape, Cache_H)  # f
         f = config_updater.f  # this is a function
-        Cache_T = dict()  # 缓存递归计算结果，避免重复子问题
-
-        # ========== 定义核心递归函数 ==========
+        Cache_T = dict()  # Cache recursive computation results to avoid redundant subproblems
+        # ========== Define the core recursive function ==========
         def domain_recursion(config):
-            if config in Cache_T:  # 如果当前配置的结果已经计算过，直接从缓存返回。
+            if config in Cache_T:  # If the result for the current configuration has already been computed, return it directly from the cache.
                 return Cache_T[config]
 
-            # --- 递归出口 ---
-            if config.array.sum() == 0: # 如果config中所有元素都已被处理 (sum=0)， 基础情况，返回 1
+            # --- Base case ---
+            if config.array.sum() == 0: # If all elements in config have been processed (sum=0), base case, return 1
                 return Rational(1, 1)
 
-            # --- 递归步骤 ---
+            # --- Recursive step ---
             result_of_target_c_list = Rational(0, 1)
-            # --- 选择一个目标元素target_c，也就是config字典的索引，它将被用来和所有其他剩余元素连接。
-            if context.contain_linear_order_axiom(): # 如果问题包含线性序，则需要遍历所有可能的元素作为target，因为它们不再对称。
+            # --- Select a target element target_c, which is an index in the config dictionary, to be paired with all other remaining elements.
+            if context.contain_linear_order_axiom(): # If the problem contains a linear order, we need to iterate over all possible elements as targets because they are no longer symmetric.
                 target_c_list = list(tuple(i) for i in np.argwhere(config.array > 0))
-            else:  # 否则，根据对称性，我们只需选择最后一个非零类型的元素作为target即可。
+            else:  # Otherwise, due to symmetry, we only need to select the last non-zero type element as the target.
                 target_c_list = list((tuple(np.argwhere(config.array > 0)[-1]),))
 
-            # --- 遍历所有选出的目标 ---
-            for target_c in target_c_list:  # 遍历备选c1_type 索引列表
-                T = defaultdict(lambda: Rational(0, 1)) # 创建字典，存储进入下一层递归的入口状态及其权重。
-                config_new = HashableArrayWrapper(  # 拷贝当前配置，避免原地修改,创建一个新的配置
+            # --- Iterate over all selected targets ---
+            for target_c in target_c_list:  # Iterate over candidate c1_type index list
+                T = defaultdict(lambda: Rational(0, 1)) # Create a dictionary to store entry states and their weights for the next recursion level.
+                config_new = HashableArrayWrapper(  # Copy the current configuration to avoid in-place modification, creating a new configuration
                     np.array(config.array, copy=True, dtype=np.uint8)
                 )
-                config_new.array[target_c] -= 1  # 从中移除我们刚刚选出的一个 target_c 对应索引里面对应的元素。
+                config_new.array[target_c] -= 1  # Remove the element corresponding to the selected target_c index from the configuration.
                 #
-                G = dict()  # 中间状态字典G, 跟踪 target_c 与其他元素配对过程中的中间状态。
-                G_config = HashableArrayWrapper(np.zeros(c1_type_shape, dtype=np.uint8)) # 初始化辅助配置 G_config，全为0，表示当前没有任何状态更新。
-                G[(target_c, G_config)] = Rational(1, 1) # 初始状态字典，权重为1。
+                G = dict()  # Intermediate state dictionary G, tracking intermediate states during pairing of target_c with other elements.
+                G_config = HashableArrayWrapper(np.zeros(c1_type_shape, dtype=np.uint8)) # Initialize auxiliary configuration G_config, all zeros, indicating no state updates currently.
+                G[(target_c, G_config)] = Rational(1, 1) # Initial state dictionary, weight is 1.
                 #
-                # --- 连接过程 ---
-                for other_c in np.argwhere(config_new.array > 0): # 依次将 target 与其余元素other_c连接, other_c 是一个c1type config里面的索引
+                # --- Connection process ---
+                for other_c in np.argwhere(config_new.array > 0): # Sequentially connect target with other elements other_c, other_c is an index in c1type config
                     other_c = tuple(other_c.flatten())  # Get cell coordinates
-                    G_new = defaultdict(lambda: Rational(0, 1)) # 新的中间状态字典 G_new，用于存储更新后的配对状态。
-                    l = config_new.array[other_c]  # 获取other_c 索引对应字典里面的剩余元素个数
+                    G_new = defaultdict(lambda: Rational(0, 1)) # New intermediate state dictionary G_new, used to store updated pairing states.
+                    l = config_new.array[other_c]  # Get the number of remaining elements corresponding to the other_c index in the dictionary.
 
-                    # --- 内层循环：更新所有可能的配对状态
-                    for (target_c, G_config), W in G.items(): # 遍历之前所有的中间状态。
+                    # --- Inner loop: update all possible pairing states
+                    for (target_c, G_config), W in G.items(): # Iterate over all previous intermediate states.
                         H = f(
                             target_c, other_c, l
-                        ) # 调用 `f` 函数（即 ConfigUpdater），计算 `target_c`  与 `l` 个 `other_c` 配对的所有可能结果，返回的结果是 H 字典。
-                        for (target_c_new, H_config_new) in H.keys(): # 遍历 H 中的每一种可能结果。
+                        ) # Call the `f` function (i.e., ConfigUpdater) to compute all possible results of pairing `target_c` with `l` `other_c` elements, returning a dictionary H.
+                        for (target_c_new, H_config_new) in H.keys(): # Iterate over each possible result in H.
                             G_config_new = HashableArrayWrapper(
                                 G_config.array + H_config_new.array
-                            ) # 将 `other_c` 元素的状态变化 (`H_config_new`) 累加到之前的辅助配置 (`G_config`) 中。
+                            ) # Accumulate the state changes of `other_c` elements (`H_config_new`) to the previous auxiliary configuration (`G_config`).
                             G_new[(target_c_new, G_config_new)] += (
                                 W * H[(target_c_new, H_config_new)]
-                            ) # 将新状态的权重累加到 `G_new` 中。新权重 = 上一步权重 W * 本次配对权重 H[...]
-                    G = G_new # 用 `G_new` 更新 `G`，准备与下一种 `other_c` 进行配对。
+                            ) # Accumulate the weight of the new state to `G_new`. New weight = previous weight W * current pairing weight H[...]
+                    G = G_new # Update `G` with `G_new`, preparing to pair with the next `other_c`.
                 # 
-                # --- 过滤与递归 ---
-                for (target_c, G_config), W in G.items():  # 当 `target_c` 与池中所有元素连接完毕后，`G` 中存储了所有最终状态。
+                # --- Filtering and recursion ---
+                for (target_c, G_config), W in G.items():  # After `target_c` has been connected with all elements in the pool, `G` stores all final states.
                     if context.stop_condition(
                         target_c
-                    ):  # stop_condition 检查 target_c 的状态是否已“满足”（例如，计数量词的要求已达到）。如果满足，说明这次对 target_c 的连接是正确的。
+                    ):  # stop_condition checks whether the state of target_c has been "satisfied" (e.g., the requirements of counting quantifiers have been met). If satisfied, it means this connection of target_c is correct.
                         T[G_config] += W
 
-                # 递归累加子问题结果
+                # Recursively accumulate subproblem results
                 result_of_target_c = Rational(0, 1)
-                for T_config, weight in T.items(): # 对所有有效的下一层入口配置，进行递归调用。
-                    W = domain_recursion(T_config) # 递归调用子问题。
-                    result_of_target_c += (weight * W) # 将子问题的结果与当前路径的权重相乘，并累加。
+                for T_config, weight in T.items(): # Recursively call for all valid next-level entry configurations.
+                    W = domain_recursion(T_config) # Recursively call subproblems.
+                    result_of_target_c += (weight * W) # Multiply the subproblem result by the current path weight and accumulate.
                 result_of_target_c_list += result_of_target_c
                 
-            # --- 缓存并返回 ---
-            Cache_T[config] = result_of_target_c_list  # 将当前配置 `config` 的最终计算结果存入缓存。
+            # --- Cache and return ---
+            Cache_T[config] = result_of_target_c_list  # Store the final computed result of the current configuration `config` in the cache.
             return result_of_target_c_list
 
-        # ========== 主循环：遍历所有多项式config ==========
-        for config in multinomial(n_cells, domain_size): # multinomial生成所有将domain_size个元素分配到 n_cells个类型中的可能方式，即config。
+        # ========== Main loop: iterate over all polynomial configs ==========
+        for config in multinomial(n_cells, domain_size): # multinomial generates all possible ways to distribute domain_size elements into n_cells types, i.e., config.
             logger.debug("Config: %s", config)
-            # --- 检查一元约束 ---
+            # --- Check the unary constraint ---
             if any(
                 context.check_unary_constraints(config, unary_mask)
-            ): # 返回结果为布尔值，表示是否违反约束。如果当前分区方式不满足任何一个一元约束，则直接跳过，因为它不可能是一个有效的模型。这里相当于预剪枝，是一个优化。满足了一元约束的话，才继续往下计算。
+            ): # Returns a boolean indicating whether any unary constraint is violated. If the current partition does not satisfy any unary constraint, it is skipped as it cannot be a valid model. This acts as a form of pruning optimization. Only if unary constraints are satisfied does the computation proceed.
                 continue 
-            # --- 初始化递归的起始配置 ---
+            # --- Initialize the starting configuration for recursion ---
             init_config = np.zeros(
-                c1_type_shape, dtype=np.uint8)  # 初始化一个全为0的数组，维度是c1type。即对应所有可能的格子空间，值为0
-            W = Rational(1, 1) # 初始化该config的基础权重 W 为1。
-            for i, n in enumerate(config):  # 把1type config中的所有元素，根据状态w2t，放到c1 type config的init_config中
+                c1_type_shape, dtype=np.uint8)  # Initialize an array of zeros with the shape of c1_type. This corresponds to all possible grid spaces, with values set to 0.
+            W = Rational(1, 1) # Initialize the base weight W for this config as 1.
+            for i, n in enumerate(config):  # Place all elements from the 1-type config into the c1-type config's init_config according to the state w2t.
                 init_config[(i,) + w2t[i]] = n
-                W = W * (w[i] ** n)  # 计算这个config的基础权重（不含组合数）。
-            init_config = HashableArrayWrapper(init_config)  # 将 NumPy 数组包装成一个可哈希的对象，这样它才能被用作字典的键（用于缓存）。
-            # --- 调用递归计算该配置的加权结果 ---
-            result_config = domain_recursion(init_config)  # call recursison
-            # --- 累加结果 ---
-            if context.contain_linear_order_axiom():  # 线性序公理下，元素是可区分的，不需要乘以多项式系数
+                W = W * (w[i] ** n)  # Calculate the base weight for this config (excluding combinatorial factors).
+            init_config = HashableArrayWrapper(init_config)  # Wrap the NumPy array into a hashable object so it can be used as a dictionary key (for caching).
+            # --- Recursively compute the weighted result for this configuration ---
+            result_config = domain_recursion(init_config)  # call recursion
+            # --- Accumulate results ---
+            if context.contain_linear_order_axiom():  # Under the linear order axiom, elements are distinguishable, so there is no need to multiply by polynomial coefficients
                 WFOMC_result += W * result_config * graph_weight
-            else:  # 在非线性序下，元素是不可区分的，需要乘以多项式系数（组合数）来计算排列方式。
+            else:  # Under non-linear order, elements are indistinguishable, so polynomial coefficients (combinatorial numbers) are needed to calculate permutations.
                 WFOMC_result += MultinomialCoefficients.coef(
-                    config) * W * result_config * graph_weight # 累加：多项式系数 × 权重 × 递归结果 × cell graph 权重
+                    config) * W * result_config * graph_weight # Accumulate: polynomial coefficient × weight × recursive result × cell graph weight
     return expand(WFOMC_result)

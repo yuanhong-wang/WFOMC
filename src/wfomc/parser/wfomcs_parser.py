@@ -90,38 +90,36 @@ class WFOMSTransformer(FOLTransformer, CCTransfomer):
 def parse(text: str) -> \
         tuple[SC2, set[Const], dict[Pred, tuple[Rational, Rational]], CardinalityConstraint]:
     """
-    将 WFOMS 文本解析成一个 WFOMCProblem 对象。
-
+    Parse the WFOMS text into a WFOMCProblem object. 
     Args:
-        text (str): 包含 WFOMS 问题定义的文本字符串。
-
+        text (str): A text string containing the definition of the WFOMS problem. 
     Returns:
-        WFOMCProblem: 一个包含了解析后的公式、论域、权重和约束的结构化对象。
+        WFOMC Problem: A structured object that contains the derived formula, domain, weights, and constraints.
     """
-    # 1. 初始化解析器
+    # 1. Initialize the parser
     wfomcs_parser = Lark(grammar,
-                        start='wfomcs') # 创建一个 Lark 解析器实例。`grammar` 是一个预定义的变量，包含了 WFOMS 语言的完整语法规则。`start='wfomcs'` 指定了解析过程应该从语法的 'wfomcs' 规则开始。
-    # 2. 解析文本
-    tree = wfomcs_parser.parse(text) # 使用上一步创建的解析器来处理输入的 `text` 字符串。如果文本符合语法规则，`.parse()` 方法会返回一个解析树（Tree），它以层级结构表示了输入文本的语法结构。
-    # 3. 转换解析树
+                        start='wfomcs') # Create a Lark parser instance. `grammar` is a predefined variable containing the complete grammar rules for the WFOMS language. `start='wfomcs'` specifies that the parsing process should begin from the 'wfomcs' rule in the grammar.
+    # 2. Parse the text
+    tree = wfomcs_parser.parse(text) # Use the parser created in the previous step to process the input `text` string. If the text conforms to the grammar rules, the `.parse()` method returns a parse tree (Tree) that hierarchically represents the syntactic structure of the input text.
+    # 3. Transform the parse tree
     (
         sentence,
         domain,
         weightings,
         cardinality_constraint
-    ) = WFOMSTransformer().transform(tree) # `WFOMSTransformer` 是一个自定义类，它会遍历解析树 `tree`。对于树中的每个节点（对应一条语法规则），它会调用一个同名的方法来处理该节点，将原始的文本标记转换成更有意义的 Python 对象（如公式、集合、字典等）。`.transform()` 方法最终返回一个元组，包含了转换后的核心组件。
-    # 4. 关联谓词对象与权重
+    ) = WFOMSTransformer().transform(tree) # `WFOMSTransformer` is a custom class that traverses the parse tree `tree`. For each node in the tree (corresponding to a grammar rule), it calls a method with the same name to process that node, converting the raw text tokens into more meaningful Python objects (such as formulas, sets, dictionaries, etc.). The `.transform()` method ultimately returns a tuple containing the core components after transformation.
+    # 4. Associate predicate objects with weights
     pred_weightings = dict(
         (sentence.pred_by_name(pred), weights)
         for pred, weights in weightings.items()
-    ) # `weightings` 字典的键是谓词的字符串名称，但算法需要的是谓词对象本身。这段代码创建一个新的字典 `pred_weightings`。它遍历 `weightings` 字典，对于每个谓词名称，它使用 `sentence.pred_by_name(pred)`,从解析好的公式 `sentence` 中查找并获取对应的谓词（Pred）对象，然后将这个对象作为新字典的键。
-    # 5. 创建并返回问题对象
+    ) # The keys in the `weightings` dictionary are predicate names as strings, but the algorithm requires the predicate objects themselves. This code creates a new dictionary `pred_weightings`. It iterates over the `weightings` dictionary, and for each predicate name, it uses `sentence.pred_by_name(pred)` to look up and retrieve the corresponding predicate (Pred) object from the parsed formula `sentence`, then uses this object as the key in the new dictionary.
+    # 5. Create and return the problem object
     return WFOMCProblem(
         sentence,
         domain,
         pred_weightings,
         cardinality_constraint
-    ) # 使用所有解析和处理过的信息，创建一个 `WFOMCProblem` 类的实例。 这个对象将所有部分封装在一起，方便后续的算法直接使用。
+    ) # Using all the parsed and processed information, create an instance of the `WFOMCProblem` class. This object encapsulates all parts together, making it convenient for subsequent algorithms to use directly.
 
 
 if __name__ == '__main__':

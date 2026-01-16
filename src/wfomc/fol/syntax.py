@@ -152,21 +152,21 @@ class Formula(object):
 @dataclass(frozen=True)
 class QFFormula(Formula):
     """
-    Quantifier-free formula 例如，简单的原子公式 R(X, Y)，或者更复杂的组合 (P(X) & Q(Y)) | ~R(Z) 都属于无量词公式。
+    Quantifier-free formula For instance, simple atomic formulas such as R(X, Y), or more complex combinations like (P(X) & Q(Y)) | ~R(Z) all fall under the category of quantifier-free formulas.
     """
-    expr: backend.Expr  # 这个属性以后端库中的符号表达式形式，保存了该公式的表示。所有的逻辑操作、组合和简化都在这个 expr 对象上执行。QFFormula 类本质上是这个强大后端对象的包装器（wrapper），在您的一阶逻辑框架内提供了一致的API。
+    expr: backend.Expr  # This attribute is in the symbolic expression form in the backend library, preserving the representation of the formula. All logical operations, combinations, and simplifications are performed on this expr object. The QFFormula class essentially acts as a wrapper (wrapper) for this powerful backend object.
 
-    def __invert__(self) -> QFFormula:  # 创建一个 QFFormula 的逻辑“非”
+    def __invert__(self) -> QFFormula:  
         return QFFormula(backend.Not(self.expr))
 
-    def __or__(self, other: Formula) -> Formula:  # 使用逻辑“或”连接两个 QFFormula
+    def __or__(self, other: Formula) -> Formula:  
         if isinstance(other, (Top, Bot)):
             return other | self
         if isinstance(other, QFFormula):
             return QFFormula(backend.Or(self.expr, other.expr))
         return other | self
 
-    def __and__(self, other: Formula) -> Formula:  # 使用逻辑“与”连接两个 QFFormula
+    def __and__(self, other: Formula) -> Formula:  
         if isinstance(other, (Top, Bot)):
             return other & self
         if isinstance(other, QFFormula):
@@ -196,7 +196,7 @@ class QFFormula(Formula):
 
     def atoms(self) -> frozenset[AtomicFormula]:
         # return backend.get_atoms(self.expr)
-        # Top / Bot（expr is None）或简化后是常量 true/false，都没有一阶原子 。它会遍历内部的 expr，并返回一个集合，其中包含了构成该公式的所有 AtomicFormula 对象（例如 P(c1, c2)）。
+        # Top / Bot (where expr is None) or after simplification it becomes a constant true/false, neither of which has a first-order atom. It will traverse the internal expr and return a set that contains all the AtomicFormula objects that constitute this formula (such as P(c1, c2)).
         if self.expr is None or self.expr in (sympy.true, sympy.false):
             return frozenset()
         return backend.get_atoms(self.expr)
@@ -206,7 +206,7 @@ class QFFormula(Formula):
             for term in atom.args:
                 yield term
 
-    # vars(), consts(), preds(): 这些是辅助方法，它们首先调用 atoms()，然后从这些原子中收集所有的变量、常量或谓词。
+    # vars(), consts(), preds(): These are helper methods that first call atoms() and then collect all variables, constants, or predicates from these atoms.
     def vars(self) -> frozenset[Var]:
         return frozenset(filter(lambda x: isinstance(x, Var), self.terms()))
 
@@ -238,18 +238,17 @@ class QFFormula(Formula):
                 for symbol, value in model.items()
             )
 
-    # TODO 这里好像是binary modk 的时候修改了
     def substitute(self, substitution: dict[Term, Term]) -> QFFormula:
-        if self.expr is None: # 如果公式的内部表达式为 None（通常表示 Top 或 Bot），则无法替换，直接返回自身。
+        if self.expr is None: # If the internal expression of the formula is None (usually representing Top or Bot), substitution cannot be performed, so return itself directly.
             return self
 
-        # 这一步是核心准备工作。它创建一个有序字典 `atom_substitutions`。字典的键是公式中原始原子公式的后端表达式（例如，P(x) 的符号表示）。字典的值是该原子公式在执行项替换后，新生成的原子公式的后端表达式（例如，P(a) 的符号表示）。
+        # This step is the core preparation work. It creates an ordered dictionary `atom_substitutions`. The keys of the dictionary are the backend expressions of the original atomic formulas in the formula (e.g., the symbolic representation of P(x)). The values are the backend expressions of the new atomic formulas generated after performing term substitution on the original atomic formulas (e.g., the symbolic representation of P(a)).
         atom_substitutions = OrderedDict(
             (atom.expr, atom.substitute(substitution).expr)
             for atom in self.atoms()
         )
         
-        # 调用后端库的 `substitute` 函数。它会遍历整个公式的符号表达式 `self.expr`， 并将所有出现的旧原子表达式（`atom_substitutions` 的键）替换为对应的新原子表达式（值）。最后，用返回的新表达式创建一个新的 QFFormula 对象。
+        # Call the backend library's `substitute` function. It traverses the entire symbolic expression `self.expr` of the formula and replaces all occurrences of old atomic expressions (keys of `atom_substitutions`) with the corresponding new atomic expressions (values). Finally, it creates a new QFFormula object with the returned new expression.
         return QFFormula(backend.substitute(self.expr, atom_substitutions))
 
     def sub_nullary_atoms(self, substitution: dict[AtomicFormula, bool]) -> QFFormula:

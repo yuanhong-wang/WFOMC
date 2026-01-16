@@ -13,26 +13,26 @@ from .components import Cell, TwoTable
 from .utils import conditional_on
 
 """
-cell_graph.py 是 WFOMC（加权一阶模型计数）算法的核心数据结构模块。它的主要作用是将一个抽象的一阶逻辑问题转换成一个具体的、可计算的图结构，即**“单元格图”（Cell Graph）**。
+cell_graph.py is the core data structure module of the WFOMC (Weighted First-Order Model Counting) algorithm. Its main function is to convert an abstract first-order logic problem into a specific and computable graph structure, namely "cell graph".
 
-这个过程是“提升推理”（Lifted Inference）的关键步骤，其思想如下：
+This process is a crucial step in "Lifted Inference", and its underlying concept is as follows:
 
-单元格（Cell）: 将论域中所有具有相同性质（满足相同的一元谓词）的元素归为一类，这一类就称为一个“单元格”或“1-类型”。
-单元格图（Cell Graph）:
-    图的节点是所有可能的单元格。
-    每个节点有一个权重，代表属于该单元格的单个元素的权重。
-    图的边代表两个单元格之间的交互关系。边的权重（在代码中由 TwoTable 表示）描述了从这两个单元格中各取一个元素时，它们之间满足二元谓词的加权模型数。
-    通过构建这个图，算法就可以从对单个元素的推理提升到对“单元格类型”的推理，从而高效地处理大论域问题。
+Cell: In the domain of discourse, all elements that share the same property (satisfy the same unary predicate) are grouped together. This group is called a "cell" or a "1-type".
+Cell Graph:
+    The nodes of the graph represent all possible cells.
+    Each node has a weight, indicating the weight of a single element belonging to that cell.
+    The edges of the graph represent the interaction relationships between two cells. The weight of the edge (represented by the TwoTable in the code) describes the weighted model number of the binary predicate satisfied when one element is taken from each of these two cells.
+    By constructing this graph, the algorithm can elevate reasoning from the level of individual elements to the level of "cell types", thereby efficiently handling large domain problems.
 
-文件主要包含三个核心类和一个工厂函数：
-    CellGraph: 基础的单元格图实现。
-    OptimizedCellGraph: 针对 CellGraph 的优化版本，通过识别和利用对称性（cliques）和独立性来加速计算，用于 FastWFOMC 算法。
-    OptimizedCellGraphWithPC: 在 OptimizedCellGraph 的基础上，增加了对划分约束（Partition Constraints）的支持。
-    build_cell_graphs: 一个工厂函数，根据输入参数决定创建哪种类型的 CellGraph 实例。
+The file mainly contains three core classes and a factory function:
+    CellGraph: The basic implementation of the cell graph.
+    OptimizedCellGraph: An optimized version of CellGraph that accelerates computation by identifying and exploiting symmetries (cliques) and independencies, used in the FastWFOMC algorithm.
+    OptimizedCellGraphWithPC: Builds upon OptimizedCellGraph by adding support for Partition Constraints.
+    build_cell_graphs: A factory function that decides which type of CellGraph instance to create based on input parameters.
 """
 class CellGraph(object):
     """
-    Cell graph that handles cells and the wmc between them.  处理单元格（cells）及其之间加权模型计数（WMC）的单元格图。
+    Cell graph that handles cells and the wmc between them.  
     """
 
     def __init__(self, formula: QFFormula,
@@ -49,58 +49,58 @@ class CellGraph(object):
         self.get_weight: Callable[[Pred],
                                   tuple[RingElement, RingElement]] = get_weight
         self.leq_pred: Pred = leq_pred
-        self.preds: tuple[Pred] = tuple(self.formula.preds()) # 提取公式中所有的谓词，并存为一个元组。
+        self.preds: tuple[Pred] = tuple(self.formula.preds()) # Extract all predicates from the formula and store them as a tuple.
         logger.debug('prednames: %s', self.preds)
 
-        # --- 实例化公式 ---
+        # --- Instantiate formulas ---
         gnd_formula_ab1: QFFormula = self._ground_on_tuple(
             self.formula, a, b
-        ) # 为了计算单元格（1-类型）和它们之间的关系（2-类型），需要将公式实例化。# 将公式中的变量替换为 (a, b)
+        ) # To compute cells (1-types) and their relationships (2-types), the formula needs to be instantiated. # Replace variables in the formula with (a, b)
         gnd_formula_ab2: QFFormula = self._ground_on_tuple(
             self.formula, b, a
-        )# 将公式中的变量替换为 (b, a)，以保证对称性
+        )# Replace variables in the formula with (b, a) to ensure symmetry
         self.gnd_formula_ab: QFFormula = \
-            gnd_formula_ab1 & gnd_formula_ab2 # `gnd_formula_ab` 用于计算任意两个元素之间的交互，是两者的合取。
+            gnd_formula_ab1 & gnd_formula_ab2 # `gnd_formula_ab` is used to calculate the interaction between any two elements and is the conjunction of the two.
         self.gnd_formula_cc: QFFormula = self._ground_on_tuple(
             self.formula, c
-        )# `gnd_formula_cc` 用于定义单个元素的类型（单元格），将变量替换为 (c, c)。
-        if self.leq_pred is not None: # 如果存在线性序，需要将序关系也加入到实例化公式中。
-            self.gnd_formula_cc = self.gnd_formula_cc & self.leq_pred(c, c) # 单个元素必须满足 c <= c (自反性)。
+        )# `gnd_formula_cc` is used to define the type of a single element (cell), replacing variables with (c, c).
+        if self.leq_pred is not None: # If a linear order exists, the order relation needs to be added to the instantiated formula.
+            self.gnd_formula_cc = self.gnd_formula_cc & self.leq_pred(c, c) # A single element must satisfy c <= c (reflexivity).
             self.gnd_formula_ab = self.gnd_formula_ab & \
                 self.leq_pred(b, a) & \
-                (~self.leq_pred(a, b)) # 两个不同元素 a, b 必须满足 b <= a 且 a < b 不成立，这强制了一个顺序。
+                (~self.leq_pred(a, b)) # Two distinct elements a, b must satisfy b <= a and not a < b, enforcing an order.
         logger.info('ground a b: %s', self.gnd_formula_ab)
         logger.info('ground c: %s', self.gnd_formula_cc)
 
         # build cells
-        self.cells: list[Cell] = self._build_cells() # `_build_cells` 根据 `gnd_formula_cc` 找出所有可能的单元格类型。
+        self.cells: list[Cell] = self._build_cells() # `_build_cells` finds all possible cell types based on `gnd_formula_cc`.
         # filter cells
         logger.info('the number of valid cells: %s',
                     len(self.cells))
 
         logger.info('computing cell weights')
-        self.cell_weights: dict[Cell, RingElement] = self._compute_cell_weights() # `_compute_cell_weights` 计算每个单元格的权重。
+        self.cell_weights: dict[Cell, RingElement] = self._compute_cell_weights() # `_compute_cell_weights` computes the weight of each cell.
         logger.info('computing two table weights')
         self.two_tables: dict[tuple[Cell, Cell],
-                              TwoTable] = self._build_two_tables() # `_build_two_tables` 计算任意两个单元格之间的交互权重。
+                              TwoTable] = self._build_two_tables() # `_build_two_tables` computes the interaction weights between any two cells.
 
     def _ground_on_tuple(self, formula: QFFormula,
                          c1: Const, c2: Const = None) -> QFFormula:
-        """辅助函数，用常量 (c1, c2) 替换公式中的变量。"""
-        variables = formula.vars() # 从输入的公式中提取出所有自由变量的集合。例如，对于公式 P(x) & R(x, y)，`variables` 将是 {'x', 'y'}。
+        """Helper function to substitute variables in the formula with constants (c1, c2)."""
+        variables = formula.vars() # Extract all free variables from the input formula. For example, for the formula P(x) & R(x, y), `variables` will be {'x', 'y'}.
         if len(variables) > 2:
             raise RuntimeError(
                 "Can only ground out FO2"
             )
-        if len(variables) == 1: # 情况1：公式只有一个变量，例如 P(x)。
-            constants = [c1] # 那么这个变量将被替换为第一个常量 `c1`。
-        else: # 情况2：公式有两个或零个变量。
-            if c2 is not None: # 如果第二个常量 `c2` 被提供了（即不是 None）。
+        if len(variables) == 1: # Case 1: The formula has only one variable, e.g., P(x).
+            constants = [c1] # Then this variable will be replaced by the first constant `c1`.
+        else: # Case 2: The formula has two or zero variables.
+            if c2 is not None: # If the second constant `c2` is provided (i.e., not None).
                 constants = [c1, c2]
-            else: # 如果第二个常量 `c2` 未提供。
+            else: # If the second constant `c2` is not provided.
                 constants = [c1, c1]
-        substitution = dict(zip(variables, constants)) # 创建一个替换字典。`zip` 会将变量列表和常量列表配对。例如，如果 variables 是 (x, y) 而 constants 是 [a, b]，字典将是 {'x': a, 'y': b}。
-        gnd_formula = formula.substitute(substitution) # 调用公式对象的 `substitute` 方法，传入替换字典。这个方法会返回一个新的、变量已被替换为常量的公式对象。
+        substitution = dict(zip(variables, constants)) # Create a substitution dictionary. `zip` pairs the list of variables with the list of constants. For example, if variables are (x, y) and constants are [a, b], the dictionary will be {'x': a, 'y': b}.
+        gnd_formula = formula.substitute(substitution) # Call the `substitute` method of the formula object, passing the substitution dictionary. This method returns a new formula object with variables replaced by constants.
         # # NOTE: workaround for the case where ground binary atoms not appearing in the formula
         # if c2 is not None:
         #     binary_preds = list(filter(
@@ -150,14 +150,14 @@ class CellGraph(object):
         return str(self)
 
     def get_cells(self, cell_filter: Callable[[Cell], bool] = None) -> list[Cell]:
-        """获取单元格列表，可选择性地进行过滤。"""
+        """Obtain the list of cells, and selectively apply filtering."""
         if cell_filter is None:
             return self.cells
         return list(filter(cell_filter, self.cells))
 
     @functools.lru_cache(maxsize=None, typed=True)
     def get_cell_weight(self, cell: Cell) -> RingElement:
-        """获取单个单元格的权重（带缓存）。"""
+        """Get the weight of a single cell (with caching)."""
         if cell not in self.cell_weights:
             logger.warning(
                 "Cell %s not found", cell
@@ -166,7 +166,7 @@ class CellGraph(object):
         return self.cell_weights.get(cell)
 
     def _check_existence(self, cells: tuple[Cell, Cell]):
-        """检查给定的单元格对是否存在于 two_tables 中。"""
+        """Check if the given pair of cells exists in two_tables."""
         if cells not in self.two_tables:
             raise ValueError(
                 f"Cells {cells} not found, note that the order of cells matters!"
@@ -175,7 +175,7 @@ class CellGraph(object):
     @functools.lru_cache(maxsize=None, typed=True)
     def get_two_table_weight(self, cells: tuple[Cell, Cell],
                              evidences: frozenset[AtomicFormula] = None) -> RingElement:
-        """获取两个单元格之间的交互权重（带缓存）。"""
+        """Obtain the interaction weight between two cells (with caching)."""
         self._check_existence(cells)
         return self.two_tables.get(cells).get_weight(evidences)
 
@@ -206,13 +206,13 @@ class CellGraph(object):
         return self.two_tables.get(cells).get_two_tables(evidences)
 
     def _build_cells(self):
-        """构建所有可能的单元格（1-类型）。"""
+        """Build all possible cells (1-types)."""
         cells = []
         code = {}
-        for model in self.gnd_formula_cc.models(): # 遍历单元素接地公式 `gnd_formula_cc` 的所有模型。每个模型都代表了一种合法的元素类型。
-            for lit in model: # 将模型（一组真值赋值）转换成一个编码（code）。
+        for model in self.gnd_formula_cc.models(): # Iterate over all models of the single-element grounded formula `gnd_formula_cc`. Each model represents a valid element type.
+            for lit in model: # Convert the model (a set of truth assignments) into a code.
                 code[lit.pred] = lit.positive
-            cells.append(Cell(tuple(code[p] for p in self.preds), self.preds)) # 用这个编码创建一个 Cell 对象。
+            cells.append(Cell(tuple(code[p] for p in self.preds), self.preds)) # Create a Cell object with this code.
         return cells
 
     def _compute_cell_weights(self):
@@ -261,8 +261,8 @@ class CellGraph(object):
             models_1 = conditional_on(models, gnd_lits, cell.get_evidences(a))
             for j, other_cell in enumerate(self.cells):
                 # NOTE: leq is sensitive to the order of cells
-                if i > j and self.leq_pred is None: # 当 leq_pred 未定义时，(cell, other_cell) 和 (other_cell, cell) 之间的关系被认为是还未定义的。因为当 i > j 时，索引 j 对应的 other_cell 和索引 i 对应的 cell 组成的元组 (other_cell, cell) 已经在之前的循环中计算过了。
-                    tables[(cell, other_cell)] = tables[(other_cell, cell)] # B(X, Y) 的约束是针对“出度”的。它要求每个节点 X 的“出度”（B(X, Y) 为真的 Y 的数量）必须是奇数。但是，它对节点的“入度”（B(Y, X) 为真的 Y 的数量）没有任何要求。因此，B(X, Y) 和 B(Y, X) 的真值可能是不同的。
+                if i > j and self.leq_pred is None: # When leq_pred is not defined, the relationship between (cell, other_cell) and (other_cell, cell) is considered undefined. Because when i > j, the tuple (other_cell, cell) corresponding to index j and index i has already been calculated in the previous loop.
+                    tables[(cell, other_cell)] = tables[(other_cell, cell)] # The constraint on B(X, Y) is about "out-degree". It requires that the "out-degree" of each node X (the number of Y for which B(X, Y) is true) must be odd. However, it imposes no requirements on the "in-degree" of the node (the number of Y for which B(Y, X) is true). Therefore, the truth values of B(X, Y) and B(Y, X) may be different.
                 models_2 = conditional_on(models_1, gnd_lits,
                                           other_cell.get_evidences(b))
                 tables[(cell, other_cell)] = TwoTable(
@@ -745,26 +745,25 @@ def build_cell_graphs(formula: QFFormula,
         -> Generator[tuple[CellGraph, RingElement], None, None]:
             
     """
-    这个函数是创建 CellGraph 对象的统一入口，它像一个工厂，根据传入的参数和公式的特性，决定“生产”哪一种 CellGraph（基础版、优化版、或带划分约束的优化版）。
+    This function serves as the unified entry point for creating CellGraph objects. It functions like a factory, determining which type of CellGraph (basic version, optimized version, or optimized version with partition constraints) to "produce" based on the input parameters and the characteristics of the formula.
 
-    它的一个关键特性是处理0元谓词（Nullary Predicates），即没有参数的谓词，如 IsRaining。这些谓词本质上是命题变量，它们的真假与论域中的元素无关。如果公式中存在0元谓词，为了计算总的加权模型数，必须分别计算该谓词为真和为假两种情况下的模型数，然后加权求和。
+    One of its key features is the handling of zero-ary predicates (Nullary Predicates), which are predicates without parameters, such as "IsRaining". These predicates are essentially propositional variables, and their truth or falsehood is independent of the elements in the domain. If there are zero-ary predicates in a formula, in order to calculate the total weighted number of models, the number of models for each case (the predicate being true and the predicate being false) must be calculated separately, and then the results are summed up with weighting.
 
-    因此，这个函数被设计成一个生成器（Generator）。
-
-    如果没有0元谓词，它只会 yield 一个 CellGraph 实例。
-    如果有0元谓词，它会遍历0元谓词所有可能的真值组合，并为每一种组合 yield 一个对应的 CellGraph 实例及其权重。调用者需要将所有 yield 出来的结果进行加权求和，才能得到最终的总数。
+    Therefore, this function is designed as a generator. 
+    If there is no 0-ary predicate, it will only yield a CellGraph instance.
+    If there is a 0-ary predicate, it will traverse all possible truth value combinations of the 0-ary predicate and yield a corresponding CellGraph instance and its weight for each combination. The caller needs to sum up all the yielded results for weighting and then obtain the final total.
     """
-    # --- 1. 检查0元谓词 ---
-    nullary_atoms = [atom for atom in formula.atoms() if atom.pred.arity == 0] # 从公式中找出所有0元谓词（arity == 0）。
-    # --- 2. 情况一：没有0元谓词 ---
-    if len(nullary_atoms) == 0: # 这是最简单的情况，只需要构建一个 CellGraph。
+    # --- Check the zero-argument predicate ---
+    nullary_atoms = [atom for atom in formula.atoms() if atom.pred.arity == 0] # Find all zero-arity predicates (arity == 0) in the formula.
+    # --- 2. Case one: no zero-arity predicates ---
+    if len(nullary_atoms) == 0: # This is the simplest case, only one CellGraph needs to be constructed.
         logger.info('No nullary atoms found, building a single cell graph')
-        if not optimized: # 根据 `optimized` 参数决定是创建基础版还是优化版。
+        if not optimized: # Decide whether to create the basic version or the optimized version based on the `optimized` parameter.
             yield CellGraph(
                 formula, get_weight, leq_pred
-            ), Rational(1, 1) # 创建并 yield 一个基础的 CellGraph。权重为1，因为没有0元谓词的贡献。
-        else: # 创建优化版 CellGraph。
-            if partition_constraint is None: # 进一步根据 `partition_constraint` 是否存在，决定是创建  `OptimizedCellGraph` 还是 `OptimizedCellGraphWithPC`。
+            ), Rational(1, 1) # Create and yield a basic CellGraph. The weight is 1 because there is no contribution from zero-ary predicates.
+        else: # Create an optimized CellGraph.
+            if partition_constraint is None: # Further decide whether to create an `OptimizedCellGraph` or an `OptimizedCellGraphWithPC` based on the presence of `partition_constraint`.
                 yield OptimizedCellGraph(
                     formula, get_weight, domain_size, modified_cell_symmetry
                 ), Rational(1, 1)
@@ -772,9 +771,9 @@ def build_cell_graphs(formula: QFFormula,
                 yield OptimizedCellGraphWithPC(
                     formula, get_weight, domain_size, partition_constraint
                 ), Rational(1, 1)
-    else: # --- 3. 情况二：存在0元谓词 --- # 需要为0元谓词的每一种真值组合构建一个 CellGraph。
+    else: # --- 3. Case two: zero-arity predicates exist --- # Need to construct a CellGraph for each truth value combination of zero-arity predicates.
         logger.info('Found nullary atoms %s', nullary_atoms)
-        for values in product(*([[True, False]] * len(nullary_atoms))): # `product(*([[True, False]] * len(nullary_atoms)))` 生成所有可能的真值组合。例如，如果有2个0元谓词，它会生成 (True, True), (True, False), (False, True), (False, False)。
+        for values in product(*([[True, False]] * len(nullary_atoms))): # `product(*([[True, False]] * len(nullary_atoms)))` generates all possible truth value combinations. For example, if there are 2 zero-arity predicates, it will generate (True, True), (True, False), (False, True), (False, False).
             substitution = dict(zip(nullary_atoms, values))
             logger.info('Building cell graph with values %s', substitution)
             subs_formula = formula.sub_nullary_atoms(substitution).simplify()

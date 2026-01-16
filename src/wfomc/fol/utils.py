@@ -97,7 +97,7 @@ def exclusive(preds: list[Pred]) -> QuantifiedFormula:
 def convert_counting_formula(formula: QuantifiedFormula, domain: set) -> \
         tuple[QFFormula, list[QuantifiedFormula], tuple, int]:
     """
-    这个函数负责实现Beat论文中的引理 4，也就是将 ∀X ∃=k Y: R(X,Y) 分解。分解过程中，它会生成 k 个独立的、需要被满足的存在量词公式 ∀X ∃Y: fᵢ(X,Y)。
+    This function is responsible for implementing Lemma 4 from the Beat paper, which decomposes ∀X ∃=k Y: R(X,Y). During the decomposition process, it generates k independent existential quantifier formulas ∀X ∃Y: fᵢ(X,Y) that need to be satisfied.
     """
 
     inner_formula = formula.quantified_formula
