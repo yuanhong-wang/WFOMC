@@ -136,6 +136,7 @@ exp/
 .ycm_extra_conf.py
 CLAUDE.md
 .claude/
+.serena/
 
 # Cython generated files
 src/**/*.c
