@@ -28,11 +28,16 @@ dependencies = [
 wfomc = "wfomc.solver:main"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68", "cython>=3.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [dependency-groups]
 dev = [
+    "cython>=3.0",
     "ipython>=9.6.0",
     "pytest>=8.4.1",
+    "setuptools",
 ]
