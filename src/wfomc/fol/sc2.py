@@ -1,5 +1,5 @@
 from functools import reduce
-from logzero import logger
+from loguru import logger
 from typing import Callable, Union
 
 from .utils import new_predicate, new_scott_predicate
@@ -108,7 +108,7 @@ def transformer(name: str, formula_clses: tuple[type[Formula]]):
     def decorator(f):
         def wrapper(formula: Formula):
             if isinstance(formula, formula_clses):
-                logger.debug("%s: %s", name, formula)
+                logger.debug("{}: {}", name, formula)
                 formula = f(formula)
                 if isinstance(formula, tuple):
                     return formula
@@ -389,15 +389,15 @@ def standardize(formula: Formula) -> Formula:
     Standardize the given formula to a compound of quantified formulas
     """
     formula, _ = dfs(formula, convert_implies_equiv)
-    logger.debug("After convert implication and equivalence: %s", formula)
+    logger.debug("After convert implication and equivalence: {}", formula)
     formula, _ = bfs(formula, push_negation)
-    logger.debug("After push negation: %s", formula)
+    logger.debug("After push negation: {}", formula)
     formula, _ = bfs(formula, distribute_quantifier)
-    logger.debug("After distribute quantifier: %s", formula)
+    logger.debug("After distribute quantifier: {}", formula)
     # formula, _ = bfs(formula, push_qfformula)
-    # logger.debug("After push quantified-free formula: %s", formula.pretty())
+    # logger.debug("After push quantified-free formula: {}", formula.pretty())
     # formula, _ = bfs(formula, pop_quantifier)
-    # logger.debug("After pop quantifier: %s", formula.pretty())
+    # logger.debug("After pop quantifier: {}", formula.pretty())
     return formula
 
 
@@ -419,31 +419,31 @@ def to_sc2(formula: Formula) -> SC2:
     #             f'Found counting quantifier {formula.quantifier_scope}'
     #         )
 
-    logger.debug("Before standardize: %s", formula)
+    logger.debug("Before standardize: {}", formula)
     formula = standardize(formula)
-    logger.debug("After standardize: \n%s", pretty_print(formula))
+    logger.debug("After standardize: \n{}", pretty_print(formula))
     formula, additional_formulas = dfs(formula, replace_disjunction)
     for additional_formula in additional_formulas:
         formula = formula & additional_formula
     formula = standardize(formula)
-    logger.debug("After replace disjunction: \n%s", pretty_print(formula))
+    logger.debug("After replace disjunction: \n{}", pretty_print(formula))
     formula, additional_formulas = dfs(formula, remove_existential_quantifier)
     scott_formula = formula # top
     for additional_formula in additional_formulas:
         scott_formula = scott_formula & additional_formula
-    logger.debug("After remove existential quantifier: \n%s", pretty_print(scott_formula))
+    logger.debug("After remove existential quantifier: \n{}", pretty_print(scott_formula))
     formula = standardize(scott_formula)
-    logger.debug("After standardize: \n%s", pretty_print(formula))
+    logger.debug("After standardize: \n{}", pretty_print(formula))
     formula = rename_variables(
         formula, 0, [U, V, W], {}
     )
     formula = rename_variables(
         formula, 0, [X, Y, Z], {}
     )
-    logger.debug("After rename variables: \n%s", pretty_print(formula))
+    logger.debug("After rename variables: \n{}", pretty_print(formula))
     # TODO: disable due to https://github.com/lucienwang1009/lifted_sampling_fo2/issues/8
     # formula = pop_quantifier(formula)
-    # logger.debug("After pop quantifier: \n%s", pretty_print(formula))
+    # logger.debug("After pop quantifier: \n{}", pretty_print(formula))
     # here, the formula must only contain conjunctions
     bfs(formula, check_all_conjunction)
 

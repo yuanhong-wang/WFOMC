@@ -1,6 +1,6 @@
 from collections import defaultdict
 from itertools import product
-from logzero import logger
+from loguru import logger
 from typing import Callable
 from contexttimer import Timer
 
@@ -75,7 +75,7 @@ def _fast_wfomc(formula: QFFormula,
                 mul = opt_cell_graph.get_term(len(i2_ind), 0, partition)
                 res_ = res_ + coef * mul * body
         res = res + weight * res_
-    logger.info('WFOMC time: %s', t.elapsed)
+    logger.info('WFOMC time: {}', t.elapsed)
     return res
 
 
@@ -84,7 +84,7 @@ def _fast_wfomc_with_pc(formula: QFFormula,
                          get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
                          partition_constraint: PartitionConstraint) -> RingElement:
     logger.info('Invoke faster WFOMC with partition constraint')
-    logger.info('Partition constraint: %s', partition_constraint)
+    logger.info('Partition constraint: {}', partition_constraint)
     res = Rational(0, 1)
     domain_size = len(domain)
     for opt_cell_graph, weight in build_cell_graphs(
@@ -140,6 +140,6 @@ def _fast_wfomc_with_pc(formula: QFFormula,
                     )
                 res_ = res_ + coef * body
         res = res + weight * res_
-    logger.info('WFOMC time: %s', t.elapsed)
+    logger.info('WFOMC time: {}', t.elapsed)
 
     return res

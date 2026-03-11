@@ -1,3 +1,7 @@
+from loguru import logger
+logger.disable("wfomc")  # Suppress wfomc logs by default (library best practice).
+                         # Enable via logger.enable("wfomc") or call wfomc().
+
 from .algo import Algo
 from .problems import WFOMCProblem, MLNProblem, MLN_to_WFOMC
 from .parser import parse_input

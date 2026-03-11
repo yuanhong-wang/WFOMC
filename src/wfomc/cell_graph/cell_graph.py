@@ -6,7 +6,7 @@ import functools
 import networkx as nx
 from itertools import product
 from typing import Callable, Generator
-from logzero import logger
+from loguru import logger
 from copy import deepcopy
 
 from wfomc.fol import AtomicFormula, Const, Pred, QFFormula, a, b, c, top
@@ -39,7 +39,7 @@ class CellGraph(object):
         self.leq_pred: Pred = leq_pred
         self.predecessor_preds: dict[int, Pred] = predecessor_preds
         self.preds: tuple[Pred] = tuple(self.formula.preds())
-        logger.debug('prednames: %s', self.preds)
+        logger.debug('prednames: {}', self.preds)
 
         gnd_formula_ab1: QFFormula = self._ground_on_tuple(
             self.formula, a, b
@@ -87,15 +87,15 @@ class CellGraph(object):
                         map(lambda x: ~x(b, a) & ~x(a, b),
                             self.predecessor_preds.values())
                     )
-        logger.info('ground a b: %s', self.gnd_formula_ab)
-        logger.info('ground c: %s', self.gnd_formula_cc)
+        logger.info('ground a b: {}', self.gnd_formula_ab)
+        logger.info('ground c: {}', self.gnd_formula_cc)
         if self.predecessor_preds is not None:
             logger.info(f'ground a, b with predecessor: {self.gnd_formula_ab_with_preds}')
 
         # build cells
         self.cells: list[Cell] = self._build_cells()
         # filter cells
-        logger.info('the number of valid cells: %s',
+        logger.info('the number of valid cells: {}',
                     len(self.cells))
 
         logger.info('computing cell weights')
@@ -329,9 +329,9 @@ class OptimizedCellGraph(CellGraph):
             self.nonind_map: dict[int, int] = dict(
                 zip(self.nonind, range(len(self.nonind))))
 
-        logger.info("Found i1 independent cliques: %s", self.i1_ind)
-        logger.info("Found i2 independent cliques: %s", self.i2_ind)
-        logger.info("Found non-independent cliques: %s", self.nonind)
+        logger.info("Found i1 independent cliques: {}", self.i1_ind)
+        logger.info("Found i2 independent cliques: {}", self.i2_ind)
+        logger.info("Found non-independent cliques: {}", self.nonind)
 
         self.term_cache = dict()
 
@@ -348,7 +348,7 @@ class OptimizedCellGraph(CellGraph):
                 cells.remove(other_cell)
             cliques.append(clique)
         cliques.sort(key=len)
-        logger.info("Built %s symmetric cliques: %s", len(cliques), cliques)
+        logger.info("Built {} symmetric cliques: {}", len(cliques), cliques)
         return cliques
 
     def build_symmetric_cliques_in_ind(self, cell_indices_list) -> \
@@ -372,7 +372,7 @@ class OptimizedCellGraph(CellGraph):
                 cliques.append(clique)
                 idx_list.append(len(cliques) - 1)
             ind_idx.append(idx_list)
-        logger.info("Built %s symmetric cliques: %s", len(cliques), cliques)
+        logger.info("Built {} symmetric cliques: {}", len(cliques), cliques)
         return cliques, ind_idx
 
     def find_independent_sets(self) -> tuple[list[int], list[int], list[int], list[int]]:
@@ -398,9 +398,9 @@ class OptimizedCellGraph(CellGraph):
         g_ind = set(nx.maximal_independent_set(g, nodes=i1_ind))
         i2_ind = g_ind.difference(i1_ind)
         non_ind = g.nodes - i1_ind - i2_ind
-        logger.info("Found i1 independent set: %s", i1_ind)
-        logger.info("Found i2 independent set: %s", i2_ind)
-        logger.info("Found non-independent set: %s", non_ind)
+        logger.info("Found i1 independent set: {}", i1_ind)
+        logger.info("Found i2 independent set: {}", i2_ind)
+        logger.info("Found non-independent set: {}", non_ind)
         return list(i1_ind), list(i2_ind), list(non_ind)
 
     def find_independent_cliques(self) -> tuple[list[int], list[int], list[int], list[int]]:
@@ -585,8 +585,8 @@ class OptimizedCellGraphWithPC(CellGraph):
                     clique_partiton.append(cell_indices)
                     self.partition_cliques[pred_idx].append(idx)
             self.clique_partitions[idx] = clique_partiton
-        logger.info("Clique partitions: %s", self.clique_partitions)
-        logger.info("Partition cliques: %s", self.partition_cliques)
+        logger.info("Clique partitions: {}", self.clique_partitions)
+        logger.info("Partition cliques: {}", self.partition_cliques)
 
         self.i1_partition: list[list[int]] = list()
         for pred, _ in self.partition_constraint.partition:
@@ -597,8 +597,8 @@ class OptimizedCellGraphWithPC(CellGraph):
     def set_clique_configs(self, clique_configs: dict[int, list[int]]):
         self.clique_configs = clique_configs
         self.ovarall_clique_config = list(sum(v) for _, v in self.clique_configs.items())
-        logger.info('Clique configs: %s', self.clique_configs)
-        logger.info('Overall clique config: %s', self.ovarall_clique_config)
+        logger.info('Clique configs: {}', self.clique_configs)
+        logger.info('Overall clique config: {}', self.ovarall_clique_config)
 
     def find_independent_sets(self) -> tuple[list[int], list[int], list[int], list[int]]:
         # find the cell with partition constraint
@@ -636,9 +636,9 @@ class OptimizedCellGraphWithPC(CellGraph):
         g_ind = set(nx.maximal_independent_set(g, nodes=i1_ind))
         i2_ind = g_ind.difference(i1_ind)
         non_ind = g.nodes - i1_ind - i2_ind
-        logger.info("Found i1 independent set: %s", i1_ind)
-        logger.info("Found i2 independent set: %s", i2_ind)
-        logger.info("Found non-independent set: %s", non_ind)
+        logger.info("Found i1 independent set: {}", i1_ind)
+        logger.info("Found i2 independent set: {}", i2_ind)
+        logger.info("Found non-independent set: {}", non_ind)
         return list(i1_ind), list(i2_ind), list(non_ind)
 
     def _matches(self, clique, other_cell) -> bool:
@@ -674,7 +674,7 @@ class OptimizedCellGraphWithPC(CellGraph):
                 cell_indices.remove(self.cells.index(other_cell))
             cliques.append(clique)
             idx_list.append(len(cliques) - 1)
-        logger.info("Built %s symmetric cliques: %s", len(cliques), cliques)
+        logger.info("Built {} symmetric cliques: {}", len(cliques), cliques)
         return cliques, idx_list
 
     def get_i1_weight(self, i1_config: tuple[int],
@@ -791,10 +791,10 @@ def build_cell_graphs(formula: QFFormula,
                     formula, get_weight, domain_size, partition_constraint
                 ), Rational(1, 1)
     else:
-        logger.info('Found nullary atoms %s', nullary_atoms)
+        logger.info('Found nullary atoms {}', nullary_atoms)
         for values in product(*([[True, False]] * len(nullary_atoms))):
             substitution = dict(zip(nullary_atoms, values))
-            logger.info('Building cell graph with values %s', substitution)
+            logger.info('Building cell graph with values {}', substitution)
             subs_formula = formula.sub_nullary_atoms(substitution).simplify()
             if not subs_formula.satisfiable():
                 logger.info('Formula is unsatisfiable, skipping')

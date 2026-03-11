@@ -1,5 +1,5 @@
 import math
-from logzero import logger
+from loguru import logger
 from copy import deepcopy
 from wfomc.fol.sc2 import SC2
 from wfomc.fol.utils import new_predicate, convert_counting_formula
@@ -26,13 +26,13 @@ class WFOMCContext(object):
         self.unary_evidence = self.problem.unary_evidence
         self.unary_evidence_encoding = unary_evidence_encoding
 
-        logger.info('sentence: \n%s', self.sentence)
-        logger.info('domain: \n%s', self.domain)
+        logger.info('sentence: \n{}', self.sentence)
+        logger.info('domain: \n{}', self.domain)
         logger.info('weights:')
         for pred, w in self.weights.items():
-            logger.info('%s: %s', pred, w)
-        logger.info('cardinality constraint: %s', self.cardinality_constraint)
-        logger.info('unary evidence: %s', self.unary_evidence)
+            logger.info('{}: {}', pred, w)
+        logger.info('cardinality constraint: {}', self.cardinality_constraint)
+        logger.info('unary evidence: {}', self.unary_evidence)
 
         self.formula: QFFormula
         # for handling linear order axiom
@@ -43,10 +43,10 @@ class WFOMCContext(object):
         self.element2evidence: dict[Const, set[AtomicFormula]] = dict()
         self.partition_constraint: PartitionConstraint = None
         self._build()
-        logger.info('Skolemized formula for WFOMC: \n%s', self.formula)
-        logger.info('weights for WFOMC: \n%s', self.weights)
-        logger.info('repeat factor: %d', self.repeat_factor)
-        logger.info('partition constraint: %s', self.partition_constraint)
+        logger.info('Skolemized formula for WFOMC: \n{}', self.formula)
+        logger.info('weights for WFOMC: \n{}', self.weights)
+        logger.info('repeat factor: {}', self.repeat_factor)
+        logger.info('partition constraint: {}', self.partition_constraint)
 
     def contain_cardinality_constraint(self) -> bool:
         return self.cardinality_constraint is not None and \
@@ -123,8 +123,8 @@ class WFOMCContext(object):
                 evi_formula, partition = unary_evidence_to_pc(
                     self.element2evidence, self.domain
                 )
-                logger.info('formula to encode unary evidence: %s', evi_formula)
-                logger.info('partition constraint: %s', partition)
+                logger.info('formula to encode unary evidence: {}', evi_formula)
+                logger.info('partition constraint: {}', partition)
                 self.formula = self.formula & evi_formula
                 self.partition_constraint = partition
             elif self.unary_evidence_encoding == UnaryEvidenceEncoding.CCS:
@@ -132,8 +132,8 @@ class WFOMCContext(object):
                 evi_formula, ccs, repeat_factor = unary_evidence_to_ccs(
                     self.element2evidence, self.domain
                 )
-                logger.info('formula to encode unary evidence: %s', evi_formula)
-                logger.info('cardinality constraints: %s', ccs)
+                logger.info('formula to encode unary evidence: {}', evi_formula)
+                logger.info('cardinality constraints: {}', ccs)
                 self.formula = self.formula & evi_formula
                 if not self.contain_cardinality_constraint():
                     self.cardinality_constraint = CardinalityConstraint()

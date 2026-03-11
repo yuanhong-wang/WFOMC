@@ -1,4 +1,4 @@
-from logzero import logger
+from loguru import logger
 
 from wfomc.problems import WFOMCProblem
 from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc

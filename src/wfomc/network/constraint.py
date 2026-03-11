@@ -3,7 +3,7 @@ from collections import defaultdict
 from enum import Enum
 from functools import reduce
 from typing import Callable, Iterable
-from logzero import logger
+from loguru import logger
 from dataclasses import dataclass
 
 from wfomc.fol import AUXILIARY_PRED_NAME, AtomicFormula, Const, Pred, X, QFFormula, top
@@ -56,7 +56,7 @@ class CardinalityConstraint(Constraint):
         if isinstance(poly, Poly):
             poly = expand(poly)
             coeffs = coeff_dict(poly, self.gen_vars)
-            # logger.debug('coeffs: %s', list(coeffs))
+            # logger.debug('coeffs: {}', list(coeffs))
             res = Rational(0, 1)
             for degrees, coeff in coeffs:
                 if self.valid(degrees):
@@ -94,7 +94,7 @@ class CardinalityConstraint(Constraint):
                 comp = '=='
             validator_list.append(f'{single_validator} {comp} {param}')
         self.validator = ' and '.join(validator_list)
-        logger.info('cardinality validator: \n%s', self.validator)
+        logger.info('cardinality validator: \n{}', self.validator)
 
     def __str__(self):
         s = ''

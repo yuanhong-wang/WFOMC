@@ -1,8 +1,6 @@
 from itertools import product
 import pytest
 import json
-import logging
-import logzero
 
 from pathlib import Path
 
@@ -42,7 +40,6 @@ models_dir2args = {
 }
 model_files = list((current_path.parent / 'models').glob('*.wfomcs')) + \
     list((current_path.parent / 'models').glob('*.mln'))
-logzero.loglevel(logging.ERROR)
 
 
 @pytest.mark.parametrize(
