@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import functools
 from dataclasses import dataclass, field
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Any
 from collections import OrderedDict
 from PrettyPrint import PrettyPrintTree
-
+import sympy
 from . import boolean_algebra as backend
-
 
 __all__ = [
     'Pred',
@@ -62,7 +61,6 @@ PREDS_FOR_EXISTENTIAL = [
     TSEITIN_PRED_NAME, SKOLEM_PRED_NAME, EVIDOM_PRED_NAME
 ]
 
-
 RESERVED_PRED_NAMES: tuple[str] = (
     'true',
     'false',
@@ -75,6 +73,7 @@ RESERVED_PRED_NAMES: tuple[str] = (
 
 RESERVED_VAR_NAMES: tuple[str] = (
 )
+
 
 @dataclass(frozen=True)
 class Pred:
@@ -153,21 +152,21 @@ class Formula(object):
 @dataclass(frozen=True)
 class QFFormula(Formula):
     """
-    Quantifier-free formula
+    Quantifier-free formula For instance, simple atomic formulas such as R(X, Y), or more complex combinations like (P(X) & Q(Y)) | ~R(Z) all fall under the category of quantifier-free formulas.
     """
-    expr: backend.Expr
+    expr: backend.Expr  # This attribute is in the symbolic expression form in the backend library, preserving the representation of the formula. All logical operations, combinations, and simplifications are performed on this expr object. The QFFormula class essentially acts as a wrapper (wrapper) for this powerful backend object.
 
-    def __invert__(self) -> QFFormula:
+    def __invert__(self) -> QFFormula:  
         return QFFormula(backend.Not(self.expr))
 
-    def __or__(self, other: Formula) -> Formula:
+    def __or__(self, other: Formula) -> Formula:  
         if isinstance(other, (Top, Bot)):
             return other | self
         if isinstance(other, QFFormula):
             return QFFormula(backend.Or(self.expr, other.expr))
         return other | self
 
-    def __and__(self, other: Formula) -> Formula:
+    def __and__(self, other: Formula) -> Formula:  
         if isinstance(other, (Top, Bot)):
             return other & self
         if isinstance(other, QFFormula):
@@ -196,6 +195,10 @@ class QFFormula(Formula):
         return str(self)
 
     def atoms(self) -> frozenset[AtomicFormula]:
+        # return backend.get_atoms(self.expr)
+        # Top / Bot (where expr is None) or after simplification it becomes a constant true/false, neither of which has a first-order atom. It will traverse the internal expr and return a set that contains all the AtomicFormula objects that constitute this formula (such as P(c1, c2)).
+        if self.expr is None or self.expr in (sympy.true, sympy.false):
+            return frozenset()
         return backend.get_atoms(self.expr)
 
     def terms(self) -> Iterable[Term]:
@@ -203,6 +206,7 @@ class QFFormula(Formula):
             for term in atom.args:
                 yield term
 
+    # vars(), consts(), preds(): These are helper methods that first call atoms() and then collect all variables, constants, or predicates from these atoms.
     def vars(self) -> frozenset[Var]:
         return frozenset(filter(lambda x: isinstance(x, Var), self.terms()))
 
@@ -229,18 +233,27 @@ class QFFormula(Formula):
 
         for model in backend.get_models(self.expr):
             yield frozenset(
-                backend.get_atom(symbol) if value else ~backend.get_atom(symbol)
+                backend.get_atom(
+                    symbol) if value else ~backend.get_atom(symbol)
                 for symbol, value in model.items()
             )
 
     def substitute(self, substitution: dict[Term, Term]) -> QFFormula:
-        atom_substitutions = OrderedDict()
-        for atom in self.atoms():
-            atom_substitutions[atom.expr] = atom.substitute(substitution).expr
+        if self.expr is None: # If the internal expression of the formula is None (usually representing Top or Bot), substitution cannot be performed, so return itself directly.
+            return self
+
+        # This step is the core preparation work. It creates an ordered dictionary `atom_substitutions`. The keys of the dictionary are the backend expressions of the original atomic formulas in the formula (e.g., the symbolic representation of P(x)). The values are the backend expressions of the new atomic formulas generated after performing term substitution on the original atomic formulas (e.g., the symbolic representation of P(a)).
+        atom_substitutions = OrderedDict(
+            (atom.expr, atom.substitute(substitution).expr)
+            for atom in self.atoms()
+        )
+        
+        # Call the backend library's `substitute` function. It traverses the entire symbolic expression `self.expr` of the formula and replaces all occurrences of old atomic expressions (keys of `atom_substitutions`) with the corresponding new atomic expressions (values). Finally, it creates a new QFFormula object with the returned new expression.
         return QFFormula(backend.substitute(self.expr, atom_substitutions))
 
     def sub_nullary_atoms(self, substitution: dict[AtomicFormula, bool]) -> QFFormula:
-        substitution = dict((atom.expr, value) for atom, value in substitution.items())
+        substitution = dict((atom.expr, value)
+                            for atom, value in substitution.items())
         return QFFormula(backend.substitute(self.expr, substitution))
 
     def simplify(self) -> QFFormula:
@@ -283,7 +296,7 @@ class AtomicFormula(QFFormula):
 
     def __str__(self):
         s = '{}({})'.format(self.pred,
-                               ','.join([str(arg) for arg in self.args]))
+                            ','.join([str(arg) for arg in self.args]))
         return s if self.positive else '~' + s
 
     def __repr__(self):
@@ -392,21 +405,25 @@ class Existential(Quantifier):
 
 @dataclass(frozen=True)
 class Counting(Quantifier):
-    comparator: str
-    count_param: int
+    comparator: str  # '='  or  'mod'
+    count_param: Any  # int
 
     def __post_init__(self):
-        assert self.comparator in ['='], 'Only equality is supported'
+        allowed = ['=', '!=', '<', '>', '<=', '>=', 'mod']
+        assert self.comparator in allowed, \
+            f"Unsupported comparator '{self.comparator}'"
+        if self.comparator == 'mod':
+            r, k = self.count_param
+            assert 0 <= r < k, "Require 0 ≤ r < k"
+
         object.__setattr__(self, 'quantifier', '\\exists')
 
-    def complement(self) -> Counting:
-        raise FOLSyntaxError('Complement of counting quantifier is not supported')
-
     def __str__(self):
-        return '{}_{{{}{}}} {}'.format(
-            self.quantifier, self.comparator,
-            self.count_param, self.quantified_var
-        )
+        if self.comparator == 'mod':
+            r, k = self.count_param
+            return f'\\exists_{{{r}mod{k}}} {self.quantified_var}'
+        else:
+            return f'\\exists_{{{self.comparator}{self.count_param}}} {self.quantified_var}'
 
 
 class QuantifiedFormula(Formula):
@@ -414,6 +431,7 @@ class QuantifiedFormula(Formula):
     Quantified formula, e.g. \\forall x P(x),
     \\exists x P(x) and \\exists_{=2} x P(x)
     """
+
     def __init__(self, quantifier_scope: Quantifier, quantified_formula: Formula):
         self.quantifier_scope = quantifier_scope
         self.quantified_formula = quantified_formula
@@ -430,14 +448,15 @@ class QuantifiedFormula(Formula):
 
     def rename(self, substitution: dict[Term, Term]) -> QuantifiedFormula:
         # filter out the quantified variable
-        substitution = {k: v for k, v in substitution.items() if k in self.free_vars()}
+        substitution = {k: v for k, v in substitution.items()
+                        if k in self.free_vars()}
         inverse_substitution = {v: k for k, v in substitution.items()}
         if self.quantified_var in inverse_substitution:
             raise FOLSyntaxError('Subsituting variable {} with {} will cause collision in the formula: {}'.format(
                 inverse_substitution[self.quantified_var],
                 self.quantified_var, self
             )
-        )
+            )
         quantifier_scope = self.quantifier_scope.rename_quantified_var(
             substitution.get(self.quantified_var, self.quantified_var)
         )
@@ -446,7 +465,8 @@ class QuantifiedFormula(Formula):
         elif isinstance(self.quantified_formula, QuantifiedFormula):
             return QuantifiedFormula(quantifier_scope, self.quantified_formula.rename(substitution))
         else:
-            raise FOLSyntaxError('Compound quantified formula is not supported')
+            raise FOLSyntaxError(
+                'Compound quantified formula is not supported')
 
     def consts(self) -> frozenset[Const]:
         return self.quantified_formula.consts()

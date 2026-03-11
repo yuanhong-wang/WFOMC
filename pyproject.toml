@@ -9,14 +9,15 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "contexttimer>=0.3.3",
-    "dataclasses>=0.8",
     "lark>=1.2.2",
     "logzero>=1.7.0",
+    "matplotlib>=3.10.7",
     "networkx>=3.2.1",
     "numpy>=2.0.2",
     "pandas>=2.3.1",
     "prettyprinttree==2.0.1",
     "cmd2==2.7.0",
+    "psutil>=7.1.2",
     "pynauty==2.8.6",
     "python-flint>=0.8.0",
     "python-sat>=1.8.dev17",
@@ -36,4 +37,5 @@ build-backend = "hatchling.build"
 dev = [
     "ipython>=9.6.0",
     "pytest>=8.4.1",
+    "tabulate>=0.9.0",
 ]

@@ -1,7 +1,6 @@
 from .fol_grammar import function_free_logic_grammar
 from .cardinality_constraints_grammar import cc_grammar
 
-
 domain_grammar = r"""
     domain: domain_name "=" domain_spec
     domain_name: CNAME
@@ -11,11 +10,10 @@ domain_grammar = r"""
     element: CNAME
 """
 
-
 grammar = r"""
-    ?wfomcs: ffl domain weightings cardinality_constraints unary_evidence
+    ?wfomcs: ffl domain weightings cardinality_constraints
     weightings: weighting*
     weighting: weight weight predicate
 
-    weight: FLOAT | INT
+    weight: SIGNED_FLOAT | SIGNED_INT
 """ + domain_grammar + cc_grammar + function_free_logic_grammar

@@ -1,15 +1,16 @@
 from enum import Enum
-
 from .StandardWFOMC import standard_wfomc
 from .FastWFOMC import fast_wfomc
 from .IncrementalWFOMC import incremental_wfomc
 from .RecursiveWFOMC import recursive_wfomc
+from .DRWFOMC import domain_recursive_wfomc
 
 __all__ = [
     "standard_wfomc",
     "fast_wfomc",
     "incremental_wfomc",
-    "recursive_wfomc"
+    "recursive_wfomc",
+    "dr"
 ]
 
 
@@ -19,6 +20,7 @@ class Algo(Enum):
     FASTv2 = 'fastv2'
     INCREMENTAL = 'incremental'
     RECURSIVE = 'recursive'
+    DR = 'dr'
 
     def __str__(self):
         return self.value

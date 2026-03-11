@@ -19,5 +19,5 @@ rule_grammar = r"""
 """ + function_free_logic_grammar
 
 grammar = r"""
-    ?mln: rules domain cardinality_constraints unary_evidence
+    ?mln: rules domain cardinality_constraints
 """ + rule_grammar + domain_grammar + cc_grammar

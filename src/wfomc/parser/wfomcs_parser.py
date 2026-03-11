@@ -3,13 +3,15 @@ from __future__ import annotations
 from fractions import Fraction
 
 from lark import Lark
-from wfomc.fol import SC2, to_sc2, Const, Pred
-from wfomc.network import CardinalityConstraint
+from wfomc.fol.sc2 import SC2, to_sc2
+from wfomc.fol.syntax import Const, Formula, Pred
+from wfomc.network.constraint import CardinalityConstraint
+from wfomc.parser.cardinality_constraints_parser import CCTransfomer
+
+from wfomc.parser.fol_parser import FOLTransformer
+from wfomc.parser.wfomcs_grammar import grammar
 from wfomc.problems import WFOMCProblem
 from wfomc.utils import Rational
-from .cardinality_constraints_parser import CCTransfomer
-from .fol_parser import FOLTransformer
-from .wfomcs_grammar import grammar
 
 
 class WFOMSTransformer(FOLTransformer, CCTransfomer):
@@ -62,7 +64,6 @@ class WFOMSTransformer(FOLTransformer, CCTransfomer):
         domain = args[1][1]
         weightings = args[2]
         cardinality_constraints = args[3]
-        unary_evidence = args[4]
         try:
             sentence = to_sc2(sentence)
         except:
@@ -83,45 +84,55 @@ class WFOMSTransformer(FOLTransformer, CCTransfomer):
         else:
             cardinality_constraint = None
 
-        return sentence, domain, weightings, cardinality_constraint, unary_evidence
+        return sentence, domain, weightings, cardinality_constraint
 
 
 def parse(text: str) -> \
         tuple[SC2, set[Const], dict[Pred, tuple[Rational, Rational]], CardinalityConstraint]:
     """
-    Parse wfoms text into WFOMSContext
+    Parse the WFOMS text into a WFOMCProblem object. 
+    Args:
+        text (str): A text string containing the definition of the WFOMS problem. 
+    Returns:
+        WFOMC Problem: A structured object that contains the derived formula, domain, weights, and constraints.
     """
+    # 1. Initialize the parser
     wfomcs_parser = Lark(grammar,
-                        start='wfomcs')
-    tree = wfomcs_parser.parse(text)
+                        start='wfomcs') # Create a Lark parser instance. `grammar` is a predefined variable containing the complete grammar rules for the WFOMS language. `start='wfomcs'` specifies that the parsing process should begin from the 'wfomcs' rule in the grammar.
+    # 2. Parse the text
+    tree = wfomcs_parser.parse(text) # Use the parser created in the previous step to process the input `text` string. If the text conforms to the grammar rules, the `.parse()` method returns a parse tree (Tree) that hierarchically represents the syntactic structure of the input text.
+    # 3. Transform the parse tree
     (
         sentence,
         domain,
         weightings,
-        cardinality_constraint,
-        unary_evidence
-    ) = WFOMSTransformer().transform(tree)
+        cardinality_constraint
+    ) = WFOMSTransformer().transform(tree) # `WFOMSTransformer` is a custom class that traverses the parse tree `tree`. For each node in the tree (corresponding to a grammar rule), it calls a method with the same name to process that node, converting the raw text tokens into more meaningful Python objects (such as formulas, sets, dictionaries, etc.). The `.transform()` method ultimately returns a tuple containing the core components after transformation.
+    # 4. Associate predicate objects with weights
     pred_weightings = dict(
         (sentence.pred_by_name(pred), weights)
         for pred, weights in weightings.items()
-    )
+    ) # The keys in the `weightings` dictionary are predicate names as strings, but the algorithm requires the predicate objects themselves. This code creates a new dictionary `pred_weightings`. It iterates over the `weightings` dictionary, and for each predicate name, it uses `sentence.pred_by_name(pred)` to look up and retrieve the corresponding predicate (Pred) object from the parsed formula `sentence`, then uses this object as the key in the new dictionary.
+    # 5. Create and return the problem object
     return WFOMCProblem(
         sentence,
         domain,
         pred_weightings,
-        cardinality_constraint,
-        unary_evidence
-    )
+        cardinality_constraint
+    ) # Using all the parsed and processed information, create an instance of the `WFOMCProblem` class. This object encapsulates all parts together, making it convenient for subsequent algorithms to use directly.
 
 
 if __name__ == '__main__':
-    wfoms = parse(r'''
-\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+    parse(r"""
 \forall X: (~E(X,X)) &
-\forall X: (\exists Y: (E(X,Y)))
-
-vertices = 10
-0.1 1 E
-0.2 2 F
-0.3 3 G
-    ''')
+\forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+\forall X: (\exists_{<=3} Y: (E(X,Y)))
+V = 5
+    """)
+#     wfoms = parse(r'''
+# \forall X: (\forall Y: (E(X,Y) -> E(Y,X))) &
+# \forall X: (~E(X,X)) &
+# \forall X: (\exists Y: (E(X,Y)))
+#
+# v = 10
+#     ''')
