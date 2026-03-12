@@ -7,7 +7,7 @@ from contexttimer import Timer
 from wfomc.network import UnaryEvidenceEncoding
 from wfomc.problems import WFOMCProblem
 from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recursive_wfomc
-from wfomc.utils import MultinomialCoefficients, Rational, round_rational
+from wfomc.utils import MultinomialCoefficients, Rational, round_rational, Poly
 from wfomc.context import WFOMCContext
 from wfomc.parser import parse_input
 
@@ -124,5 +124,6 @@ def main() -> None:
     )
 
     print(f'WFOMC (arbitrary precision): {res}')
-    round_val = round_rational(res)
-    print(f'WFOMC (round): {round_val} (exp({round_val.ln()}))')
+    if isinstance(res, Rational):
+        round_val = round_rational(res)
+        print(f'WFOMC (round): {round_val} (exp({round_val.ln()}))')

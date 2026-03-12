@@ -75,16 +75,22 @@ wheels = [
 
 [[package]]
 name = "gnureadline"
-version = "8.2.13"
+version = "8.3.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/cb/92/20723aa239b9a8024e6f8358c789df8859ab1085a1ae106e5071727ad20f/gnureadline-8.2.13.tar.gz", hash = "sha256:c9b9e1e7ba99a80bb50c12027d6ce692574f77a65bf57bc97041cf81c0f49bd1", size = 3224991, upload-time = "2024-10-18T14:03:11.727Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/34/33/d0a1a41e687f0d1956cc5a7b07735c6893f3fa061440fddb7a2c9d2bcd35/gnureadline-8.3.3.tar.gz", hash = "sha256:0972392bd2f31244e2d981178246fe8b729c8766454fdaeb275946ac47b7e9fd", size = 3595875, upload-time = "2026-01-06T15:03:17.802Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ff/ad/a6c59fcdbc8173bc538dad042696b732d39bc8de95adb07664b124c07942/gnureadline-8.2.13-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:561a60b12f74ea7234036cc4fe558f3b46023be0dac5ed73541ece58cba2f88a", size = 160575, upload-time = "2024-10-18T14:03:37.655Z" },
-    { url = "https://files.pythonhosted.org/packages/f7/9b/464929f1e81ba4ea4fafb033c38eefedc533b503d777e91ffa12751ad34e/gnureadline-8.2.13-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:daa405028b9fe92bfbb93624e13e0674a242a1c5434b70ef61a04294502fdb65", size = 162528, upload-time = "2024-10-18T14:03:40.893Z" },
-    { url = "https://files.pythonhosted.org/packages/68/bd/df8fd060e43efd3dbdd3b210bf558ce3ef854843cd093f910f4115ebe2e9/gnureadline-8.2.13-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:9c152a82613fa012ab4331bb9a0ffddb415e37561d376b910bf9e7d535607faf", size = 160504, upload-time = "2024-10-18T14:03:49.725Z" },
-    { url = "https://files.pythonhosted.org/packages/97/ee/322e5340c8cdfa40e71bd0485a82404ad4cf9aed2260cca090f3c1a3a032/gnureadline-8.2.13-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:85e362d2d0e85e45f0affae7bbfaf998b00167c55a78d31ee0f214de9ff429d2", size = 162380, upload-time = "2024-10-18T14:03:53.129Z" },
-    { url = "https://files.pythonhosted.org/packages/a1/b0/4a3c55a05b4c1c240fd6dc204ff597432008c4649ce500688a2441d27cf4/gnureadline-8.2.13-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:2d3e33d2e0dd694d623a2ca1fae6990b52f1d25955504b7293a9350fb9912940", size = 160646, upload-time = "2024-10-18T14:04:00.723Z" },
-    { url = "https://files.pythonhosted.org/packages/3a/41/8821db40f2b0dd9cc935d6838bc63776fb5bfb1df092f8d4698ec29ada6a/gnureadline-8.2.13-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:6c550d08c4d2882a83293a724b14a262ee5078fd4fa7acdc78aa59cab26ae343", size = 162630, upload-time = "2024-10-18T14:04:02.711Z" },
+    { url = "https://files.pythonhosted.org/packages/74/9a/1a9b7c9b7b03022d8dfa02e17f66e819ef377c7c48cf91173826422382e1/gnureadline-8.3.3-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:fff8def8a9ec595e6dd9186bc4fc7061aaee34e4a0b762b120ef2398bbbbafc8", size = 166892, upload-time = "2026-01-06T15:04:00.751Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/a8/c5bb8a49dcea7819ce1a5816365f6aa15bc04efb91cc820dd985a55b9362/gnureadline-8.3.3-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:fa03cc35adeddb05412fda494b3d6851e810401341aa7abee7347f116dc74ad6", size = 166898, upload-time = "2026-01-06T15:04:02.192Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/29/cad97d1e8fc3102169a84f8fbf299b7306ebe27c2523dd0e441b40b29646/gnureadline-8.3.3-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:04ad9724dd1783d140146a1e83313918741975c1226a5dfa1b2e97560d8e36c7", size = 166926, upload-time = "2026-01-06T15:04:06.588Z" },
+    { url = "https://files.pythonhosted.org/packages/76/80/fadacc11c6ebba0a49e66c1279c95dfc4caeb3bcf05da8965fc2efb5f163/gnureadline-8.3.3-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:831599cd9fea95eae2110646d274ed0fe0e0c20cf32e0eb01a5225d9dad4f1b4", size = 166744, upload-time = "2026-01-06T15:04:07.714Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/a6/69fc7b54bbc74797c8ede68904b6b1f3fe9c891f1bb6be12a6b40d5aa76c/gnureadline-8.3.3-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:14df36d06f8102caadff0df0a87ba33b381c2b22904f0ed2ad527784f5ec9f46", size = 167501, upload-time = "2026-01-06T15:04:11.297Z" },
+    { url = "https://files.pythonhosted.org/packages/12/ae/1a20910eee2582eab73c4aea1ff6bd71ba78e0d12d58cddec32e7936fb42/gnureadline-8.3.3-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:75519fea565510a868389cd841e45d64140a323d723dda30edf72009c2e3362f", size = 167327, upload-time = "2026-01-06T15:04:12.401Z" },
+    { url = "https://files.pythonhosted.org/packages/2a/ea/93d9bcccb3f0b02f9cf07c57c2492512f75b27d82fb722629698edf5356b/gnureadline-8.3.3-cp313-cp313t-macosx_10_13_x86_64.whl", hash = "sha256:8012e70db91f13409f36655a10f9752c43d9848de6d1ed379b526f3f8a449a44", size = 168490, upload-time = "2026-01-06T15:04:16.526Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/85/fd0f7fce581c56a45e2d53e34c29c9b82b6c3fd082533872e54d105a1bf5/gnureadline-8.3.3-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:da1335bdc70fc99f45578d7cdeb89bd5a16e0d26785bbe5bcc1dc1acdd7a7734", size = 168265, upload-time = "2026-01-06T15:04:18.262Z" },
+    { url = "https://files.pythonhosted.org/packages/0c/b7/f8c9be26236c376c796a8b6ada0d4efe9bc604843d97c5bef0b86b4e865f/gnureadline-8.3.3-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:251495414ee34dd7f068e0c4f09ee46f068e0e08a75428a7fbdf41a8ffa8bb27", size = 167489, upload-time = "2026-01-06T15:04:22.465Z" },
+    { url = "https://files.pythonhosted.org/packages/bd/2b/ec2958df1bbb878d56c29b5ef7fbf1f1eb2c3b27bb3e9e1b4bff71a7dfad/gnureadline-8.3.3-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:8513db40b4c5404ad3e883ad747e0cf113ec7b0b884dff1f6f873f9a1c1d2432", size = 167309, upload-time = "2026-01-06T15:04:23.69Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/bc/f32652ca2e685ad11862a3b9976d0ff7bccdf476cd60921fba144b65cd41/gnureadline-8.3.3-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:dfd893dac7b63f71dc41dce5d31c05388e55cb7bc6b58535e2a0eb29a5ad0352", size = 168590, upload-time = "2026-01-06T15:04:28.266Z" },
+    { url = "https://files.pythonhosted.org/packages/6b/8e/30a82d454640430a472660727f16c7804848a4f4af4f0bbfca410bc4250d/gnureadline-8.3.3-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:1a954229ac14210f8efbbd724184f26a09a5b85ddb027a1f4ab64c22da59cf69", size = 168268, upload-time = "2026-01-06T15:04:29.467Z" },
 ]
 
 [[package]]
@@ -166,14 +172,14 @@ wheels = [
 
 [[package]]
 name = "markdown-it-py"
-version = "3.0.0"
+version = "4.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "mdurl" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/38/71/3b932df36c1a044d397a1f92d1cf91ee0a503d91e470cbd670aa66b07ed0/markdown-it-py-3.0.0.tar.gz", hash = "sha256:e3f60a94fa066dc52ec76661e37c851cb232d92f9886b15cb560aaada2df8feb", size = 74596, upload-time = "2023-06-03T06:41:14.443Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5b/f5/4ec618ed16cc4f8fb3b701563655a69816155e79e24a17b651541804721d/markdown_it_py-4.0.0.tar.gz", hash = "sha256:cb0a2b4aa34f932c007117b194e945bd74e0ec24133ceb5bac59009cda1cb9f3", size = 73070, upload-time = "2025-08-11T12:57:52.854Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/42/d7/1ec15b46af6af88f19b8e5ffea08fa375d433c998b8a7639e76935c14f1f/markdown_it_py-3.0.0-py3-none-any.whl", hash = "sha256:355216845c60bd96232cd8d8c40e8f9765cc86f46880e43a8fd22dc1a1a8cab1", size = 87528, upload-time = "2023-06-03T06:41:11.019Z" },
+    { url = "https://files.pythonhosted.org/packages/94/54/e7d793b573f298e1c9013b8c4dade17d481164aa517d1d7148619c2cedbf/markdown_it_py-4.0.0-py3-none-any.whl", hash = "sha256:87327c59b172c5011896038353a81343b6754500a08cd7a4973bb48c6d578147", size = 87321, upload-time = "2025-08-11T12:57:51.923Z" },
 ]
 
 [[package]]
@@ -413,9 +419,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/d0/b5/45698dcf656eec5e3
 
 [[package]]
 name = "pyperclip"
-version = "1.9.0"
+version = "1.11.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/30/23/2f0a3efc4d6a32f3b63cdff36cd398d9701d26cda58e3ab97ac79fb5e60d/pyperclip-1.9.0.tar.gz", hash = "sha256:b7de0142ddc81bfc5c7507eea19da920b92252b548b96186caf94a5e2527d310", size = 20961, upload-time = "2024-06-18T20:38:48.401Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/52/d87eba7cb129b81563019d1679026e7a112ef76855d6159d24754dbd2a51/pyperclip-1.11.0.tar.gz", hash = "sha256:244035963e4428530d9e3a6101a1ef97209c6825edab1567beac148ccc1db1b6", size = 12185, upload-time = "2025-09-26T14:40:37.245Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/80/fc9d01d5ed37ba4c42ca2b55b4339ae6e200b456be3a1aaddf4a9fa99b8c/pyperclip-1.11.0-py3-none-any.whl", hash = "sha256:299403e9ff44581cb9ba2ffeed69c7aa96a008622ad0c46cb575ca75b5b84273", size = 11063, upload-time = "2025-09-26T14:40:36.069Z" },
+]
 
 [[package]]
 name = "pyreadline3"
@@ -534,27 +543,27 @@ wheels = [
 
 [[package]]
 name = "rich"
-version = "14.0.0"
+version = "14.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "markdown-it-py" },
     { name = "pygments" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a1/53/830aa4c3066a8ab0ae9a9955976fb770fe9c6102117c8ec4ab3ea62d89e8/rich-14.0.0.tar.gz", hash = "sha256:82f1bc23a6a21ebca4ae0c45af9bdbc492ed20231dcb63f297d6d1021a9d5725", size = 224078, upload-time = "2025-03-30T14:15:14.23Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/c6/f3b320c27991c46f43ee9d856302c70dc2d0fb2dba4842ff739d5f46b393/rich-14.3.3.tar.gz", hash = "sha256:b8daa0b9e4eef54dd8cf7c86c03713f53241884e814f4e2f5fb342fe520f639b", size = 230582, upload-time = "2026-02-19T17:23:12.474Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0d/9b/63f4c7ebc259242c89b3acafdb37b41d1185c07ff0011164674e9076b491/rich-14.0.0-py3-none-any.whl", hash = "sha256:1c9491e1951aac09caffd42f448ee3d04e58923ffe14993f6e83068dc395d7e0", size = 243229, upload-time = "2025-03-30T14:15:12.283Z" },
+    { url = "https://files.pythonhosted.org/packages/14/25/b208c5683343959b670dc001595f2f3737e051da617f66c31f7c4fa93abc/rich-14.3.3-py3-none-any.whl", hash = "sha256:793431c1f8619afa7d3b52b2cdec859562b950ea0d4b6b505397612db8d5362d", size = 310458, upload-time = "2026-02-19T17:23:13.732Z" },
 ]
 
 [[package]]
 name = "rich-argparse"
-version = "1.7.1"
+version = "1.7.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "rich" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/71/a6/34460d81e5534f6d2fc8e8d91ff99a5835fdca53578eac89e4f37b3a7c6d/rich_argparse-1.7.1.tar.gz", hash = "sha256:d7a493cde94043e41ea68fb43a74405fa178de981bf7b800f7a3bd02ac5c27be", size = 38094, upload-time = "2025-05-25T20:20:35.335Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/f7/1c65e0245d4c7009a87ac92908294a66e7e7635eccf76a68550f40c6df80/rich_argparse-1.7.2.tar.gz", hash = "sha256:64fd2e948fc96e8a1a06e0e72c111c2ce7f3af74126d75c0f5f63926e7289cd1", size = 38500, upload-time = "2025-11-01T10:35:44.232Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/31/f6/5fc0574af5379606ffd57a4b68ed88f9b415eb222047fe023aefcc00a648/rich_argparse-1.7.1-py3-none-any.whl", hash = "sha256:a8650b42e4a4ff72127837632fba6b7da40784842f08d7395eb67a9cbd7b4bf9", size = 25357, upload-time = "2025-05-25T20:20:33.793Z" },
+    { url = "https://files.pythonhosted.org/packages/04/80/97b6f357ac458d9ad9872cc3183ca09ef7439ac89e030ea43053ba1294b6/rich_argparse-1.7.2-py3-none-any.whl", hash = "sha256:0559b1f47a19bbeb82bf15f95a057f99bcbbc98385532f57937f9fc57acc501a", size = 25476, upload-time = "2025-11-01T10:35:42.681Z" },
 ]
 
 [[package]]

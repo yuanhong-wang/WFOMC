@@ -1,6 +1,7 @@
 from functools import reduce
 import math
 from collections import defaultdict
+from sympy.logic.boolalg import And, Or, Not, Implies, Equivalent
 
 from .syntax import *
 
@@ -122,3 +123,22 @@ def convert_counting_formula(formula: QuantifiedFormula, domain: set[Const]):
     cardinality_constraint = (aux_pred, '=', len(domain) * count_param)
 
     return uni_formula, ext_formulas, cardinality_constraint, repeat_factor
+
+
+def formula_to_str(formula: Formula) -> str:
+    """Convert a formula to a string representation."""
+    if isinstance(formula, QuantifiedFormula):
+        return f"{formula.quantifier_scope}: ({formula_to_str(formula.quantified_formula)})"
+    if isinstance(formula, QFFormula):
+        return formula_to_str(formula.expr)
+    if isinstance(formula, And):
+        return "(" + " & ".join(formula_to_str(arg) for arg in formula.args) + ")"
+    if isinstance(formula, Or):
+        return "(" + " | ".join(formula_to_str(arg) for arg in formula.args) + ")"
+    if isinstance(formula, Not):
+        return f"~({formula_to_str(formula.args[0])})"
+    if isinstance(formula, Implies):
+        return f"({formula_to_str(formula.args[0])} -> {formula_to_str(formula.args[1])})"
+    if isinstance(formula, Equivalent):
+        return f"({formula_to_str(formula.args[0])} <-> {formula_to_str(formula.args[1])})"
+    return str(formula)

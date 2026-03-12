@@ -5,7 +5,7 @@ from functools import reduce
 from dataclasses import dataclass, field
 
 from wfomc.fol import AtomicFormula, Pred, Term, X, get_predicates
-from wfomc.utils import Rational, RingElement
+from wfomc.utils import RingElement
 
 from .utils import conditional_on
 
@@ -86,12 +86,12 @@ class TwoTable(object):
 
     def get_weight(self, evidence: frozenset[AtomicFormula] = None) -> RingElement:
         if not self.satisfiable(evidence):
-            return Rational(0, 1)
+            return 0
         conditional_models = conditional_on(self.models, self.gnd_lits, evidence)
         ret = reduce(
             lambda a, b: a + b,
             conditional_models.values(),
-            Rational(0, 1)
+            0
         )
         return ret
 
