@@ -245,6 +245,11 @@ class IncrementalWFOMC3Context(object):
             # Note: idx uses the current length of self.cnt_preds. This is because unary constraints do not add new counting predicates to the cnt_preds list, ensuring that new binary counting predicates are assigned continuous and correct indices.
             idx = len(self.cnt_preds)  # Use the current length of cnt_preds as the index
             # Note that the lengths of cnt_formulas and cnt_preds differ. Unary mod does not add to cnt_preds. To skip unary mod, do not manually increment idx = idx + 1. This is because idx must always stay synchronized with the current length of cnt_preds, keeping new predicate indices continuous and correct,
+            if comparator not in self.comparator_handlers:
+                raise ValueError(
+                    f"Unsupported comparator '{comparator}' in counting quantifier. "
+                    f"Supported comparators are: {list(self.comparator_handlers.keys())}"
+                )
             self.comparator_handlers[comparator](
                 type, idx, inner_formula, qscope, cnt_param_raw, comparator
             )

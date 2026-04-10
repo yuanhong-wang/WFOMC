@@ -171,7 +171,6 @@ class WFOMCContext(object):
             cardinality_constraint = (
                 predicate_to_constrain, comparator, count_param)
             self.cardinality_constraint.add_simple_constraint(*cardinality_constraint)
-            self.repeat_factor *= math.factorial(count_param)
         else:
             logger.info(
                 f"Handling binary counting formula with NEW encoding: {formula}"
