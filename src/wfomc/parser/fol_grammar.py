@@ -30,7 +30,7 @@ function_free_logic_grammar = r"""
     ?quantifier: universal_quantifier | existential_quantifier | counting_quantifier
     universal_quantifier: "\\forall"
     existential_quantifier: "\\exists"
-    counting_quantifier: "\\exists_{" comparator count_parameter "}"
+    counting_quantifier : "\\exists_{" comparator count_parameter "}" | "\\exists_{" INT "mod" count_parameter "}"    -> mod_quantifier   //  ∃_{r mod k}
     constant: LCASE_CNAME
     variable: UCASE_LETTER
     predicate: CNAME
@@ -55,6 +55,8 @@ function_free_logic_grammar = r"""
     %import common.DIGIT
     %import common.FLOAT
     %import common.INT
+    %import common.SIGNED_FLOAT
+    %import common.SIGNED_INT
     %import common.SIGNED_NUMBER
     %import common.NUMBER
     %import common.WS

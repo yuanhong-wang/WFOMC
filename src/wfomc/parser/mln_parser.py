@@ -1,8 +1,8 @@
 from lark import Lark
-
 from wfomc.network import CardinalityConstraint
 from wfomc.problems import MLNProblem
 from wfomc.fol.syntax import *
+
 from .cardinality_constraints_parser import CCTransfomer
 from .mln_grammar import grammar
 from .fol_parser import FOLTransformer
@@ -27,9 +27,7 @@ class MLNTransformer(FOLTransformer, CCTransfomer):
     def domain(self, args):
         domain_name, domain_spec = args
         if isinstance(domain_spec, int):
-            domain_spec = set(
-                Const(f'{domain_name}{i}') for i in range(domain_spec)
-            )
+            domain_spec = set(f'{domain_name}{i}' for i in range(domain_spec))
         return (domain_name, domain_spec)
 
     def weighting(self, args):
