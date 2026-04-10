@@ -52,7 +52,7 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
             logger.info('Modulo counting quantifier is found')
             if algo != Algo.INCREMENTAL3:
                 raise RuntimeError("Modulo counting quantifier is only supported by the "
-                                   "domain recursive WFOMC algorithm")
+                                   "incremental WFOMC3 algorithm")
 
         logger.info(f'Invoke WFOMC with {algo} algorithm and {unary_evidence_encoding} encoding')
 
