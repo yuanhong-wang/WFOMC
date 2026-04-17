@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from functools import reduce
 from loguru import logger
 from typing import Callable, Union
@@ -21,6 +23,15 @@ class SC2(Formula):
 
     def contain_counting_quantifier(self) -> bool:
         return len(self.cnt_formulas) > 0
+
+    def contain_modulo_counting_quantifier(self) -> bool:
+        for formula in self.cnt_formulas:
+            while isinstance(formula, QuantifiedFormula):
+                if isinstance(formula.quantifier_scope, Counting) and \
+                        formula.quantifier_scope.comparator == 'mod':
+                    return True
+                formula = formula.quantified_formula
+        return False
 
     def append_ext(self, formula: QuantifiedFormula):
         self.ext_formulas.append(formula)
@@ -466,11 +477,13 @@ def to_sc2(formula: Formula) -> SC2:
                     formula
                 )
                 if len(quantifier_scopes) == 2 and \
-                    isinstance(quantifier_scopes[0], Universal) and \
+                        isinstance(quantifier_scopes[0], Universal) and \
                         isinstance(quantifier_scopes[1], Counting):
-                            sc2.append_cnt(collected_formula)
+                    sc2.append_cnt(collected_formula)
+                elif len(quantifier_scopes) == 1 and isinstance(quantifier_scopes[0], Counting):
+                    sc2.append_cnt(collected_formula)
                 else:
-                    raise FOLSyntaxError(f"Not support fomula \"{collected_formula}\"")
+                    raise FOLSyntaxError(f"Not support formula \"{collected_formula}\"")
             else:
                 collected_formula = reduce(
                     lambda x, y: QuantifiedFormula(y, x),

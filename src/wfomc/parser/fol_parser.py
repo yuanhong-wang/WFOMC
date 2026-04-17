@@ -90,17 +90,35 @@ class FOLTransformer(Transformer):
         return param
 
     def counting_quantifier(self, args):
-        return QuantifiersEnum.COUNTING, args
+        """process \exists_{=k}, \exists_{<=k}, …"""
+        comparator = args[0]
+        k = int(args[1])
+        return (QuantifiersEnum.COUNTING, (comparator, k))
+
+    def mod_quantifier(self, args):
+        """
+        process \exists_{r mod k}
+        args = [r, k]
+        return ('mod', (r, k))
+        """
+        if len(args) != 2:
+            raise ValueError(
+                "Use \\exists_{r mod k}; the old \\exists_{mod k} form is unsupported."
+            )
+        r, k = map(int, args)
+        return (QuantifiersEnum.COUNTING, ('mod', (r, k)))
 
     def quantifier_variable(self, args):
-        quantifier = args[0][0]
-        if quantifier == QuantifiersEnum.UNIVERSAL:
-            return Universal(args[1])
-        elif quantifier == QuantifiersEnum.EXISTENTIAL:
-            return Existential(args[1])
-        elif quantifier == QuantifiersEnum.COUNTING:
-            comparator, count_param = args[0][1]
-            return Counting(args[1], comparator, count_param)
+        qinfo, var = args
+        qtype = qinfo[0]
+
+        if qtype == QuantifiersEnum.UNIVERSAL:
+            return Universal(var)
+        elif qtype == QuantifiersEnum.EXISTENTIAL:
+            return Existential(var)
+        else:  # COUNTING
+            comparator, param = qinfo[1]
+            return Counting(var, comparator, param)
 
     def quantification(self, args):
         quantifier, _, formula, _ = args[:]
@@ -161,9 +179,3 @@ if __name__ == '__main__':
     formula = FOLTransformer().transform(tree)
     formula = to_sc2(formula)
     print(formula)
-    # print(formula.atoms())
-    # print(formula.vars())
-    # print(formula.consts())
-    # print(formula.formula)
-    # print(list(formula.formula.formula.models()))
-    # print(formula.substitute({Var('X'): Const('tommy')}))
