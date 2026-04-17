@@ -4,11 +4,11 @@ import argparse
 from loguru import logger
 from contexttimer import Timer
 
+from wfomc.context import WFOMCContext, IncrementalWFOMC3Context
 from wfomc.network import UnaryEvidenceEncoding
 from wfomc.problems import WFOMCProblem
-from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recursive_wfomc
+from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recursive_wfomc, incremental_wfomc3
 from wfomc.utils import MultinomialCoefficients, Rational, round_rational
-from wfomc.context import WFOMCContext
 from wfomc.parser import parse_input
 
 _LOG_FORMAT = (
@@ -32,7 +32,7 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
 
         if problem.contain_linear_order_axiom():
             logger.info('Linear order axiom with the predicate LEQ is found')
-            if algo != Algo.INCREMENTAL and algo != Algo.RECURSIVE:
+            if algo != Algo.INCREMENTAL and algo != Algo.RECURSIVE and algo != Algo.INCREMENTAL3:
                 raise RuntimeError("Linear order axiom is only supported by the "
                                    "incremental and recursive WFOMC algorithms")
         if problem.contain_predecessor_axiom():
@@ -48,9 +48,18 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
                 raise RuntimeError("Partition constraint is only supported for the "
                                    "fastv2 WFOMC and incremental WFOMC algorithms")
 
+        if problem.sentence.contain_modulo_counting_quantifier():
+            logger.info('Modulo counting quantifier is found')
+            if algo != Algo.INCREMENTAL3:
+                raise RuntimeError("Modulo counting quantifier is only supported by the "
+                                   "incremental WFOMC3 algorithm")
+
         logger.info(f'Invoke WFOMC with {algo} algorithm and {unary_evidence_encoding} encoding')
 
-        context = WFOMCContext(problem, unary_evidence_encoding)
+        if algo == Algo.INCREMENTAL3:
+            context = IncrementalWFOMC3Context(problem)
+        else:
+            context = WFOMCContext(problem, unary_evidence_encoding)
         with Timer() as t:
             if algo == Algo.STANDARD:
                 res = standard_wfomc(context)
@@ -62,6 +71,8 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
                 res = incremental_wfomc(context, problem.circle_len)
             elif algo == Algo.RECURSIVE:
                 res = recursive_wfomc(context)
+            elif algo == Algo.INCREMENTAL3:
+                res = incremental_wfomc3(context)
             res = context.decode_result(res)
         logger.info('WFOMC time: {}', t.elapsed)
         return res
@@ -112,6 +123,7 @@ def main() -> None:
         filter="wfomc",
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{line} - {message}",
     )
+
 
     with Timer() as t:
         problem = parse_input(args.input, debug=args.debug)

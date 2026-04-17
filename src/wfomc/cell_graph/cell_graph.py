@@ -12,11 +12,27 @@ from copy import deepcopy
 from wfomc.fol import AtomicFormula, Const, Pred, QFFormula, a, b, c, top
 from wfomc.network import PartitionConstraint
 from wfomc.utils import Rational, RingElement, MultinomialCoefficients
-
 from .components import Cell, TwoTable
 from .utils import conditional_on
 
+"""
+cell_graph.py is the core data structure module of the WFOMC (Weighted First-Order Model Counting) algorithm. Its main function is to convert an abstract first-order logic problem into a specific and computable graph structure, namely "cell graph".
 
+This process is a crucial step in "Lifted Inference", and its underlying concept is as follows:
+
+Cell: In the domain of discourse, all elements that share the same property (satisfy the same unary predicate) are grouped together. This group is called a "cell" or a "1-type".
+Cell Graph:
+    The nodes of the graph represent all possible cells.
+    Each node has a weight, indicating the weight of a single element belonging to that cell.
+    The edges of the graph represent the interaction relationships between two cells. The weight of the edge (represented by the TwoTable in the code) describes the weighted model number of the binary predicate satisfied when one element is taken from each of these two cells.
+    By constructing this graph, the algorithm can elevate reasoning from the level of individual elements to the level of "cell types", thereby efficiently handling large domain problems.
+
+The file mainly contains three core classes and a factory function:
+    CellGraph: The basic implementation of the cell graph.
+    OptimizedCellGraph: An optimized version of CellGraph that accelerates computation by identifying and exploiting symmetries (cliques) and independencies, used in the FastWFOMC algorithm.
+    OptimizedCellGraphWithPC: Builds upon OptimizedCellGraph by adding support for Partition Constraints.
+    build_cell_graphs: A factory function that decides which type of CellGraph instance to create based on input parameters.
+"""
 class CellGraph(object):
     """
     Cell graph that handles cells and the wmc between them.
@@ -41,19 +57,20 @@ class CellGraph(object):
         self.preds: tuple[Pred] = tuple(self.formula.preds())
         logger.debug('prednames: {}', self.preds)
 
+        # --- Instantiate formulas ---
         gnd_formula_ab1: QFFormula = self._ground_on_tuple(
             self.formula, a, b
-        )
+        ) # To compute cells (1-types) and their relationships (2-types), the formula needs to be instantiated. # Replace variables in the formula with (a, b)
         gnd_formula_ab2: QFFormula = self._ground_on_tuple(
             self.formula, b, a
-        )
+        )# Replace variables in the formula with (b, a) to ensure symmetry
         self.gnd_formula_ab: QFFormula = \
-            gnd_formula_ab1 & gnd_formula_ab2
+            gnd_formula_ab1 & gnd_formula_ab2 # `gnd_formula_ab` is used to calculate the interaction between any two elements and is the conjunction of the two.
         self.gnd_formula_cc: QFFormula = self._ground_on_tuple(
             self.formula, c
-        )
-        if self.leq_pred is not None:
-            self.gnd_formula_cc = self.gnd_formula_cc & self.leq_pred(c, c)
+        )# `gnd_formula_cc` is used to define the type of a single element (cell), replacing variables with (c, c).
+        if self.leq_pred is not None: # If a linear order exists, the order relation needs to be added to the instantiated formula.
+            self.gnd_formula_cc = self.gnd_formula_cc & self.leq_pred(c, c) # A single element must satisfy c <= c (reflexivity).
             self.gnd_formula_ab = self.gnd_formula_ab & \
                 self.leq_pred(b, a) & \
                 (~self.leq_pred(a, b))
@@ -93,13 +110,13 @@ class CellGraph(object):
             logger.info(f'ground a, b with predecessor: {self.gnd_formula_ab_with_preds}')
 
         # build cells
-        self.cells: list[Cell] = self._build_cells()
+        self.cells: list[Cell] = self._build_cells() # `_build_cells` finds all possible cell types based on `gnd_formula_cc`.
         # filter cells
         logger.info('the number of valid cells: {}',
                     len(self.cells))
 
         logger.info('computing cell weights')
-        self.cell_weights: dict[Cell, RingElement] = self._compute_cell_weights()
+        self.cell_weights: dict[Cell, RingElement] = self._compute_cell_weights() # `_compute_cell_weights` computes the weight of each cell.
         logger.info('computing two table weights')
         self.two_tables: dict[tuple[Cell, Cell],
                               TwoTable] = self._build_two_tables(self.gnd_formula_ab)
@@ -113,20 +130,21 @@ class CellGraph(object):
 
     def _ground_on_tuple(self, formula: QFFormula,
                          c1: Const, c2: Const = None) -> QFFormula:
-        variables = formula.vars()
+        """Helper function to substitute variables in the formula with constants (c1, c2)."""
+        variables = formula.vars() # Extract all free variables from the input formula. For example, for the formula P(x) & R(x, y), `variables` will be {'x', 'y'}.
         if len(variables) > 2:
             raise RuntimeError(
                 "Can only ground out FO2"
             )
-        if len(variables) == 1:
-            constants = [c1]
-        else:
-            if c2 is not None:
+        if len(variables) == 1: # Case 1: The formula has only one variable, e.g., P(x).
+            constants = [c1] # Then this variable will be replaced by the first constant `c1`.
+        else: # Case 2: The formula has two or zero variables.
+            if c2 is not None: # If the second constant `c2` is provided (i.e., not None).
                 constants = [c1, c2]
-            else:
+            else: # If the second constant `c2` is not provided.
                 constants = [c1, c1]
-        substitution = dict(zip(variables, constants))
-        gnd_formula = formula.substitute(substitution)
+        substitution = dict(zip(variables, constants)) # Create a substitution dictionary. `zip` pairs the list of variables with the list of constants. For example, if variables are (x, y) and constants are [a, b], the dictionary will be {'x': a, 'y': b}.
+        gnd_formula = formula.substitute(substitution) # Call the `substitute` method of the formula object, passing the substitution dictionary. This method returns a new formula object with variables replaced by constants.
         # NOTE: workaround for the case where ground binary atoms not appearing in the formula
         if c2 is not None:
             binary_preds = list(filter(
@@ -176,12 +194,14 @@ class CellGraph(object):
         return str(self)
 
     def get_cells(self, cell_filter: Callable[[Cell], bool] = None) -> list[Cell]:
+        """Obtain the list of cells, and selectively apply filtering."""
         if cell_filter is None:
             return self.cells
         return list(filter(cell_filter, self.cells))
 
     @functools.lru_cache(maxsize=None, typed=True)
     def get_cell_weight(self, cell: Cell) -> RingElement:
+        """Get the weight of a single cell (with caching)."""
         if cell not in self.cell_weights:
             logger.warning(
                 "Cell %s not found", cell
@@ -190,6 +210,7 @@ class CellGraph(object):
         return self.cell_weights.get(cell)
 
     def _check_existence(self, cells: tuple[Cell, Cell]):
+        """Check if the given pair of cells exists in two_tables."""
         if cells not in self.two_tables:
             raise ValueError(
                 f"Cells {cells} not found, note that the order of cells matters!"
@@ -198,6 +219,7 @@ class CellGraph(object):
     @functools.lru_cache(maxsize=None, typed=True)
     def get_two_table_weight(self, cells: tuple[Cell, Cell],
                              evidences: frozenset[AtomicFormula] = None) -> RingElement:
+        """Obtain the interaction weight between two cells (with caching)."""
         self._check_existence(cells)
         return self.two_tables.get(cells).get_weight(evidences)
 
@@ -236,12 +258,13 @@ class CellGraph(object):
         return self.two_tables.get(cells).get_two_tables(evidences)
 
     def _build_cells(self):
+        """Build all possible cells (1-types)."""
         cells = []
         code = {}
-        for model in self.gnd_formula_cc.models():
-            for lit in model:
+        for model in self.gnd_formula_cc.models(): # Iterate over all models of the single-element grounded formula `gnd_formula_cc`. Each model represents a valid element type.
+            for lit in model: # Convert the model (a set of truth assignments) into a code.
                 code[lit.pred] = lit.positive
-            cells.append(Cell(tuple(code[p] for p in self.preds), self.preds))
+            cells.append(Cell(tuple(code[p] for p in self.preds), self.preds)) # Create a Cell object with this code.
         return cells
 
     def _compute_cell_weights(self):
@@ -290,9 +313,8 @@ class CellGraph(object):
             models_1 = conditional_on(models, gnd_lits, cell.get_evidences(a))
             for j, other_cell in enumerate(self.cells):
                 # NOTE: leq is sensitive to the order of cells
-                if i > j and self.leq_pred is None:
-                    tables[(cell, other_cell)] = tables[(other_cell, cell)]
-                    continue
+                # if i > j and self.leq_pred is None: # When leq_pred is not defined, the relationship between (cell, other_cell) and (other_cell, cell) is considered undefined. Because when i > j, the tuple (other_cell, cell) corresponding to index j and index i has already been calculated in the previous loop.
+                #     tables[(cell, other_cell)] = tables[(other_cell, cell)] # The constraint on B(X, Y) is about "out-degree". It requires that the "out-degree" of each node X (the number of Y for which B(X, Y) is true) must be odd. However, it imposes no requirements on the "in-degree" of the node (the number of Y for which B(Y, X) is true). Therefore, the truth values of B(X, Y) and B(Y, X) may be different.
                 models_2 = conditional_on(models_1, gnd_lits,
                                           other_cell.get_evidences(b))
                 tables[(cell, other_cell)] = TwoTable(
@@ -777,7 +799,7 @@ def build_cell_graphs(formula: QFFormula,
     nullary_atoms = [atom for atom in formula.atoms() if atom.pred.arity == 0]
     if len(nullary_atoms) == 0:
         logger.info('No nullary atoms found, building a single cell graph')
-        if not optimized:
+        if not optimized: # Decide whether to create the basic version or the optimized version based on the `optimized` parameter.
             yield CellGraph(
                 formula, get_weight, leq_pred, predecessor_preds
             ), Rational(1, 1)
