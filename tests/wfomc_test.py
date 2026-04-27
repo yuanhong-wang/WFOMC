@@ -28,7 +28,7 @@ models_dir2args = {
         (Algo.FASTv2, ),
         (Algo.INCREMENTAL, ),
         (Algo.INCREMENTAL3, ),
-        # (Algo.RECURSIVE, ),
+        (Algo.RECURSIVE, ),
     ),
     current_path.parent / 'models' / 'unary_evidence': (
         (Algo.STANDARD, UnaryEvidenceEncoding.CCS),
@@ -36,19 +36,19 @@ models_dir2args = {
         (Algo.FASTv2, UnaryEvidenceEncoding.CCS),
         (Algo.INCREMENTAL, UnaryEvidenceEncoding.CCS),
         (Algo.INCREMENTAL3, UnaryEvidenceEncoding.CCS),
-        # (Algo.RECURSIVE, UnaryEvidenceEncoding.CCS),
+        (Algo.RECURSIVE, UnaryEvidenceEncoding.CCS),
         (Algo.INCREMENTAL, UnaryEvidenceEncoding.PC),
         (Algo.FASTv2, UnaryEvidenceEncoding.PC),
     ),
     current_path.parent / 'models' / 'linear_order': (
         (Algo.INCREMENTAL, ),
         (Algo.INCREMENTAL3, ),
-        # (Algo.RECURSIVE, ),
+        (Algo.RECURSIVE, ),
     ),
     current_path.parent / 'models' / 'linear_order_unary_evidence': (
         (Algo.INCREMENTAL, UnaryEvidenceEncoding.CCS),
         (Algo.INCREMENTAL3, UnaryEvidenceEncoding.CCS),
-        # (Algo.RECURSIVE, UnaryEvidenceEncoding.CCS),
+        (Algo.RECURSIVE, UnaryEvidenceEncoding.CCS),
         (Algo.INCREMENTAL, UnaryEvidenceEncoding.PC),
     ),
     current_path.parent / 'models' / 'predk': (
@@ -56,7 +56,7 @@ models_dir2args = {
     ),
     current_path.parent / 'models' / 'regular_graphs': (
         (Algo.FASTv2, ),
-        # (Algo.RECURSIVE, ),
+        (Algo.RECURSIVE, ),
         (Algo.INCREMENTAL3, ),
     ),
     current_path.parent / 'models' / 'modk': (
