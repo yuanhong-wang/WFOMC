@@ -29,12 +29,11 @@ module-level constant ``LINEAR_ORDER_ENCODING``:
 
 ``PREDk`` for ``k > 1`` is rejected with a clear error in both encodings.
 
-Unary evidence is handled directly: when called via ``wfomc()`` with
-``algo=Algo.PROPOSITIONAL``, the solver overrides the unary-evidence
-encoding to ``UnaryEvidenceEncoding.NONE`` so the context skips the CCS /
-PC preprocessing entirely; this module then emits one ground unit clause
-per evidence atom. As a result, evidence-only problems stay in ganak's
-rational ``--mode 1`` instead of being lifted into polynomial ``--mode 3``.
+Unary evidence can be handled directly when the effective unary evidence
+strategy is ``UnaryEvidenceStrategy.AUTO``; this module then emits one ground
+unit clause per evidence atom. The solver resolves AUTO to CCS for the
+pin-and-multiply linear-order path where direct element-specific evidence
+would break the symmetry argument.
 """
 from __future__ import annotations
 
@@ -47,10 +46,9 @@ from sympy.logic.boolalg import And, BooleanFalse, BooleanTrue, Not, Or, to_cnf
 
 from flint import fmpq_mpoly, fmpq_mpoly_ctx
 
-from wfomc.context import WFOMCContext
+from wfomc.context import UnaryEvidenceStrategy, WFOMCContext
 from wfomc.fol import boolean_algebra as backend
 from wfomc.fol.syntax import AtomicFormula, Bot, Const, Pred, Top, X, Y
-from wfomc.network import UnaryEvidenceEncoding
 from wfomc.utils import Rational, RingElement
 from wfomc.utils.polynomial_flint import align_ctx
 
@@ -329,11 +327,6 @@ def _ground_circular_pred_definition(
 # ---------------------------------------------------------------------------
 def _validate_supported(context: WFOMCContext) -> None:
     """Reject features outside the propositional counter's scope."""
-    if context.contain_partition_constraint():
-        raise GanakError(
-            'the propositional counter does not support the partition-constraint '
-            '(pc) unary-evidence encoding; use the default ccs encoding'
-        )
     cpred = context.circular_predecessor_pred
     for k, pred in (context.predecessor_preds or {}).items():
         if pred == cpred:
@@ -415,25 +408,30 @@ def propositional_wfomc(
         return next_id[0]
 
     # --- Unary evidence: direct unit-clause encoding ------------------------
-    # Only valid when the solver has chosen ``UnaryEvidenceEncoding.NONE``.
+    # Only valid when the solver has chosen the AUTO strategy.
     # Direct evidence is element-specific, which breaks the symmetry argument
     # behind pin-and-multiply for the linear-order axioms; the solver
     # therefore keeps CCS encoding in the ``pin`` + order-axiom case, and the
     # CCS path is handled by the standard ``context.formula`` + cardinality
     # constraint already populated by ``WFOMCContext._build``.
     if context.unary_evidence and \
-            context.unary_evidence_encoding == UnaryEvidenceEncoding.NONE:
+            context.unary_evidence_strategy == UnaryEvidenceStrategy.AUTO:
+        evidence_preds = sorted(
+            {atom.pred for atom in context.unary_evidence},
+            key=lambda pred: (pred.name, pred.arity),
+        )
+        for pred in evidence_preds:
+            for const in domain:
+                key = pred(const).make_positive()
+                if key not in atom2id:
+                    vid = fresh()
+                    atom2id[key] = vid
+                    id2pred[vid] = pred
         added = 0
         for atom in sorted(context.unary_evidence,
                             key=lambda a: (a.pred.name, str(a.args), a.positive)):
             key = atom.make_positive()
-            vid = atom2id.get(key)
-            if vid is None:
-                # Evidence on a predicate not otherwise in the formula
-                # vocabulary -- allocate a fresh propositional variable.
-                vid = fresh()
-                atom2id[key] = vid
-                id2pred[vid] = atom.pred
+            vid = atom2id[key]
             clauses.append(frozenset([vid if atom.positive else -vid]))
             added += 1
         logger.info('Added {} unary-evidence unit clauses', added)

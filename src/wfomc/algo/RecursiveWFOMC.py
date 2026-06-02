@@ -1,13 +1,14 @@
 import math
 import functools
 from collections import Counter
-from typing import Callable
 import pynauty
 import networkx as nx
+from loguru import logger
+from flint import fmpq as Rational
 
-from wfomc.cell_graph import CellGraph, build_cell_graphs
+from wfomc.cell_graph import CellGraph
 from wfomc.utils import RingElement
-from wfomc.fol.syntax import Const, Pred, QFFormula
+from wfomc.utils.polynomial_flint import expand
 from wfomc.context import WFOMCContext
 
 class NautyContext(object):
@@ -22,6 +23,7 @@ class NautyContext(object):
         self.vertex_weight_to_color = {}
         self.adjacency_dict = {}
         self.cache_for_nauty = {}
+        self.use_nauty = False
         self.ig_cache = IsomorphicGraphCache(domain_size)
 
         self.edgeWeight_to_edgeColor(edge_weights)
@@ -77,14 +79,27 @@ class NautyContext(object):
         self.adjacency_dict = adjacency_dict
 
     def create_graph(self):
+        if not hasattr(pynauty, "Graph") or not hasattr(pynauty, "certificate"):
+            logger.warning(
+                "pynauty Graph/certificate is unavailable; recursive WFOMC "
+                "will use non-isomorphic cache keys"
+            )
+            return
         self.graph = pynauty.Graph(self.node_num,
                               directed=False,
                               adjacency_dict=self.adjacency_dict)
+        self.use_nauty = True
 
     def update_graph(self, colored_vertices):
         # for speed up, we can modify the function 'set_vertex_coloring' in graph.py of pynauty
         self.graph.set_vertex_coloring(colored_vertices)
         return self.graph
+
+    def certificate(self, adjust_vertex_colors, no_color):
+        if not self.use_nauty:
+            return tuple(adjust_vertex_colors)
+        colored_vertices = self.extend_vertex_coloring(adjust_vertex_colors, no_color)
+        return pynauty.certificate(self.update_graph(colored_vertices))
 
     # @functools.lru_cache(maxsize=None)
     def get_vertex_color(self, weight):
@@ -203,11 +218,11 @@ def adjust_vertex_coloring(colored_vertices):
     return [rank[x] for x in colored_vertices], len(sorted_colors)
 
 def dfs_wfomc_real(cell_weights, edge_weights, domain_size, nauty_ctx: NautyContext, node: TreeNode = None):
-    res = 0
+    res = Rational(0, 1)
     cell_num = len(cell_weights)
     for l in range(cell_num):
         w_l = cell_weights[l]
-        new_cell_weights = [cell_weights[i] * edge_weights[l][i] for i in range(cell_num)]
+        new_cell_weights = [expand(cell_weights[i] * edge_weights[l][i]) for i in range(cell_num)]
         if PRINT_TREE:
             node.cell_to_children[l] = TreeNode(new_cell_weights, node.depth+1)
         if domain_size - 1 == 1:
@@ -215,14 +230,14 @@ def dfs_wfomc_real(cell_weights, edge_weights, domain_size, nauty_ctx: NautyCont
         else:
             # convert cell weights to vertex colors
             original_vertex_colors, vertex_color_kind, vertex_color_count = nauty_ctx.cellWeight_To_vertexColor(new_cell_weights)
-            if ENABLE_ISOMORPHISM:
+            if ENABLE_ISOMORPHISM and nauty_ctx.use_nauty:
                 # adjust the color no. of vertices to make them start from 0 and be continuous to add the hit rate of "CACHE_FOR_NAUTY"
                 # here we dont need to consider the different "original_vertex_colors"s with the same "adjust_vertex_colors",
                 # since our IG_CACHE has multiple keys (vertex_color_kind, vertex_color_count) to distinguish them
                 # even if they have the same "adjust_vertex_colors" but different "vertex_color_kind" or "vertex_color_count"
                 adjust_vertex_colors, no_color = adjust_vertex_coloring(original_vertex_colors)
                 if tuple(adjust_vertex_colors) not in nauty_ctx.cache_for_nauty:
-                    can_label = pynauty.certificate(nauty_ctx.update_graph(nauty_ctx.extend_vertex_coloring(adjust_vertex_colors, no_color)))
+                    can_label = nauty_ctx.certificate(adjust_vertex_colors, no_color)
                     nauty_ctx.cache_for_nauty[tuple(adjust_vertex_colors)] = can_label
                 else:
                     can_label = nauty_ctx.cache_for_nauty[tuple(adjust_vertex_colors)]
@@ -232,6 +247,7 @@ def dfs_wfomc_real(cell_weights, edge_weights, domain_size, nauty_ctx: NautyCont
             value = nauty_ctx.ig_cache.get(domain_size-1, vertex_color_kind, vertex_color_count, can_label)
             if value is None:
                 value = dfs_wfomc_real(new_cell_weights, edge_weights, domain_size - 1, nauty_ctx, node.cell_to_children[l] if PRINT_TREE else None)
+                value = expand(value)
                 nauty_ctx.ig_cache.set(domain_size-1, vertex_color_kind, vertex_color_count, can_label, value)
         res += w_l * value # * expand(gcd**(domain_size - 1))
     return res
@@ -242,12 +258,12 @@ def find_independent_sets(cell_graph: CellGraph) -> tuple[list[int], list[int], 
     g.add_nodes_from(range(len(cells)))
     for i in range(len(cells)):
         for j in range(i + 1, len(cells)):
-            if cell_graph.get_two_table_weight((cells[i], cells[j])) != 1:
+            if cell_graph.get_two_table_weight((cells[i], cells[j])) != Rational(1, 1):
                 g.add_edge(i, j)
 
     self_loop = set()
     for i in range(len(cells)):
-        if cell_graph.get_two_table_weight((cells[i], cells[i])) != 1:
+        if cell_graph.get_two_table_weight((cells[i], cells[i])) != Rational(1, 1):
             self_loop.add(i)
 
     non_self_loop = g.nodes - self_loop
@@ -277,14 +293,11 @@ def cache_size(nauty_ctx: NautyContext, ig_cache: IsomorphicGraphCache):
 
 ENABLE_ISOMORPHISM = True
 def recursive_wfomc(context: WFOMCContext) -> RingElement:
-    formula: QFFormula = context.formula
-    domain: set[Const] = context.domain
-    get_weight: Callable[[Pred], tuple[RingElement, RingElement]] = context._get_weight
-    leq_pred: Pred = context.leq_pred
-
-    domain_size = len(domain)
-    res = 0
-    for cell_graph, weight in build_cell_graphs(formula, get_weight, leq_pred=leq_pred):
+    domain_size = len(context.domain)
+    res = Rational(0, 1)
+    for cell_graph, weight in context.build_cell_graphs(
+        leq_pred=context.leq_pred
+    ):
         cell_weights = cell_graph.get_all_weights()[0]
         edge_weights = cell_graph.get_all_weights()[1]
 

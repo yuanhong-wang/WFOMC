@@ -16,7 +16,7 @@ dependencies = [
     "pandas>=2.3.1",
     "prettyprinttree==2.0.1",
     "cmd2==2.7.0",
-    "pynauty==2.8.6",
+    "pynauty==2.8.8.1",
     "python-flint>=0.8.0",
     "python-sat>=1.8.dev17",
     "symengine>=0.14.1",

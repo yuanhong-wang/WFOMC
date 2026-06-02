@@ -1,10 +1,12 @@
-from wfomc.cell_graph import CellGraph, Cell, build_cell_graphs
-from wfomc.context import WFOMCContext
-from wfomc.utils import MultinomialCoefficients, multinomial, RingElement
+from flint import fmpq as Rational
+
+from wfomc.cell_graph import CellGraph, Cell
+from wfomc.context import CellEvidenceAllocation, WFOMCContext
+from wfomc.utils import RingElement
 
 def get_config_weight_standard(cell_graph: CellGraph,
                                cell_config: dict[Cell, int]) -> RingElement:
-    res = 1
+    res = Rational(1, 1)
     for cell, n in cell_config.items():
         if n > 0:
             # NOTE: nullary weight is multiplied once
@@ -31,22 +33,19 @@ def get_config_weight_standard(cell_graph: CellGraph,
 
 def standard_wfomc(context: WFOMCContext) -> RingElement:
     # cell_graph.show()
-    formula = context.formula
     domain = context.domain
-    get_weight = context._get_weight
-    res = 0
+    res = Rational(0, 1)
     domain_size = len(domain)
-    for cell_graph, weight in build_cell_graphs(formula, get_weight):
-        res_ = 0
+    for cell_graph, weight in context.build_cell_graphs():
+        res_ = Rational(0, 1)
         cells = cell_graph.get_cells()
-        n_cells = len(cells)
-        for partition in multinomial(n_cells, domain_size):
-            coef = MultinomialCoefficients.coef(partition)
-            cell_config = dict(zip(cells, partition))
-            # logger.debug(
-            #     '=' * 15 + ' Compute WFOMC for the partition %s ' + '=' * 15,
-            #     dict(filter(lambda x: x[1] != 0, cell_config.items())
-            # ))
+        allocation = context.cell_evidence_allocation(cells)
+        if allocation is None:
+            allocation = CellEvidenceAllocation.unconstrained(
+                len(cells), domain_size
+            )
+        for config, coef in allocation.iter_config_coefficients():
+            cell_config = dict(zip(cells, config))
             res_ = res_ + coef * get_config_weight_standard(
                 cell_graph, cell_config
             )

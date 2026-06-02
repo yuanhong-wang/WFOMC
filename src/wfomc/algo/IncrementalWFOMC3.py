@@ -7,16 +7,23 @@ from typing import Callable
 from flint import fmpq as Rational
 from loguru import logger
 
-from wfomc.cell_graph import build_cell_graphs
-from wfomc.context import IncrementalWFOMC3Context, CountingState
+from wfomc.context import (
+    CellConfigCoefficientBasis,
+    CellEvidenceAllocation,
+    CountingState,
+    IncrementalWFOMC3Context,
+)
 from wfomc.fol import Const, Pred
-from wfomc.utils import multinomial, MultinomialCoefficients, expand, RingElement
+from wfomc.utils import (
+    MultinomialCoefficients,
+    expand,
+    RingElement,
+)
 
 
 # ---------------------------------------------------------------------------
 # Infrastructure
 # ---------------------------------------------------------------------------
-
 
 Config = tuple[int, ...]
 State = tuple[int, ...]
@@ -308,8 +315,6 @@ def _make_domain_recursion(
 
 def incremental_wfomc3(context: IncrementalWFOMC3Context) -> RingElement:
     domain: set[Const] = context.domain
-    formula = context.formula
-    get_weight = context._get_weight
     leq_pred: Pred = context.leq_pred
     cs = context.counting_state
     has_lo = context.contain_linear_order_axiom()
@@ -318,7 +323,7 @@ def incremental_wfomc3(context: IncrementalWFOMC3Context) -> RingElement:
     domain_size = len(domain)
     MultinomialCoefficients.setup(domain_size)
 
-    for cell_graph, graph_weight in build_cell_graphs(formula, get_weight, leq_pred):
+    for cell_graph, graph_weight in context.build_cell_graphs(leq_pred=leq_pred):
         cells = cell_graph.get_cells()
         n_cells = len(cells)
 
@@ -331,7 +336,19 @@ def incremental_wfomc3(context: IncrementalWFOMC3Context) -> RingElement:
         space = ConfigSpace((n_cells,) + tuple(cs.c_type_shape))
         domain_recursion = _make_domain_recursion(t_update_dict, space, cs, has_lo)
 
-        for config in multinomial(n_cells, domain_size):
+        allocation = context.cell_evidence_allocation(cells)
+        if allocation is None:
+            allocation = CellEvidenceAllocation.unconstrained(
+                n_cells, domain_size
+            )
+        coefficient_basis = (
+            CellConfigCoefficientBasis.RELATIVE_TO_CELL_MULTINOMIAL
+            if has_lo
+            else CellConfigCoefficientBasis.ABSOLUTE
+        )
+        config_source = allocation.iter_config_coefficients(coefficient_basis)
+
+        for config, coef in config_source:
             logger.debug("Config: {}", config)
             if any(context.unary_handler.check(config, unary_mask)):
                 continue
@@ -345,9 +362,6 @@ def incremental_wfomc3(context: IncrementalWFOMC3Context) -> RingElement:
 
             result_config = domain_recursion(tuple(init_list))
 
-            if has_lo:
-                WFOMC_result += W * result_config * graph_weight
-            else:
-                WFOMC_result += MultinomialCoefficients.coef(config) * W * result_config * graph_weight
+            WFOMC_result += coef * W * result_config * graph_weight
 
     return expand(WFOMC_result)

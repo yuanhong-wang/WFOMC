@@ -829,9 +829,12 @@ wheels = [
 
 [[package]]
 name = "pynauty"
-version = "2.8.6"
+version = "2.8.8.1"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple/" }
-sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/d0/b5/45698dcf656eec5e3d403864502f074dd62a95a3ced41056ea7158616efa/pynauty-2.8.6.tar.gz", hash = "sha256:7685cd01bc3835341921b42821e2cd7da1d287c4726aa845da290edbfa07d528", size = 1717165, upload-time = "2022-11-25T00:24:49.605Z" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/a3/23/0f7ac6e39e60c8a7ae385cc8da372d7d1608c087f8d5fa9d99e6bb130466/pynauty-2.8.8.1.tar.gz", hash = "sha256:454d3b0e605d649d13478afb090daef4a152f15c4a337a391fe69fded7e683f2", size = 2328874, upload-time = "2024-06-06T18:12:07.442Z" }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/b7/63/bd34818a92c7ee76f4af4049b3a22c8e65b9535c33e793d31ddffaec9455/pynauty-2.8.8.1-cp312-cp312-manylinux_2_39_x86_64.whl", hash = "sha256:2d9c7e23000137434dc8a0301779d891868f76c17bcbcafd2b5cc27a9636ab32", size = 194801, upload-time = "2024-06-06T18:12:04.291Z" },
+]
 
 [[package]]
 name = "pyparsing"
@@ -1166,7 +1169,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.0.2" },
     { name = "pandas", specifier = ">=2.3.1" },
     { name = "prettyprinttree", specifier = "==2.0.1" },
-    { name = "pynauty", specifier = "==2.8.6" },
+    { name = "pynauty", specifier = "==2.8.8.1" },
     { name = "python-flint", specifier = ">=0.8.0" },
     { name = "python-sat", specifier = ">=1.8.dev17" },
     { name = "symengine", specifier = ">=0.14.1" },

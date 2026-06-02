@@ -17,7 +17,7 @@ uv sync
 
 ### How to use
 ```
-$ uv run wfomc -i [input] -a [algo] -e [unary_evidence_encoding] [-l [linear_order_encoding]]
+$ uv run wfomc -i [input] -a [algo] -e [unary_evidence_strategy]
 ```
 where
 - `input` is the input file with the suffix `.wfomcs` or `.mln`
@@ -27,126 +27,30 @@ where
   - `fastv2` (default): the optimized fast WFOMC algorithm
   - `incremental`: the incremental WFOMC algorithm for linear order axiom in Toth and Kuzelka (2022)
   - `recursive`: the recursive WFOMC algorithm for linear order axiom in Meng et al. (2024)
-  - `propositional`: ground the (Skolemized) sentence over the domain and count with the external [ganak](https://github.com/meelgroup/ganak) propositional model counter. Intended as a ground-truth baseline. Requires a ganak binary; see *Propositional counter* below.
-- `unary_evidence_encoding` is the encoding for unary evidence, including:
-  - `ccs` (default): using cardinality constraints to encode unary evidence, see Wang et al. (2024)
-  - `pc`: **only work for the algorithms `fast`, `fastv2` and `incremental`**
-- `linear_order_encoding` (only used by `-a propositional`) controls how the order axioms (`LEQ` / `PRED` / `CIRCULAR_PRED`) are encoded:
-  - `pin` (default): pin every ground order atom to a canonical sorted order/cycle; `decode_result` applies the `n!` multiplier. Cheap, fast.
-  - `axioms`: emit the FO³ axioms / definitions explicitly. Pin-free but materially slower. See *Propositional counter* below for the trade-off.
+- `unary_evidence_strategy` is the unary evidence strategy, including:
+  - `auto` (default): selects the best supported implementation for each
+    algorithm
+  - `ccs`: forces the modular auxiliary-predicate and cardinality-constraint
+    encoding
 
-### Python API
+Unary evidence is represented once as a `UnaryEvidencePartition` and compiled
+into a `CellEvidenceAllocation` for each cell graph. With `auto`, the current
+implementation mapping is:
 
-You can also call the solver directly from a Python script:
+| Algorithm | Unary evidence strategy |
+| --- | --- |
+| `standard` | evidence-profile configuration coefficients |
+| `fast` | classic CCS fallback |
+| `fastv2` | evidence-expanded cell graph view |
+| `incremental` | threaded evidence-profile capacities |
+| `incremental3` | evidence-profile configuration coefficients |
+| `recursive` | classic CCS fallback |
 
-```python
-from sympy import symbols
-from wfomc import Algo, Const, Pred, Rational, WFOMCProblem, fol_parse, to_sc2, wfomc
+The explicit `ccs` strategy is available for every algorithm as an independent,
+modular correctness reference.
 
-x = symbols("x")
-domain = {Const("a"), Const("b"), Const("c")}
-sentence = to_sc2(fol_parse(r"\forall X: (P(X))"))
-weights = {
-    Pred("P", 1): (x, Rational(1, 1)),
-}
-
-problem = WFOMCProblem(sentence, domain, weights)
-result = wfomc(problem, algo=Algo.FASTv2)
-
-print(result)                  # exact result
-print(result.constant_value())  # SymPy Rational, or None for polynomial results
-for degrees, coeff in result.terms([x]):
-    print(degrees, coeff)
-```
-
-`wfomc(...)` returns a `WFOMCResult`, not a raw FLINT polynomial. Use:
-
-- `result.is_zero()`
-- `result.is_constant()`
-- `result.constant_value()`
-- `result.is_polynomial()`
-- `result.variable_names()`
-- `result.terms([...])`
-
-The underlying solver still uses FLINT internally for exact polynomial arithmetic,
-but callers should treat that as an implementation detail.
-
-`WFOMCProblem(..., weights=...)` accepts a dictionary from `Pred` to
-`(positive_weight, negative_weight)`. Each weight may be:
-
-- a Python `int`;
-- a Python `float`, converted exactly through `fractions.Fraction(float_value)`;
-- a SymPy expression (`sympy.Expr`), including `sympy.Rational`, symbols, and
-  polynomial expressions such as `x`, `2*x + 1`, or `x*y`.
-
-Avoid passing raw FLINT values or `sympy.Poly` objects as weights. If you need a
-polynomial weight, pass the corresponding SymPy expression instead, e.g.
-`x**2 + 3*x + 1`.
-
-### Propositional counter
-
-The `propositional` algorithm grounds the universally quantified (Skolemized) sentence over every pair of domain elements and hands the resulting weighted CNF to [ganak](https://github.com/meelgroup/ganak). It is intended as a textbook-definition ground-truth baseline against which the lifted algorithms can be checked.
-
-It supports plain FO² with rational weights, cardinality constraints and counting quantifiers (`∃_{=k}`), unary evidence with the default `ccs` encoding, and three order axioms: `LEQ` (linear order), `PRED` (= `PRED1`, the immediate linear predecessor), and `CIRCULAR_PRED` (the immediate circular predecessor). The `PREDk` family for `k > 1` and the partition-constraint (`pc`) unary-evidence encoding raise an error.
-
-The encoding of the order axioms is selected per call via the `--linear-order-encoding` (short `-l`) CLI flag, the `linear_order_encoding=` keyword argument on `wfomc()` / `propositional_wfomc()`, or, as a fallback for both, the module-level constant `LINEAR_ORDER_ENCODING` in [src/wfomc/algo/PropositionalWFOMC.py](src/wfomc/algo/PropositionalWFOMC.py):
-
-| Setting | Mechanism | Multiplier | Cost | When to use |
-|---|---|---|---|---|
-| `"pin"` (default) | Each ground `LEQ` / `PRED1` / `CIRCULAR_PRED` atom is pinned to its value under a canonical sorted order / cycle on the domain. | `× n!` via `decode_result`. | `O(n²)` unit clauses, no aux. Fast. | Default; the cheap textbook trick. |
-| `"axioms"` | `LEQ` is axiomatized as a total order (FO³ transitivity); `PRED1` is defined via the FO³ "immediately below" pattern with Tseitin auxiliaries; `CIRCULAR_PRED` is defined as `PRED1 ∨ (LEQ-min ∧ LEQ-max)`. | None — axioms already range `LEQ` over all `n!` orders. | `O(n³)` clauses + Tseitin aux. Materially slower under ganak `--mode 3` (polynomial weighting). | When you want a pin-free, FO-axiomatic baseline. |
-
-Both options give the same answers (the pin trick exploits domain symmetry: model count is invariant under permutations of the domain, so any fixed pinning multiplied by `n!` recovers the total). Slow cases for the `"axioms"` setting — `predecessor.wfomcs` and the `MATH/*` `CIRCULAR_PRED` problems — are gated behind `WFOMC_RUN_SLOW=1` in the test suite; under the default `"pin"` they run in seconds and are tested unconditionally.
-
-**Unary evidence handling.** Direct unit-clause evidence (`UnaryEvidenceEncoding.NONE`) is element-specific and therefore breaks pin-and-multiply's symmetry argument when an order axiom is present. The solver automatically picks the right encoding for the propositional algorithm:
-
-| `LINEAR_ORDER_ENCODING` | Has order axiom? | Evidence encoding | ganak mode |
-|---|---|---|---|
-| `"pin"` | yes | `CCS` (symmetric fingerprint counts) | `--mode 3` (polynomial) |
-| `"pin"` | no | `NONE` (direct unit clauses) | `--mode 1` |
-| `"axioms"` | any | `NONE` (direct unit clauses) | `--mode 1` |
-
-Skipping CCS in the no-order and axioms cases avoids a needless trip through ganak's polynomial mode; on the test suite this gives a 2–4× speed-up on `unary_evidence/*` (e.g. `unary_evidence/employment.mln`: 204 ms → 47 ms).
-
-ganak is invoked in two modes:
-
-- exact rational weighted counting (`--mode 1`) when no symbolic/polynomial weights are involved,
-- multivariate-polynomial weighted counting (`--mode 3`) when cardinality constraints or counting quantifiers introduce symbolic weights.
-
-WFOMC expects a ganak build with mode-3 polynomial output. For reproducibility,
-the supported ganak source is pinned to commit
-`82a1d1fb6f0d6fb4a46b825f84b29567728ae483`.
-
-Install the pinned binary into the active uv environment with:
-
-```
-uv run wfomc-install-ganak
-```
-
-The installer clones `https://github.com/meelgroup/ganak.git`, checks out the
-pinned commit, initializes submodules, builds target `ganak-bin`, and copies the
-binary to `.venv/bin/ganak` (or the active environment's equivalent `bin`
-directory). It requires the native build dependencies used by ganak: `git`,
-`cmake`, a C++ compiler, `gmp`, `mpfr`, and `flint`. The installer entry point
-lives in `scripts/tools/install_ganak.py`.
-
-The runtime lookup order is:
-
-- `--ganak-path` argument when calling `propositional_wfomc()` programmatically;
-- the `GANAK` environment variable;
-- `ganak` on `PATH`.
-
-If you need to install somewhere else, pass `--install-dir`:
-
-```
-uv run wfomc-install-ganak --install-dir /path/to/bin
-```
-
-Then run:
-
-```
-uv run wfomc -i models/2-regular-graph.wfomcs -a propositional
-```
+Unary evidence grouping assumes the sentence does not distinguish named domain
+constants. Such inputs fail fast rather than silently overcounting.
 
 ## Input format
 
@@ -184,7 +88,7 @@ See [predk](models/predk/) for more examples.
 The circular predecessor `CIRCULAR_PRED` is also predefined with `CIRCULAR_PRED(X, Y)` means `Y` is the predecessor of `X` in a circular order.
 The output count of circular order is always divided by the domain size to avoid overcounting.
 
-> **Note: To use linear order constraint, you must use the `incremental` or `recursive` algorithm. To use $k$-th predecessor or circular predecessor, you must use the `incremental` algorithm.**
+> **Note: To use linear order constraint, you must use the `incremental`, `incremental3`, or `recursive` algorithm. To use $k$-th predecessor or circular predecessor, you must use the `incremental` algorithm.**
 
 
 ### Example input file

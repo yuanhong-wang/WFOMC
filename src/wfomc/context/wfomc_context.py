@@ -1,22 +1,22 @@
 from __future__ import annotations
-
 import math
 from copy import deepcopy
+from loguru import logger
 from functools import reduce
 from math import comb
 
-from loguru import logger
-
+from wfomc.cell_graph import Cell, build_cell_graphs as _build_cell_graphs
 from wfomc.fol.sc2 import SC2
-from wfomc.fol.syntax import *
 from wfomc.fol.utils import new_predicate, tseitin_transform
+from wfomc.fol.syntax import *
 from wfomc.network import (
     CardinalityConstraint,
-    PartitionConstraint,
-    UnaryEvidenceEncoding,
-    organize_evidence,
-    unary_evidence_to_ccs,
-    unary_evidence_to_pc,
+)
+from .unary_evidence import (
+    CellEvidenceAllocation,
+    UnaryEvidencePartition,
+    UnaryEvidencePlan,
+    UnaryEvidenceStrategy,
 )
 from wfomc.problems import WFOMCProblem
 from wfomc.utils import Expr, Rational, RingElement, to_ringelements
@@ -24,15 +24,17 @@ from wfomc.utils import Expr, Rational, RingElement, to_ringelements
 
 class WFOMCContext:
     """
-    Context for the lifted WFOMC algorithms.
+    Context for WFOMC algorithm (Beame et al. 2015, van Bremen & Kuzelka 2021).
 
-    Public problem weights remain SymPy expressions. The context converts them
-    to FLINT ring elements once preprocessing has finished, and algorithms read
-    the converted weights through _get_weight().
+    Also serves as the base class for other WFOMC algorithm contexts.
+    Subclasses may override _build() to implement algorithm-specific preprocessing.
     """
 
-    def __init__(self, problem: WFOMCProblem,
-                 unary_evidence_encoding: UnaryEvidenceEncoding = UnaryEvidenceEncoding.CCS):
+    def __init__(
+        self,
+        problem: WFOMCProblem,
+        unary_evidence_strategy: UnaryEvidenceStrategy = UnaryEvidenceStrategy.AUTO,
+    ):
         self.problem = deepcopy(problem)
         self.domain: set[Const] = self.problem.domain
         self.sentence: SC2 = self.problem.sentence
@@ -43,9 +45,8 @@ class WFOMCContext:
         self.repeat_factor = 1
         self.unary_evidence = self.problem.unary_evidence
 
-        self.unary_evidence_encoding = unary_evidence_encoding
-        self.partition_constraint: PartitionConstraint | None = None
-        self.element2evidence: dict[Const, set[AtomicFormula]] = dict()
+        self.unary_evidence_strategy = unary_evidence_strategy
+        self.unary_evidence_plan: UnaryEvidencePlan | None = None
 
         logger.info('sentence: \n{}', self.sentence)
         logger.info('domain: \n{}', self.domain)
@@ -54,13 +55,16 @@ class WFOMCContext:
             logger.info('{}: {}', pred, w)
         logger.info('cardinality constraint: {}', self.cardinality_constraint)
 
+        # Linear order axiom detection
         self.leq_pred: Pred | None = None
         if problem.contain_linear_order_axiom():
             self.leq_pred = Pred('LEQ', 2)
 
+        # Predecessor axioms
         self.predecessor_preds: dict[int, Pred] | None = None
         self.circular_predecessor_pred: Pred | None = None
 
+        # To be set by _build()
         self.formula: QFFormula | None = None
 
         self._build()
@@ -69,30 +73,109 @@ class WFOMCContext:
         logger.info('weights for WFOMC: \n{}', self.weights)
         logger.info('repeat factor: {}', self.repeat_factor)
         logger.info('unary evidence: {}', self.unary_evidence)
-        logger.info('partition constraint: {}', self.partition_constraint)
+        logger.info('unary evidence strategy: {}', self.unary_evidence_strategy)
 
     def contain_cardinality_constraint(self) -> bool:
+        """Check if this problem has non-empty cardinality constraints."""
         return self.cardinality_constraint is not None and \
             not self.cardinality_constraint.empty()
 
-    def contain_partition_constraint(self) -> bool:
-        return self.partition_constraint is not None
+    def _prepare_cardinality_weights(self) -> None:
+        """Attach polynomial weights used to enforce cardinality constraints."""
+        if self.contain_cardinality_constraint():
+            self.cardinality_constraint.build()
+            self.weights.update(
+                self.cardinality_constraint.transform_weighting(self.get_weight)
+            )
+
+    def get_weight(self, pred: Pred) -> tuple[Expr, Expr]:
+        """Get the (positive, negative) weights for a predicate."""
+        default = Rational(1, 1)
+        if pred in self.weights:
+            return self.weights[pred]
+        return (default, default)
+
+    def _get_weight(self, pred: Pred) -> tuple[RingElement, RingElement]:
+        if pred in self._weights:
+            return self._weights[pred]
+        return (self.ring_element_one, self.ring_element_one)
+
+    def _skolemize(self):
+        """Skolemize all existential quantifiers in the formula."""
+        for ext_formula in self.sentence.ext_formulas:
+            formula, weights_update = self._skolemize_one_formula(ext_formula)
+            self.formula &= formula
+            self.weights.update(weights_update)
+
+    def _skolemize_one_formula(self, formula: QuantifiedFormula) -> \
+            tuple[QFFormula, dict[Pred, tuple[Expr, Expr]]]:
+        """
+        Skolemize a single existential quantifier formula.
+
+        Transforms ∃Y: φ(X,Y) into a logically equivalent formula without
+        existential quantifiers by introducing a Skolem predicate S(X) such
+        that φ(X,Y) → S(X), with weight (1,-1).
+
+        After tseitin_transform, the innermost body is always a single atom.
+        """
+        ext_formula = formula.quantified_formula
+        quantifier_num = 1
+        while not isinstance(ext_formula, QFFormula):
+            ext_formula = ext_formula.quantified_formula
+            quantifier_num += 1
+
+        if quantifier_num == 2:  # ∀X ∃Y ...
+            skolem_pred = new_predicate(1, SKOLEM_PRED_NAME)
+            skolem_atom = skolem_pred(X)
+        else:  # ∃Y ... (no external universal quantifier)
+            skolem_pred = new_predicate(0, SKOLEM_PRED_NAME)
+            skolem_atom = skolem_pred()
+        return (skolem_atom | ~ext_formula), {skolem_pred: (Rational(1, 1), Rational(-1, 1))}
+
+    @property
+    def required_unary_preds(self) -> frozenset[Pred]:
+        if self.unary_evidence_plan is None:
+            return frozenset()
+        return self.unary_evidence_plan.required_unary_preds
+
+    @property
+    def unary_evidence_partition(self) -> UnaryEvidencePartition | None:
+        if self.unary_evidence_plan is None:
+            return None
+        return self.unary_evidence_plan.partition
+
+    @property
+    def uses_lifted_unary_evidence(self) -> bool:
+        return (
+            self.unary_evidence_plan is not None
+            and self.unary_evidence_plan.uses_cell_allocation
+        )
+
+    def cell_evidence_allocation(
+        self,
+        cells: list[Cell] | tuple[Cell, ...],
+    ) -> CellEvidenceAllocation | None:
+        if self.unary_evidence_plan is None:
+            return None
+        return self.unary_evidence_plan.compile_for_cells(cells)
+
+    def build_cell_graphs(self, **kwargs):
+        """Build cell graphs with all context-owned unary evidence metadata."""
+        kwargs.setdefault("required_unary_preds", self.required_unary_preds)
+        if (
+            kwargs.get("optimized", False)
+            and self.uses_lifted_unary_evidence
+        ):
+            kwargs.setdefault(
+                "unary_evidence_partition", self.unary_evidence_partition
+            )
+        return _build_cell_graphs(self.formula, self._get_weight, **kwargs)
 
     def contain_existential_quantifier(self) -> bool:
         return self.sentence.contain_existential_quantifier()
 
     def contain_linear_order_axiom(self) -> bool:
         return self.leq_pred is not None
-
-    def get_weight(self, pred: Pred) -> tuple[Expr, Expr]:
-        if pred in self.weights:
-            return self.weights[pred]
-        return (Rational(1, 1), Rational(1, 1))
-
-    def _get_weight(self, pred: Pred) -> tuple[RingElement, RingElement]:
-        if pred in self._weights:
-            return self._weights[pred]
-        return (self.ring_element_one, self.ring_element_one)
 
     def decode_result(self, res: RingElement) -> RingElement:
         if self.leq_pred is not None:
@@ -102,39 +185,14 @@ class WFOMCContext:
             res = self.cardinality_constraint.decode_poly(res)
         return res
 
-    def _skolemize(self) -> None:
-        for ext_formula in self.sentence.ext_formulas:
-            formula, weights_update = self._skolemize_one_formula(ext_formula)
-            self.formula &= formula
-            self.weights.update(weights_update)
-
-    def _skolemize_one_formula(self, formula: QuantifiedFormula) -> \
-            tuple[QFFormula, dict[Pred, tuple[Expr, Expr]]]:
-        ext_formula = formula.quantified_formula
-        quantifier_num = 1
-        while not isinstance(ext_formula, QFFormula):
-            ext_formula = ext_formula.quantified_formula
-            quantifier_num += 1
-
-        if quantifier_num == 2:
-            skolem_pred = new_predicate(1, SKOLEM_PRED_NAME)
-            skolem_atom = skolem_pred(X)
-        else:
-            skolem_pred = new_predicate(0, SKOLEM_PRED_NAME)
-            skolem_atom = skolem_pred()
-        return (
-            skolem_atom | ~ext_formula,
-            {skolem_pred: (Rational(1, 1), Rational(-1, 1))},
-        )
-
     def _transform_forall_existsK(self, formula: QuantifiedFormula) -> \
-            tuple[QFFormula, list[QuantifiedFormula], tuple, int]:
+        tuple[QFFormula, list[QuantifiedFormula], tuple, int]:
         uni_formula = top
         ext_formulas = []
 
         cnt_quantified_formula = formula.quantified_formula.quantified_formula
         cnt_quantifier = formula.quantified_formula.quantifier_scope
-        count_param = int(cnt_quantifier.count_param)
+        count_param = cnt_quantifier.count_param
 
         repeat_factor = (math.factorial(count_param)) ** len(self.domain)
 
@@ -164,117 +222,154 @@ class WFOMCContext:
         cardinality_constraint = (aux_pred, '=', len(self.domain) * count_param)
         return uni_formula, ext_formulas, cardinality_constraint, repeat_factor
 
-    def _transform_counting_quantifier(self, formula: QuantifiedFormula) -> None:
+    def _transform_counting_quantifier(self, formula: QuantifiedFormula):
+        """
+        This function is responsible for implementing Lemma 4 from the Beat paper, which decomposes ∀X ∃=k Y: R(X,Y). During the decomposition process, it generates k independent existential quantifier formulas ∀X ∃Y: fᵢ(X,Y) that need to be satisfied.
+        """
+
         inner_formula = formula.quantified_formula
 
         if not isinstance(inner_formula, QuantifiedFormula):
             if not (isinstance(inner_formula, AtomicFormula) and inner_formula.pred.arity == 1):
                 raise TypeError(
-                    f"Unary counting quantifier requires a unary atomic formula inside, but got {inner_formula}"
-                )
+                    f"Unary counting quantifier requires a unary atomic formula inside, but got {inner_formula}")
 
             quantifier_scope = formula.quantifier_scope
             comparator = quantifier_scope.comparator
-            if comparator == 'mod':
-                raise ValueError(
-                    "Modulo unary counting quantifiers are only supported by "
-                    "IncrementalWFOMC3Context"
-                )
             count_param = int(quantifier_scope.count_param)
+
+            predicate_to_constrain = inner_formula.pred
+            cardinality_constraint = (
+                predicate_to_constrain, comparator, count_param)
+            self.cardinality_constraint.add_simple_constraint(*cardinality_constraint)
+        else:
+            logger.info(
+                f"Handling binary counting formula with NEW encoding: {formula}"
+            )
+            # 2.3.1 Call the old conversion function to get all components of the old encoding Γ*
+            (
+                uni_formula_old,
+                ext_formulas_from_cnt,
+                card_constraint,
+                repeat_factor,
+            ) = self._transform_forall_existsK(formula)
+
+            k = formula.quantified_formula.quantifier_scope.count_param
+
+            # 2.3.2 Immediately handle the k existential quantifier formulas related to this counting quantifier
+            skolem_preds = []
+            skolem_axioms = top
+            for (
+                ext_formula
+            ) in ext_formulas_from_cnt:
+                inner_formula = (
+                    ext_formula.quantified_formula.quantified_formula
+                )
+                skolem_pred = new_predicate(
+                    1, SKOLEM_PRED_NAME
+                )
+                skolem_preds.append(skolem_pred)
+                X = Var("X")
+                axiom_body = (
+                    skolem_pred(X) | ~inner_formula
+                )
+                skolem_axioms &= axiom_body
+                self.weights[skolem_pred] = (
+                    Rational(1, 1),
+                    Rational(-1, 1),
+                )
+            # 2.3.3 Create k + 1 new "standard state" marking predicates Cᵢ
+            c_preds = [new_predicate(1, f"C_{j}_")
+                       for j in range(k + 1)]
+
+            # 2.3.4 Establish Γ꜀ constraints
+            gamma_c_body = top
+            X = Var("X")
+            for j in range(k + 1):
+                true_atoms = [skolem_preds[h](X) for h in range(j)]
+                false_atoms = [~skolem_preds[h]
+                               (X) for h in range(j, k)]
+                conj_true_A = reduce(
+                    lambda f1, f2: f1 & f2, true_atoms, top)
+                conj_false_A = reduce(
+                    lambda f1, f2: f1 & f2, false_atoms, top)
+                definition = conj_true_A & conj_false_A
+                gamma_c_body &= c_preds[j](X).equivalent(
+                    definition
+                )
+
+            # 2.3.5 Construct the forced disjunction ∀x ⋁ Cⱼ(x)
+            disjuncts = [
+                p(X) for p in c_preds
+            ]
+            final_disjunction_body = reduce(
+                lambda f1, f2: f1 | f2, disjuncts, bot
+            )
+
+            # 2.3.6 Combine all parts into the final quantifier-free formula
+            self.formula &= (
+                uni_formula_old
+                & skolem_axioms
+                & gamma_c_body
+                & final_disjunction_body
+            )
+
+            # 2.3.7 Set "magic weights" for Cᵢ: w(Cⱼ) = C(k, j)
+            for j in range(k + 1):
+                weight = Rational(comb(k, j), 1)
+                neg_weight = Rational(1, 1)
+                self.weights[c_preds[j]] = (weight, neg_weight)
+
+            # 2.3.8 Update global cardinality constraints and correction factors
             self.cardinality_constraint.add_simple_constraint(
-                inner_formula.pred, comparator, count_param
-            )
-            return
-
-        logger.info(
-            f"Handling binary counting formula with NEW encoding: {formula}"
-        )
-        comparator = formula.quantified_formula.quantifier_scope.comparator
-        if comparator != '=':
-            raise ValueError(
-                f"Binary counting comparator '{comparator}' is not "
-                "supported by WFOMCContext; use IncrementalWFOMC3Context "
-                "for supported non-equality binary counting quantifiers"
-            )
-
-        uni_formula_old, ext_formulas_from_cnt, card_constraint, repeat_factor = \
-            self._transform_forall_existsK(formula)
-        k = int(formula.quantified_formula.quantifier_scope.count_param)
-
-        skolem_preds = []
-        skolem_axioms = top
-        for ext_formula in ext_formulas_from_cnt:
-            inner_formula = ext_formula.quantified_formula.quantified_formula
-            skolem_pred = new_predicate(1, SKOLEM_PRED_NAME)
-            skolem_preds.append(skolem_pred)
-            axiom_body = skolem_pred(X) | ~inner_formula
-            skolem_axioms &= axiom_body
-            self.weights[skolem_pred] = (
-                Rational(1, 1),
-                Rational(-1, 1),
-            )
-
-        c_preds = [new_predicate(1, f"C_{j}_") for j in range(k + 1)]
-
-        gamma_c_body = top
-        for j in range(k + 1):
-            true_atoms = [skolem_preds[h](X) for h in range(j)]
-            false_atoms = [~skolem_preds[h](X) for h in range(j, k)]
-            conj_true_A = reduce(lambda f1, f2: f1 & f2, true_atoms, top)
-            conj_false_A = reduce(lambda f1, f2: f1 & f2, false_atoms, top)
-            definition = conj_true_A & conj_false_A
-            gamma_c_body &= c_preds[j](X).equivalent(definition)
-
-        disjuncts = [p(X) for p in c_preds]
-        final_disjunction_body = reduce(
-            lambda f1, f2: f1 | f2, disjuncts, bot
-        )
-
-        self.formula &= (
-            uni_formula_old
-            & skolem_axioms
-            & gamma_c_body
-            & final_disjunction_body
-        )
-
-        for j in range(k + 1):
-            self.weights[c_preds[j]] = (
-                Rational(comb(k, j), 1),
-                Rational(1, 1),
-            )
-
-        self.cardinality_constraint.add_simple_constraint(*card_constraint)
-        self.repeat_factor *= repeat_factor
-
-    def _encode_unary_evidence(self) -> None:
-        if self.unary_evidence_encoding == UnaryEvidenceEncoding.NONE:
-            logger.info('No encoding for unary evidence; handed off raw')
-            return
-
-        self.element2evidence = organize_evidence(self.unary_evidence)
-        if self.unary_evidence_encoding == UnaryEvidenceEncoding.PC:
-            logger.info('Use partition constraint to encode unary evidence')
-            evi_formula, partition = unary_evidence_to_pc(
-                self.element2evidence, self.domain
-            )
-            logger.info('formula to encode unary evidence: {}', evi_formula)
-            logger.info('partition constraint: {}', partition)
-            self.formula = self.formula & evi_formula
-            self.partition_constraint = partition
-        elif self.unary_evidence_encoding == UnaryEvidenceEncoding.CCS:
-            logger.info('Use cardinality constraint to encode unary evidence')
-            evi_formula, ccs, repeat_factor = unary_evidence_to_ccs(
-                self.element2evidence, self.domain
-            )
-            logger.info('formula to encode unary evidence: {}', evi_formula)
-            logger.info('cardinality constraints: {}', ccs)
-            self.formula = self.formula & evi_formula
-            if not self.contain_cardinality_constraint():
-                self.cardinality_constraint = CardinalityConstraint()
-            self.cardinality_constraint.extend_simple_constraints(ccs)
+                *card_constraint)
             self.repeat_factor *= repeat_factor
 
-    def _handle_linear_order_axiom(self) -> None:
+    def _apply_unary_evidence(self):
+        plan = UnaryEvidencePlan.build(
+            self.unary_evidence,
+            self.domain,
+            self.sentence,
+            self.unary_evidence_strategy,
+        )
+        self.unary_evidence_plan = plan
+        self.formula &= plan.formula
+
+        if plan.cardinality_constraints:
+            logger.info('Use cardinality constraints to encode unary evidence')
+            logger.info('formula to encode unary evidence: {}', plan.formula)
+            logger.info(
+                'cardinality constraints: {}',
+                plan.cardinality_constraints,
+            )
+            if not self.contain_cardinality_constraint():
+                self.cardinality_constraint = CardinalityConstraint()
+            self.cardinality_constraint.extend_simple_constraints(
+                plan.cardinality_constraints
+            )
+        else:
+            logger.info(
+                "Prepared lifted unary evidence with {} evidence profile(s)",
+                len(plan.partition.evidence_profiles),
+            )
+        self.repeat_factor *= plan.repeat_factor
+
+    def _convert_weights_to_ring_elements(self) -> None:
+        weights = []
+        preds = []
+        for pred, (w_true, w_false) in self.weights.items():
+            preds.append(pred)
+            weights.append(w_true)
+            weights.append(w_false)
+
+        ring_elements = to_ringelements(weights)
+        for i, pred in enumerate(preds):
+            self._weights[pred] = (
+                ring_elements[2 * i],
+                ring_elements[2 * i + 1],
+            )
+
+    def _handle_linear_order_axiom(self):
         if self.problem.contain_linear_order_axiom():
             self.leq_pred = Pred('LEQ', 2)
 
@@ -292,32 +387,26 @@ class WFOMCContext:
                 }
             self.circular_predecessor_pred = Pred('CIRCULAR_PRED', 2)
 
-    def _convert_weights_to_ring_elements(self) -> None:
-        weights = []
-        preds = []
-        for pred, (w_true, w_false) in self.weights.items():
-            preds.append(pred)
-            weights.append(w_true)
-            weights.append(w_false)
-
-        ring_elements = to_ringelements(weights)
-        for i, pred in enumerate(preds):
-            self._weights[pred] = (
-                ring_elements[2 * i],
-                ring_elements[2 * i + 1],
-            )
-
-    def _build(self) -> None:
+    def _build(self):
+        """
+        Rewrite the _build method to handle different quantifiers separately.
+        """
+        # Tseitin-simplify ext/cnt bodies so every ext/cnt subformula has a
+        # single atom as its innermost body. Auxiliary equivalences are
+        # absorbed into the universal part.
         self.sentence = tseitin_transform(self.sentence)
         logger.info('sentence after tseitin transform: \n{}', self.sentence)
 
+        # Step 1: Initialize and get the quantifier-free part of the formula
         self.formula = self.sentence.uni_formula
         while not isinstance(self.formula, QFFormula):
             self.formula = self.formula.quantified_formula
 
+        # Step 2: Handle unary evidence
         if self.unary_evidence:
-            self._encode_unary_evidence()
+            self._apply_unary_evidence()
 
+        # Step 3: Use the new encoding to handle counting quantifiers
         if self.sentence.contain_counting_quantifier():
             logger.info("Translating SC2 to SNF using the NEW encoding logic.")
             if not self.contain_cardinality_constraint():
@@ -325,15 +414,11 @@ class WFOMCContext:
             for cnt_formula in self.sentence.cnt_formulas:
                 self._transform_counting_quantifier(cnt_formula)
 
+        # Only process original existential quantifier formulas unrelated to cardinality quantifiers
         self._skolemize()
 
-        if self.contain_cardinality_constraint():
-            self.cardinality_constraint.build()
-            self.weights.update(
-                self.cardinality_constraint.transform_weighting(
-                    self.get_weight,
-                )
-            )
+        self._prepare_cardinality_weights()
 
+        # Step 4: Handle linear order axioms and predecessor axioms
         self._handle_linear_order_axiom()
         self._convert_weights_to_ring_elements()
