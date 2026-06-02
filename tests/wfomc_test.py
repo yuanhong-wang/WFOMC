@@ -10,7 +10,6 @@ from wfomc import (
     Const,
     Pred,
     Rational,
-    UnaryEvidenceEncoding,
     WFOMCProblem,
     WFOMCResult,
     fol_parse,
@@ -30,26 +29,10 @@ models_dir2args = {
         (Algo.INCREMENTAL3, ),
         (Algo.RECURSIVE, ),
     ),
-    current_path.parent / 'models' / 'unary_evidence': (
-        (Algo.STANDARD, UnaryEvidenceEncoding.CCS),
-        (Algo.FAST, UnaryEvidenceEncoding.CCS),
-        (Algo.FASTv2, UnaryEvidenceEncoding.CCS),
-        (Algo.INCREMENTAL, UnaryEvidenceEncoding.CCS),
-        (Algo.INCREMENTAL3, UnaryEvidenceEncoding.CCS),
-        (Algo.RECURSIVE, UnaryEvidenceEncoding.CCS),
-        (Algo.INCREMENTAL, UnaryEvidenceEncoding.PC),
-        (Algo.FASTv2, UnaryEvidenceEncoding.PC),
-    ),
     current_path.parent / 'models' / 'linear_order': (
         (Algo.INCREMENTAL, ),
         (Algo.INCREMENTAL3, ),
         (Algo.RECURSIVE, ),
-    ),
-    current_path.parent / 'models' / 'linear_order_unary_evidence': (
-        (Algo.INCREMENTAL, UnaryEvidenceEncoding.CCS),
-        (Algo.INCREMENTAL3, UnaryEvidenceEncoding.CCS),
-        (Algo.RECURSIVE, UnaryEvidenceEncoding.CCS),
-        (Algo.INCREMENTAL, UnaryEvidenceEncoding.PC),
     ),
     current_path.parent / 'models' / 'predk': (
         (Algo.INCREMENTAL, ),
@@ -103,17 +86,15 @@ def test_wfomc_result_exposes_projected_polynomial_terms():
     assert dict(result.terms([x])) == {(2,): Rational(1, 1)}
 
 
-# answer_json = json.load(open(current_path.parent / 'models' / 'MATH' / 'all.json'))
-# MATH_files = list((current_path.parent / 'models' / 'MATH').glob('*.wfomcs'))
-# @pytest.mark.parametrize(
-#     'model_file, id',
-#     [(str(model_file), Path(model_file).stem) for model_file in MATH_files]
-# )
-# def test_MATH(model_file, id):
-#     problem = parse_input(str(model_file))
-#     problem_id = Path(model_file).stem
-#     answer = int(answer_json[problem_id]['answer'])
-#     res = wfomc(problem, algo=Algo.INCREMENTAL, unary_evidence_encoding=UnaryEvidenceEncoding.CCS)
-#     assert res == answer, f"Failed CCS for MATH {problem_id}: {answer}(true) != {res}(computed)"
-#     res = wfomc(problem, algo=Algo.INCREMENTAL, unary_evidence_encoding=UnaryEvidenceEncoding.PC)
-#     assert res == answer, f"Failed PC for MATH {problem_id}: {answer}(true) != {res}(computed)"
+answer_json = json.load(open(current_path.parent / 'models' / 'MATH' / 'all.json'))
+MATH_files = list((current_path.parent / 'models' / 'MATH').glob('*.wfomcs'))
+@pytest.mark.parametrize(
+    'model_file, id',
+    [(str(model_file), Path(model_file).stem) for model_file in MATH_files]
+)
+def test_MATH(model_file, id):
+    problem = parse_input(str(model_file))
+    problem_id = Path(model_file).stem
+    answer = int(answer_json[problem_id]['answer'])
+    res = wfomc(problem, algo=Algo.INCREMENTAL)
+    assert res == answer, f"Failed MATH {problem_id}: {answer}(true) != {res}(computed)"

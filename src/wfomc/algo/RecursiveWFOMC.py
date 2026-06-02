@@ -277,14 +277,11 @@ def cache_size(nauty_ctx: NautyContext, ig_cache: IsomorphicGraphCache):
 
 ENABLE_ISOMORPHISM = True
 def recursive_wfomc(context: WFOMCContext) -> RingElement:
-    formula: QFFormula = context.formula
-    domain: set[Const] = context.domain
-    get_weight: Callable[[Pred], tuple[RingElement, RingElement]] = context._get_weight
-    leq_pred: Pred = context.leq_pred
-
-    domain_size = len(domain)
+    domain_size = len(context.domain)
     res = 0
-    for cell_graph, weight in build_cell_graphs(formula, get_weight, leq_pred=leq_pred):
+    for cell_graph, weight in context.build_cell_graphs(
+        leq_pred=context.leq_pred
+    ):
         cell_weights = cell_graph.get_all_weights()[0]
         edge_weights = cell_graph.get_all_weights()[1]
 

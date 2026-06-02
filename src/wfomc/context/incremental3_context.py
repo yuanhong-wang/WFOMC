@@ -7,12 +7,12 @@ from loguru import logger
 
 from wfomc.fol.syntax import *
 from wfomc.fol import tseitin_transform
-from wfomc.network import UnaryEvidenceEncoding
 from wfomc.problems import WFOMCProblem
 from wfomc.utils import RingElement
 
 from .wfomc_context import WFOMCContext
-from .unary_constraint import UnaryConstraintHandler
+from .unary_cardinality import UnaryCardinalityConstraintHandler
+from .unary_evidence import UnaryEvidenceStrategy
 
 
 @dataclass
@@ -57,12 +57,15 @@ def _build_binary_evidence(ext_preds: list[Pred], cnt_preds: list[Pred]) -> list
 
 
 class IncrementalWFOMC3Context(WFOMCContext):
-    def __init__(self, problem: WFOMCProblem,
-                 unary_evidence_encoding: UnaryEvidenceEncoding = UnaryEvidenceEncoding.CCS):
+    def __init__(
+        self,
+        problem: WFOMCProblem,
+        unary_evidence_strategy: UnaryEvidenceStrategy = UnaryEvidenceStrategy.AUTO,
+    ):
         # Initialise IncrementalWFOMC3-specific mutable state before calling
         # super().__init__(), because _build() is dispatched from within
         # WFOMCContext.__init__ and needs these to be ready.
-        self.unary_handler = UnaryConstraintHandler()
+        self.unary_handler = UnaryCardinalityConstraintHandler()
 
         # Counting-quantifier parsing state (populated by _handle_* during _build)
         self._ext_preds: list[Pred] = []
@@ -82,7 +85,10 @@ class IncrementalWFOMC3Context(WFOMCContext):
         # Exposed after _build() completes
         self.counting_state: CountingState | None = None
 
-        super().__init__(problem, unary_evidence_encoding)
+        super().__init__(
+            problem,
+            unary_evidence_strategy,
+        )
 
     # ------------------------------------------------------------------
     # Algorithm interface
@@ -109,7 +115,7 @@ class IncrementalWFOMC3Context(WFOMCContext):
             self.formula = self.formula.quantified_formula
 
         if self.unary_evidence:
-            self._encode_unary_evidence()
+            self._apply_unary_evidence()
 
         if self.sentence.contain_counting_quantifier():
             self._handle_counting_quantifier()
@@ -119,11 +125,7 @@ class IncrementalWFOMC3Context(WFOMCContext):
                 ext_formula = ext_formula.quantified_formula
             self._ext_preds.append(ext_formula.pred)
 
-        if self.contain_cardinality_constraint():
-            self.cardinality_constraint.build()
-            self.weights.update(
-                self.cardinality_constraint.transform_weighting(self.get_weight)
-            )
+        self._prepare_cardinality_weights()
 
         self._handle_linear_order_axiom()
 

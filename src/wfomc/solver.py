@@ -17,9 +17,12 @@ from wfomc.algo import (
     resolve_linear_order_encoding,
     standard_wfomc,
 )
-from wfomc.context import IncrementalWFOMC3Context, WFOMCContext
+from wfomc.context import (
+    IncrementalWFOMC3Context,
+    UnaryEvidenceStrategy,
+    WFOMCContext,
+)
 from wfomc.fol import Counting, QuantifiedFormula
-from wfomc.network import UnaryEvidenceEncoding
 from wfomc.parser import parse_input
 from wfomc.problems import WFOMCProblem
 from wfomc.result import WFOMCResult
@@ -67,8 +70,32 @@ def _validate_counting_quantifiers(problem: WFOMCProblem, algo: Algo) -> None:
         )
 
 
+def resolve_unary_evidence_strategy(
+    algo: Algo,
+    requested: UnaryEvidenceStrategy,
+    *,
+    has_linear_order: bool = False,
+    linear_order_encoding: Optional[Union[LinearOrderEncoding, str]] = None,
+) -> UnaryEvidenceStrategy:
+    """Resolve AUTO to the best supported unary evidence path for an algorithm."""
+    if requested == UnaryEvidenceStrategy.CCS:
+        return UnaryEvidenceStrategy.CCS
+    if requested != UnaryEvidenceStrategy.AUTO:
+        raise ValueError(f"Unsupported unary evidence strategy: {requested}")
+    if algo in {Algo.FAST, Algo.RECURSIVE}:
+        return UnaryEvidenceStrategy.CCS
+    if algo == Algo.PROPOSITIONAL:
+        # Pin-and-multiply over a linear order needs symmetric (CCS) evidence;
+        # otherwise the propositional counter emits direct unit clauses (AUTO).
+        effective_loe = resolve_linear_order_encoding(linear_order_encoding)
+        if has_linear_order and effective_loe == LinearOrderEncoding.PIN:
+            return UnaryEvidenceStrategy.CCS
+        return UnaryEvidenceStrategy.AUTO
+    return UnaryEvidenceStrategy.AUTO
+
+
 def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
-          unary_evidence_encoding: UnaryEvidenceEncoding = UnaryEvidenceEncoding.CCS,
+          unary_evidence_strategy: UnaryEvidenceStrategy = UnaryEvidenceStrategy.AUTO,
           linear_order_encoding: Optional[Union[LinearOrderEncoding, str]] = None,
           debug: bool = False) -> WFOMCResult:
     level = "DEBUG" if debug else "INFO"
@@ -97,30 +124,18 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
                                    "incremental and propositional WFOMC "
                                    "algorithms")
 
+        effective_unary_evidence_strategy = resolve_unary_evidence_strategy(
+            algo,
+            unary_evidence_strategy,
+            has_linear_order=problem.contain_linear_order_axiom(),
+            linear_order_encoding=linear_order_encoding,
+        )
         if problem.contain_unary_evidence():
-            if algo == Algo.PROPOSITIONAL:
-                effective_loe = resolve_linear_order_encoding(linear_order_encoding)
-                has_order = problem.contain_linear_order_axiom()
-                if has_order and effective_loe == LinearOrderEncoding.PIN:
-                    required = UnaryEvidenceEncoding.CCS
-                    reason = 'pin-and-multiply needs symmetric evidence (CCS)'
-                else:
-                    required = UnaryEvidenceEncoding.NONE
-                    reason = ('FO3 axiomatization handles element identity'
-                              if has_order else
-                              'no order axiom; direct unit clauses suffice')
-                if unary_evidence_encoding != required:
-                    logger.info(
-                        'Forcing unary_evidence_encoding=%s for the '
-                        'propositional counter (was %s; %s)',
-                        required, unary_evidence_encoding, reason,
-                    )
-                    unary_evidence_encoding = required
-            logger.info(f'Unary evidence is found, using {unary_evidence_encoding} encoding')
-            if unary_evidence_encoding == UnaryEvidenceEncoding.PC and \
-                    algo != Algo.FASTv2 and algo != Algo.INCREMENTAL:
-                raise RuntimeError("Partition constraint is only supported for the "
-                                   "fastv2 WFOMC and incremental WFOMC algorithms")
+            logger.info(
+                'Unary evidence is found, requested strategy: {}, effective strategy: {}',
+                unary_evidence_strategy,
+                effective_unary_evidence_strategy,
+            )
 
         _validate_counting_quantifiers(problem, algo)
 
@@ -130,12 +145,20 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
                 raise RuntimeError("Modulo counting quantifier is only supported by the "
                                    "incremental WFOMC3 algorithm")
 
-        logger.info(f'Invoke WFOMC with {algo} algorithm and {unary_evidence_encoding} encoding')
+        logger.info(
+            'Invoke WFOMC with {} algorithm and {} unary evidence strategy',
+            algo,
+            effective_unary_evidence_strategy,
+        )
 
         if algo == Algo.INCREMENTAL3:
-            context = IncrementalWFOMC3Context(problem, unary_evidence_encoding)
+            context = IncrementalWFOMC3Context(
+                problem, effective_unary_evidence_strategy
+            )
         else:
-            context = WFOMCContext(problem, unary_evidence_encoding)
+            context = WFOMCContext(
+                problem, effective_unary_evidence_strategy
+            )
 
         with Timer() as t:
             if algo == Algo.STANDARD:
@@ -176,9 +199,9 @@ def parse_args():
                         default='./check-points')
     parser.add_argument('--algo', '-a', type=Algo,
                         choices=list(Algo), default=Algo.FASTv2)
-    parser.add_argument('--unary_evidence_encoding', '-e', type=UnaryEvidenceEncoding,
-                        choices=list(UnaryEvidenceEncoding),
-                        default=UnaryEvidenceEncoding.CCS)
+    parser.add_argument('--unary_evidence_strategy', '-e', type=UnaryEvidenceStrategy,
+                        choices=list(UnaryEvidenceStrategy),
+                        default=UnaryEvidenceStrategy.AUTO)
     parser.add_argument('--linear-order-encoding', '-l',
                         type=LinearOrderEncoding,
                         choices=list(LinearOrderEncoding),
@@ -217,7 +240,7 @@ def main() -> None:
 
     res = wfomc(
         problem, algo=args.algo,
-        unary_evidence_encoding=args.unary_evidence_encoding,
+        unary_evidence_strategy=args.unary_evidence_strategy,
         linear_order_encoding=args.linear_order_encoding,
         debug=args.debug,
     )

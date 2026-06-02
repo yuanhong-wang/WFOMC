@@ -21,7 +21,7 @@ from wfomc import (
     wfomc,
 )
 from wfomc.algo.IncrementalWFOMC3 import ConfigSpace, build_weight
-from wfomc.context import CountingState, IncrementalWFOMC3Context, UnaryConstraintHandler
+from wfomc.context import CountingState, IncrementalWFOMC3Context, UnaryCardinalityConstraintHandler
 from wfomc.parser.wfomcs_parser import parse as wfomcs_parse
 
 
@@ -93,7 +93,7 @@ def test_counting_quantifier_rejects_invalid_inputs_without_asserts() -> None:
 
 def test_incremental3_rejects_non_atomic_binary_counting_bodies() -> None:
     ctx = IncrementalWFOMC3Context.__new__(IncrementalWFOMC3Context)
-    ctx.unary_handler = UnaryConstraintHandler()
+    ctx.unary_handler = UnaryCardinalityConstraintHandler()
     ctx._cnt_preds = []
     ctx._cnt_params = []
     ctx._cnt_remainder = []

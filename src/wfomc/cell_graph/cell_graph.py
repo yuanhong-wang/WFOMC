@@ -1,19 +1,24 @@
 from __future__ import annotations
 from collections import defaultdict
+from dataclasses import dataclass
 
 import pandas as pd
 import functools
 import networkx as nx
 from itertools import product
-from typing import Callable, Generator
+from typing import Callable, Generator, TYPE_CHECKING
 from loguru import logger
 from copy import deepcopy
 
-from wfomc.fol import AtomicFormula, Const, Pred, QFFormula, a, b, c, top
-from wfomc.network import PartitionConstraint
-from wfomc.utils import Rational, RingElement, MultinomialCoefficients
+from flint import fmpq as Rational
+
+from wfomc.fol import AtomicFormula, Const, Pred, QFFormula, X, a, b, c, top
+from wfomc.utils import RingElement, MultinomialCoefficients
 from .components import Cell, TwoTable
 from .utils import conditional_on
+
+if TYPE_CHECKING:
+    from wfomc.context.unary_evidence import UnaryEvidencePartition
 
 """
 cell_graph.py is the core data structure module of the WFOMC (Weighted First-Order Model Counting) algorithm. Its main function is to convert an abstract first-order logic problem into a specific and computable graph structure, namely "cell graph".
@@ -30,7 +35,7 @@ Cell Graph:
 The file mainly contains three core classes and a factory function:
     CellGraph: The basic implementation of the cell graph.
     OptimizedCellGraph: An optimized version of CellGraph that accelerates computation by identifying and exploiting symmetries (cliques) and independencies, used in the FastWFOMC algorithm.
-    OptimizedCellGraphWithPC: Builds upon OptimizedCellGraph by adding support for Partition Constraints.
+    OptimizedCellGraphWithEvidence: Expands OptimizedCellGraph by evidence profiles for lifted unary evidence.
     build_cell_graphs: A factory function that decides which type of CellGraph instance to create based on input parameters.
 """
 class CellGraph(object):
@@ -41,7 +46,8 @@ class CellGraph(object):
     def __init__(self, formula: QFFormula,
                  get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
                  leq_pred: Pred = None,
-                 predecessor_preds: dict[int, Pred] = None):
+                 predecessor_preds: dict[int, Pred] = None,
+                 required_unary_preds: frozenset[Pred] = frozenset()):
         """
         Cell graph that handles cells (1-types) and the WMC between them
 
@@ -49,6 +55,17 @@ class CellGraph(object):
         :param get_weight Callable[[Pred], tuple[RingElement, RingElement]]: the weighting function
         :param conditional_formulas list[CNF]: the optional conditional formula appended in WMC computing
         """
+        self.required_unary_preds = tuple(sorted(
+            required_unary_preds, key=lambda pred: (pred.name, pred.arity)
+        ))
+        for pred in self.required_unary_preds:
+            if pred.arity != 1:
+                raise ValueError(
+                    f"Required cell predicate {pred} must be unary."
+                )
+            if pred not in formula.preds():
+                formula &= pred(X) | ~pred(X)
+
         self.formula: QFFormula = formula
         self.get_weight: Callable[[Pred],
                                   tuple[RingElement, RingElement]] = get_weight
@@ -327,14 +344,17 @@ class OptimizedCellGraph(CellGraph):
     def __init__(self, formula: QFFormula,
                  get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
                  domain_size: int,
-                 modified_cell_symmetry: bool = False):
+                 modified_cell_symmetry: bool = False,
+                 required_unary_preds: frozenset[Pred] = frozenset()):
         """
         Optimized cell graph for FastWFOMC
         :param formula: the formula to be grounded
         :param get_weight: a function that returns the weight of a predicate
         :param domain_size: the domain size
         """
-        super().__init__(formula, get_weight)
+        super().__init__(
+            formula, get_weight, required_unary_preds=required_unary_preds
+        )
         self.modified_cell_symmetry = modified_cell_symmetry
         self.domain_size: int = domain_size
         MultinomialCoefficients.setup(self.domain_size)
@@ -553,141 +573,195 @@ class OptimizedCellGraph(CellGraph):
         return ret
 
 
-class OptimizedCellGraphWithPC(CellGraph):
-    def __init__(self, formula: QFFormula,
-                 get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
-                 domain_size: int,
-                 partition_constraint: PartitionConstraint):
-        """
-        Optimized cell graph for FastWFOMC
-        :param formula: the formula to be grounded
-        :param get_weight: a function that returns the weight of a predicate
-        :param domain_size: the domain size
-        """
-        super().__init__(formula, get_weight)
-        self.domain_size: int = domain_size
-        self.partition_constraint = partition_constraint
+@dataclass(frozen=True)
+class CellWithEvidenceProfile:
+    """A lightweight compatible ``(base cell, evidence profile)`` node."""
+
+    base_cell: Cell
+    evidence_profile_index: int
+
+    def is_positive(self, pred: Pred) -> bool:
+        return self.base_cell.is_positive(pred)
+
+    def __str__(self) -> str:
+        return f"{self.base_cell} [evidence_profile={self.evidence_profile_index}]"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+
+class OptimizedCellGraphWithEvidence:
+    """Fastv2 graph view expanded by evidence profiles without aux predicates."""
+
+    def __init__(
+        self,
+        formula: QFFormula,
+        get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
+        domain_size: int,
+        unary_evidence_partition: "UnaryEvidencePartition",
+        required_unary_preds: frozenset[Pred] = frozenset(),
+    ):
+        self.base_graph = CellGraph(
+            formula,
+            get_weight,
+            required_unary_preds=required_unary_preds,
+        )
+        self.formula = self.base_graph.formula
+        self.preds = self.base_graph.preds
+        self.domain_size = domain_size
+        self.unary_evidence_partition = unary_evidence_partition
+        base_cells = tuple(self.base_graph.get_cells())
+        self.allocation = unary_evidence_partition.compile_for_cells(base_cells)
+        self.evidence_profile_sizes = self.allocation.evidence_profile_sizes
+        self.cells = [
+            CellWithEvidenceProfile(base_cells[cell_idx], evidence_profile_idx)
+            for cell_idx, evidence_profile_indices in enumerate(
+                self.allocation.compatible_evidence_profiles_by_cell
+            )
+            for evidence_profile_idx in evidence_profile_indices
+        ]
 
         i1_ind_set, i2_ind_set, nonind_set = self.find_independent_sets()
-        # TODO incorporate partition constraint into i2_ind_set
-        # for now, merge i2_ind_set into nonind_set
         self.i1_ind = i1_ind_set
         nonind_set = i2_ind_set + nonind_set
-        self.cliques, self.nonind = \
-            self.build_symmetric_cliques(nonind_set)
-        self.nonind_map: dict[int, int] = dict(zip(self.nonind, range(len(self.nonind))))
+        self.cliques, self.nonind = self.build_symmetric_cliques(nonind_set)
+        self.nonind_map = dict(zip(self.nonind, range(len(self.nonind))))
 
-        logger.info(f"Found i1 independent cliques: {self.i1_ind}")
-        logger.info(f"Found non-independent cliques: {self.nonind}")
-        self.term_cache = dict()
+        self.clique_evidence_profile_partitions: dict[int, list[list[int]]] = {}
+        self.evidence_profile_cliques: dict[int, list[int]] = defaultdict(list)
+        for clique_idx, clique in enumerate(self.cliques):
+            clique_evidence_profile_partition = []
+            for evidence_profile_idx in range(len(self.evidence_profile_sizes)):
+                cell_indices = [
+                    cell_idx
+                    for cell_idx, cell in enumerate(clique)
+                    if cell.evidence_profile_index == evidence_profile_idx
+                ]
+                if cell_indices:
+                    clique_evidence_profile_partition.append(cell_indices)
+                    self.evidence_profile_cliques[evidence_profile_idx].append(
+                        clique_idx
+                    )
+            self.clique_evidence_profile_partitions[clique_idx] = (
+                clique_evidence_profile_partition
+            )
 
-        # partition each clique according to the partition constraint
-        # NOTE: ignore the empty set of cells
-        # {clique_idx: [[cell_idx_in_clique for pred1],
-        #               [cell_idx_in_clique for pred2],
-        #                             ..
-        #               [cell_idx_in_clique for predk]]}
-        # partition constrained cells into cliques
-        # {pred_idx: [clique_indices that pred1 appears,
-        #             clique_indices that pred2 appears
-        #                     ndices...
-        #             clique_indices that pred3 appears]
-        self.clique_partitions: dict[int, list[list[int]]] = dict()
-        self.partition_cliques: dict[int, list[int]] = defaultdict(list)
-        for idx, clique in enumerate(self.cliques):
-            clique_partiton = list()
-            for pred_idx, (pred, _) in enumerate(
-                    self.partition_constraint.partition
-            ):
-                cell_indices = list()
-                for cell_idx, cell in enumerate(clique):
-                    if cell.is_positive(pred):
-                        cell_indices.append(cell_idx)
-                if len(cell_indices) > 0:
-                    clique_partiton.append(cell_indices)
-                    self.partition_cliques[pred_idx].append(idx)
-            self.clique_partitions[idx] = clique_partiton
-        logger.info("Clique partitions: {}", self.clique_partitions)
-        logger.info("Partition cliques: {}", self.partition_cliques)
+        self.i1_evidence_profile_partition = [
+            [
+                cell_idx
+                for cell_idx in self.i1_ind
+                if self.cells[cell_idx].evidence_profile_index == evidence_profile_idx
+            ]
+            for evidence_profile_idx in range(len(self.evidence_profile_sizes))
+        ]
 
-        self.i1_partition: list[list[int]] = list()
-        for pred, _ in self.partition_constraint.partition:
-            self.i1_partition.append(list(filter(
-                lambda idx: self.cells[idx].is_positive(pred), self.i1_ind
-            )))
+        logger.info(
+            "Cell-evidence compatibility pairs: {}",
+            self.allocation.compatibility_pair_count,
+        )
+        logger.info("Evidence-expanded cells: {}", len(self.cells))
+        logger.info(
+            "Evidence clique partitions: {}",
+            self.clique_evidence_profile_partitions,
+        )
+        logger.info("Evidence cliques: {}", self.evidence_profile_cliques)
 
-    def set_clique_configs(self, clique_configs: dict[int, list[int]]):
-        self.clique_configs = clique_configs
-        self.ovarall_clique_config = list(sum(v) for _, v in self.clique_configs.items())
-        logger.info('Clique configs: {}', self.clique_configs)
-        logger.info('Overall clique config: {}', self.ovarall_clique_config)
+    def get_cells(self):
+        return self.cells
 
-    def find_independent_sets(self) -> tuple[list[int], list[int], list[int], list[int]]:
-        # find the cell with partition constraint
-        in_partition_cells = set()
-        self.partition_constraint.partition = \
-            sorted(self.partition_constraint.partition, key=lambda x: x[1], reverse=True)
-        maximal_partition_pred = self.partition_constraint.partition[0][0]
-        g = nx.Graph()
-        g.add_nodes_from(range(len(self.cells)))
+    @functools.lru_cache(maxsize=None, typed=True)
+    def get_cell_weight(self, cell: CellWithEvidenceProfile) -> RingElement:
+        return self.base_graph.get_cell_weight(cell.base_cell)
+
+    @functools.lru_cache(maxsize=None, typed=True)
+    def get_two_table_weight(
+        self,
+        cells: tuple[CellWithEvidenceProfile, CellWithEvidenceProfile],
+    ) -> RingElement:
+        return self.base_graph.get_two_table_weight(
+            (cells[0].base_cell, cells[1].base_cell)
+        )
+
+    def find_independent_sets(self) -> tuple[list[int], list[int], list[int]]:
+        max_evidence_profile_idx = max(
+            range(len(self.evidence_profile_sizes)),
+            key=lambda idx: self.evidence_profile_sizes[idx],
+        )
+        in_max_evidence_profile = {
+            idx
+            for idx, cell in enumerate(self.cells)
+            if cell.evidence_profile_index == max_evidence_profile_idx
+        }
+
+        graph = nx.Graph()
+        graph.add_nodes_from(range(len(self.cells)))
         for i in range(len(self.cells)):
-            if self.cells[i].is_positive(maximal_partition_pred):
-                in_partition_cells.add(i)
             for j in range(i + 1, len(self.cells)):
                 if self.get_two_table_weight(
-                        (self.cells[i], self.cells[j])
-                ) != 1:
-                    g.add_edge(i, j)
+                    (self.cells[i], self.cells[j])
+                ) != Rational(1, 1):
+                    graph.add_edge(i, j)
 
-        self_loop = set()
-        for i in range(len(self.cells)):
-            if self.get_two_table_weight((self.cells[i], self.cells[i])) != 1:
-                self_loop.add(i)
-
-        non_self_loop = g.nodes - self_loop
-        # NOTE: only consider the cells with partition constraint
-        # ind_seed = non_self_loop & in_partition_cells
-        if len(non_self_loop) == 0:
+        self_loop = {
+            i
+            for i in range(len(self.cells))
+            if self.get_two_table_weight(
+                (self.cells[i], self.cells[i])
+            ) != Rational(1, 1)
+        }
+        non_self_loop = set(graph.nodes) - self_loop
+        if not non_self_loop:
             i1_ind = set()
+        elif non_self_loop & in_max_evidence_profile:
+            evidence_seed = set(nx.maximal_independent_set(
+                graph.subgraph(non_self_loop & in_max_evidence_profile)
+            ))
+            i1_ind = set(nx.maximal_independent_set(
+                graph.subgraph(non_self_loop), nodes=evidence_seed
+            ))
         else:
-            if len(non_self_loop & in_partition_cells) != 0:
-                in_partition_ind = set(nx.maximal_independent_set(g.subgraph(non_self_loop & in_partition_cells)))
-                i1_ind = set(nx.maximal_independent_set(g.subgraph(non_self_loop), nodes=in_partition_ind))
-            else:
-                i1_ind = set(nx.maximal_independent_set(g.subgraph(non_self_loop)))
-        g_ind = set(nx.maximal_independent_set(g, nodes=i1_ind))
-        i2_ind = g_ind.difference(i1_ind)
-        non_ind = g.nodes - i1_ind - i2_ind
-        logger.info("Found i1 independent set: {}", i1_ind)
-        logger.info("Found i2 independent set: {}", i2_ind)
-        logger.info("Found non-independent set: {}", non_ind)
-        return list(i1_ind), list(i2_ind), list(non_ind)
+            i1_ind = set(nx.maximal_independent_set(
+                graph.subgraph(non_self_loop)
+            ))
+
+        graph_ind = set(nx.maximal_independent_set(graph, nodes=i1_ind))
+        i2_ind = graph_ind - i1_ind
+        nonind = set(graph.nodes) - i1_ind - i2_ind
+        logger.info("Found evidence i1 independent set: {}", i1_ind)
+        logger.info("Found evidence i2 independent set: {}", i2_ind)
+        logger.info("Found evidence non-independent set: {}", nonind)
+        return list(i1_ind), list(i2_ind), list(nonind)
 
     def _matches(self, clique, other_cell) -> bool:
         cell = clique[0]
         if len(clique) > 1:
-            third_cell = clique[1]
-            r = self.get_two_table_weight((cell, third_cell))
+            relation = self.get_two_table_weight((cell, clique[1]))
             for third_cell in clique:
-                if r != self.get_two_table_weight((other_cell, third_cell)):
+                if relation != self.get_two_table_weight(
+                    (other_cell, third_cell)
+                ):
                     return False
 
         for third_cell in self.get_cells():
             if other_cell == third_cell or third_cell in clique:
                 continue
-            r = self.get_two_table_weight((cell, third_cell))
-            if r != self.get_two_table_weight((other_cell, third_cell)):
+            relation = self.get_two_table_weight((cell, third_cell))
+            if relation != self.get_two_table_weight(
+                (other_cell, third_cell)
+            ):
                 return False
         return True
 
-    def build_symmetric_cliques(self, cell_indices) -> \
-            tuple[list[list[Cell]], list[int]]:
-        cliques: list[list[Cell]] = []
-        idx_list = []
-        while len(cell_indices) > 0:
+    def build_symmetric_cliques(
+        self,
+        cell_indices: list[int],
+    ) -> tuple[list[list[CellWithEvidenceProfile]], list[int]]:
+        cell_indices = list(cell_indices)
+        cliques = []
+        clique_indices = []
+        while cell_indices:
             cell_idx = cell_indices.pop()
             clique = [self.cells[cell_idx]]
-            # for cell in I1 independent set, we dont need to built symmetric cliques
             for other_cell_idx in cell_indices:
                 other_cell = self.cells[other_cell_idx]
                 if self._matches(clique, other_cell):
@@ -695,123 +769,148 @@ class OptimizedCellGraphWithPC(CellGraph):
             for other_cell in clique[1:]:
                 cell_indices.remove(self.cells.index(other_cell))
             cliques.append(clique)
-            idx_list.append(len(cliques) - 1)
-        logger.info("Built {} symmetric cliques: {}", len(cliques), cliques)
-        return cliques, idx_list
+            clique_indices.append(len(cliques) - 1)
+        logger.info(
+            "Built {} evidence symmetric cliques: {}",
+            len(cliques),
+            cliques,
+        )
+        return cliques, clique_indices
 
-    def get_i1_weight(self, i1_config: tuple[int],
-                      config: tuple[int]) -> RingElement:
-        ret = 1
-        for i1_inds, num in zip(self.i1_partition, i1_config):
-            # NOTE: it means the config is not valid
-            if len(i1_inds) == 0 and num > 0:
-                return 0
-            accum = 0
-            for i in i1_inds:
-                tmp = self.get_cell_weight(self.cells[i])
-                for j in self.nonind:
-                    tmp = tmp * self.get_two_table_weight(
-                        (self.cliques[j][0], self.cells[i])
-                    ) ** config[self.nonind_map[j]]
-                accum = accum + tmp
-            ret = ret * (accum ** num)
-        return ret
+    def get_i1_weight(self, i1_config: tuple[int], config: tuple[int]) -> RingElement:
+        result = Rational(1, 1)
+        for i1_indices, count in zip(
+            self.i1_evidence_profile_partition, i1_config
+        ):
+            if not i1_indices and count > 0:
+                return Rational(0, 1)
+            accum = Rational(0, 1)
+            for cell_idx in i1_indices:
+                term = self.get_cell_weight(self.cells[cell_idx])
+                for clique_idx in self.nonind:
+                    term *= self.get_two_table_weight(
+                        (self.cliques[clique_idx][0], self.cells[cell_idx])
+                    ) ** config[self.nonind_map[clique_idx]]
+                accum += term
+            result *= accum ** count
+        return result
 
     @functools.lru_cache(maxsize=None)
-    def get_J_term(self, l: int, clique_config: tuple[int]) -> RingElement:
-        """
-        clique_config: the partition config in the clique l
-        """
-        ret = 1
-        clique = self.cliques[l]
-        clique_partition = self.clique_partitions[l]
-        # the clique belongs to one pred
-        if len(clique_partition) == 1:
-            ret = self.get_partitioned_J_term(
-                l, 0, clique_config[0]
+    def get_J_term(self, clique_idx: int, clique_config: tuple[int]) -> RingElement:
+        result = Rational(1, 1)
+        clique = self.cliques[clique_idx]
+        evidence_profile_groups = self.clique_evidence_profile_partitions[
+            clique_idx
+        ]
+        if len(evidence_profile_groups) == 1:
+            return self.get_partitioned_J_term(
+                clique_idx, 0, clique_config[0]
             )
-        else:
-            # at least two cells in the clique
-            r = self.get_two_table_weight((clique[0], clique[1]))
-            sumn = 0
-            for i, n1 in enumerate(clique_config):
-                for j, n2 in enumerate(clique_config):
-                    if i < j:
-                        sumn = sumn + n1 * n2
-            ret = ret * (r ** sumn)
-            for par_idx in range(len(clique_partition)):
-                ret = ret * self.get_partitioned_J_term(
-                    l, par_idx, clique_config[par_idx]
-                )
-        return ret
+
+        relation = self.get_two_table_weight((clique[0], clique[1]))
+        cross_pairs = sum(
+            left_count * right_count
+            for left_idx, left_count in enumerate(clique_config)
+            for right_idx, right_count in enumerate(clique_config)
+            if left_idx < right_idx
+        )
+        result *= relation ** cross_pairs
+        for partition_idx in range(len(evidence_profile_groups)):
+            result *= self.get_partitioned_J_term(
+                clique_idx, partition_idx, clique_config[partition_idx]
+            )
+        return result
 
     @functools.lru_cache(maxsize=None)
-    def get_partitioned_J_term(self, l: int, par_idx: int, nhat: int):
-        cell_indices_in_clique = self.clique_partitions[l][par_idx]
-        clique = self.cliques[l]
-        if len(cell_indices_in_clique) == 1:
-            thesum = self.get_two_table_weight(
-                (clique[cell_indices_in_clique[0]],
-                 clique[cell_indices_in_clique[0]])
-            ) ** MultinomialCoefficients.comb(nhat, 2)
-            thesum = thesum * self.get_cell_weight(
-                clique[cell_indices_in_clique[0]]
-            ) ** nhat
-        else:
-            thesum = self.get_d_term(l, nhat, par_idx)
-        return thesum
+    def get_partitioned_J_term(
+        self,
+        clique_idx: int,
+        partition_idx: int,
+        count: int,
+    ) -> RingElement:
+        cell_indices = self.clique_evidence_profile_partitions[clique_idx][
+            partition_idx
+        ]
+        clique = self.cliques[clique_idx]
+        if len(cell_indices) == 1:
+            cell = clique[cell_indices[0]]
+            return (
+                self.get_two_table_weight((cell, cell))
+                ** MultinomialCoefficients.comb(count, 2)
+                * self.get_cell_weight(cell) ** count
+            )
+        return self.get_d_term(clique_idx, count, partition_idx)
 
     @functools.lru_cache(maxsize=None)
-    def get_d_term(self, l: int, n: int, par_idx: int, cur: int = 0) -> RingElement:
-        cell_indices_in_clique = self.clique_partitions[l][par_idx]
-        cell_index = cell_indices_in_clique[cur]
-        cells_num = len(cell_indices_in_clique)
-        clique = self.cliques[l]
-        r = self.get_two_table_weight((clique[0], clique[1]))
-        if cur == cells_num - 1:
-            w = self.get_cell_weight(clique[cell_index]) ** n
-            s = self.get_two_table_weight((clique[cell_index], clique[cell_index]))
-            ret = w * s ** MultinomialCoefficients.comb(n, 2)
-        else:
-            ret = 0
-            for ni in range(n + 1):
-                mult = MultinomialCoefficients.comb(n, ni)
-                w = self.get_cell_weight(clique[cell_index]) ** ni
-                s = self.get_two_table_weight((clique[cell_index], clique[cell_index]))
-                mult = mult * w
-                mult = mult * (s ** MultinomialCoefficients.comb(ni, 2))
-                mult = mult * r ** (ni * (n - ni))
-                mult = mult * self.get_d_term(l, n - ni, par_idx, cur + 1)
-                ret = ret + mult
-        return ret
+    def get_d_term(
+        self,
+        clique_idx: int,
+        count: int,
+        partition_idx: int,
+        cur: int = 0,
+    ) -> RingElement:
+        cell_indices = self.clique_evidence_profile_partitions[clique_idx][
+            partition_idx
+        ]
+        cell_index = cell_indices[cur]
+        clique = self.cliques[clique_idx]
+        cell = clique[cell_index]
+        relation = self.get_two_table_weight((clique[0], clique[1]))
+        self_relation = self.get_two_table_weight((cell, cell))
+        weight = self.get_cell_weight(cell)
+
+        if cur == len(cell_indices) - 1:
+            return (
+                weight ** count
+                * self_relation ** MultinomialCoefficients.comb(count, 2)
+            )
+
+        result = Rational(0, 1)
+        for cell_count in range(count + 1):
+            term = MultinomialCoefficients.comb(count, cell_count)
+            term *= weight ** cell_count
+            term *= self_relation ** MultinomialCoefficients.comb(cell_count, 2)
+            term *= relation ** (cell_count * (count - cell_count))
+            term *= self.get_d_term(
+                clique_idx,
+                count - cell_count,
+                partition_idx,
+                cur + 1,
+            )
+            result += term
+        return result
 
 
-def build_cell_graphs(formula: QFFormula,
-                      get_weight: Callable[[Pred],
-                                           tuple[RingElement, RingElement]],
-                      leq_pred: Pred = None,
-                      predecessor_preds: dict[int, Pred] = None,
-                      optimized: bool = False,
-                      domain_size: int = 0,
-                      modified_cell_symmetry: bool = False,
-                      partition_constraint: PartitionConstraint = None) \
-        -> Generator[tuple[CellGraph, RingElement]]:
+def build_cell_graphs(
+    formula: QFFormula,
+    get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
+    leq_pred: Pred = None,
+    predecessor_preds: dict[int, Pred] = None,
+    optimized: bool = False,
+    domain_size: int = 0,
+    modified_cell_symmetry: bool = False,
+    required_unary_preds: frozenset[Pred] = frozenset(),
+    unary_evidence_partition: "UnaryEvidencePartition | None" = None,
+) -> Generator[tuple[CellGraph, RingElement]]:
     nullary_atoms = [atom for atom in formula.atoms() if atom.pred.arity == 0]
     if len(nullary_atoms) == 0:
         logger.info('No nullary atoms found, building a single cell graph')
         if not optimized: # Decide whether to create the basic version or the optimized version based on the `optimized` parameter.
             yield CellGraph(
-                formula, get_weight, leq_pred, predecessor_preds
-            ), 1
+                formula, get_weight, leq_pred, predecessor_preds,
+                required_unary_preds
+            ), Rational(1, 1)
         else:
-            if partition_constraint is None:
-                yield OptimizedCellGraph(
-                    formula, get_weight, domain_size, modified_cell_symmetry
-                ), 1
+            if unary_evidence_partition is not None:
+                yield OptimizedCellGraphWithEvidence(
+                    formula, get_weight, domain_size,
+                    unary_evidence_partition, required_unary_preds
+                ), Rational(1, 1)
             else:
-                yield OptimizedCellGraphWithPC(
-                    formula, get_weight, domain_size, partition_constraint
-                ), 1
+                yield OptimizedCellGraph(
+                    formula, get_weight, domain_size, modified_cell_symmetry,
+                    required_unary_preds
+                ), Rational(1, 1)
     else:
         logger.info('Found nullary atoms {}', nullary_atoms)
         for values in product(*([[True, False]] * len(nullary_atoms))):
@@ -823,18 +922,21 @@ def build_cell_graphs(formula: QFFormula,
                 continue
             if not optimized:
                 cell_graph = CellGraph(
-                    subs_formula, get_weight, leq_pred, predecessor_preds
+                    subs_formula, get_weight, leq_pred, predecessor_preds,
+                    required_unary_preds
                 )
             else:
-                if partition_constraint is None:
-                    cell_graph = OptimizedCellGraph(
-                        subs_formula, get_weight, domain_size, modified_cell_symmetry
+                if unary_evidence_partition is not None:
+                    cell_graph = OptimizedCellGraphWithEvidence(
+                        subs_formula, get_weight, domain_size,
+                        unary_evidence_partition, required_unary_preds
                     )
                 else:
-                    cell_graph = OptimizedCellGraphWithPC(
-                        subs_formula, get_weight, domain_size, partition_constraint
+                    cell_graph = OptimizedCellGraph(
+                        subs_formula, get_weight, domain_size,
+                        modified_cell_symmetry, required_unary_preds
                     )
-            weight = 1
+            weight = Rational(1, 1)
             for atom, val in zip(nullary_atoms, values):
                 weight = weight * (get_weight(atom.pred)[0] if val else get_weight(atom.pred)[1])
             yield cell_graph, weight
