@@ -107,3 +107,12 @@ class TwoTable(object):
         if len(conditional_models) == 0:
             return False
         return True
+
+    def __str__(self):
+        s = 'TwoTable:\n'
+        for evidence, weight in self.models.items():
+            s += f'\t{evidence}: {weight}\n'
+        return s
+
+    def __repr__(self) -> str:
+        return self.__str__()

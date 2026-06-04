@@ -1,20 +1,29 @@
+import argparse
 import os
 import sys
-import argparse
-from loguru import logger
-from contexttimer import Timer
-
 from typing import Optional, Union
 
+from contexttimer import Timer
+from loguru import logger
+
+from wfomc.algo import (
+    Algo,
+    LinearOrderEncoding,
+    fast_wfomc,
+    incremental_wfomc,
+    incremental_wfomc3,
+    propositional_wfomc,
+    recursive_wfomc,
+    resolve_linear_order_encoding,
+    standard_wfomc,
+)
+from wfomc.context import IncrementalWFOMC3Context, WFOMCContext
+from wfomc.fol import Counting, QuantifiedFormula
 from wfomc.network import UnaryEvidenceEncoding
+from wfomc.parser import parse_input
 from wfomc.problems import WFOMCProblem
-from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, \
-    recursive_wfomc, propositional_wfomc, LinearOrderEncoding, \
-    resolve_linear_order_encoding
 from wfomc.result import WFOMCResult
 from wfomc.utils import MultinomialCoefficients, round_rational
-from wfomc.context import WFOMCContext
-from wfomc.parser import parse_input
 
 _LOG_FORMAT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
@@ -22,6 +31,40 @@ _LOG_FORMAT = (
     "<cyan>{name}</cyan>:<cyan>{line}</cyan> - "
     "<level>{message}</level>"
 )
+
+
+def _counting_formula_kind_and_comparator(formula: QuantifiedFormula) -> tuple[str, str | None]:
+    if isinstance(formula.quantified_formula, QuantifiedFormula):
+        scope = formula.quantified_formula.quantifier_scope
+        kind = "binary"
+    else:
+        scope = formula.quantifier_scope
+        kind = "unary"
+    comparator = scope.comparator if isinstance(scope, Counting) else None
+    return kind, comparator
+
+
+def _validate_counting_quantifiers(problem: WFOMCProblem, algo: Algo) -> None:
+    if algo == Algo.INCREMENTAL3:
+        supported = {
+            "unary": {"=", "<=", "mod"},
+            "binary": {"=", "<=", "mod"},
+        }
+    else:
+        supported = {
+            "unary": {"=", "!=", "<", ">", "<=", ">="},
+            "binary": {"="},
+        }
+
+    for formula in problem.sentence.cnt_formulas:
+        kind, comparator = _counting_formula_kind_and_comparator(formula)
+        if comparator is None or comparator in supported[kind]:
+            continue
+        allowed = ", ".join(sorted(supported[kind]))
+        raise RuntimeError(
+            f"{kind.capitalize()} counting comparator '{comparator}' is not "
+            f"supported by the {algo} algorithm. Supported comparators: {allowed}."
+        )
 
 
 def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
@@ -38,10 +81,15 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
 
         if problem.contain_linear_order_axiom():
             logger.info('Linear order axiom with the predicate LEQ is found')
-            if algo not in (Algo.INCREMENTAL, Algo.RECURSIVE, Algo.PROPOSITIONAL):
+            if algo not in (
+                Algo.INCREMENTAL,
+                Algo.INCREMENTAL3,
+                Algo.RECURSIVE,
+                Algo.PROPOSITIONAL,
+            ):
                 raise RuntimeError("Linear order axiom is only supported by the "
-                                   "incremental, recursive, and propositional "
-                                   "WFOMC algorithms")
+                                   "incremental, incremental3, recursive, and "
+                                   "propositional WFOMC algorithms")
         if problem.contain_predecessor_axiom():
             logger.info('Predecessor predicate PRED is found')
             if algo not in (Algo.INCREMENTAL, Algo.PROPOSITIONAL):
@@ -50,13 +98,6 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
                                    "algorithms")
 
         if problem.contain_unary_evidence():
-            # The propositional counter picks its unary-evidence encoding
-            # based on whether the linear-order axioms (if any) are pinned
-            # or axiomatized. Direct (NONE) evidence is element-specific and
-            # therefore breaks the pin-and-multiply symmetry argument when
-            # an order axiom is present, so in that case we keep the CCS
-            # encoding (symmetric fingerprint counts + repeat_factor).
-            # Otherwise direct evidence is correct and much cheaper.
             if algo == Algo.PROPOSITIONAL:
                 effective_loe = resolve_linear_order_encoding(linear_order_encoding)
                 has_order = problem.contain_linear_order_axiom()
@@ -65,7 +106,7 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
                     reason = 'pin-and-multiply needs symmetric evidence (CCS)'
                 else:
                     required = UnaryEvidenceEncoding.NONE
-                    reason = ('FO³ axiomatization handles element identity'
+                    reason = ('FO3 axiomatization handles element identity'
                               if has_order else
                               'no order axiom; direct unit clauses suffice')
                 if unary_evidence_encoding != required:
@@ -81,9 +122,21 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
                 raise RuntimeError("Partition constraint is only supported for the "
                                    "fastv2 WFOMC and incremental WFOMC algorithms")
 
+        _validate_counting_quantifiers(problem, algo)
+
+        if problem.sentence.contain_modulo_counting_quantifier():
+            logger.info('Modulo counting quantifier is found')
+            if algo != Algo.INCREMENTAL3:
+                raise RuntimeError("Modulo counting quantifier is only supported by the "
+                                   "incremental WFOMC3 algorithm")
+
         logger.info(f'Invoke WFOMC with {algo} algorithm and {unary_evidence_encoding} encoding')
 
-        context = WFOMCContext(problem, unary_evidence_encoding)
+        if algo == Algo.INCREMENTAL3:
+            context = IncrementalWFOMC3Context(problem, unary_evidence_encoding)
+        else:
+            context = WFOMCContext(problem, unary_evidence_encoding)
+
         with Timer() as t:
             if algo == Algo.STANDARD:
                 res = standard_wfomc(context)
@@ -96,14 +149,15 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
             elif algo == Algo.RECURSIVE:
                 res = recursive_wfomc(context)
             elif algo == Algo.PROPOSITIONAL:
-                # propositional_wfomc decodes its own result so it can choose
-                # its post-processing (e.g., skip the n! multiplier when LEQ
-                # is axiomatized rather than pinned).
                 res = propositional_wfomc(
                     context, linear_order_encoding=linear_order_encoding,
                 )
+            elif algo == Algo.INCREMENTAL3:
+                res = incremental_wfomc3(context)
+
             if algo is not Algo.PROPOSITIONAL:
                 res = context.decode_result(res)
+
         logger.info('WFOMC time: {}', t.elapsed)
         return WFOMCResult(res)
     finally:
@@ -144,15 +198,11 @@ def main() -> None:
 
     level = "DEBUG" if args.debug else "INFO"
 
-    # Remove the default loguru stderr handler; parse_input() and wfomc()
-    # each add their own scoped handler.
     try:
         logger.remove(0)
     except ValueError:
         pass
 
-    # File sink covers the entire session. It receives records whenever
-    # parse_input() or wfomc() call logger.enable("wfomc").
     logger.add(
         f'{args.output_dir}/log.txt',
         mode='w',

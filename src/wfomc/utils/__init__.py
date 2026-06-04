@@ -7,7 +7,7 @@ from sympy import Rational, Expr, Poly
 from decimal import Decimal
 
 from .multinomial import MultinomialCoefficients, multinomial, multinomial_less_than
-from .polynomial_flint import RingElement, to_ringelements, to_symexpr, filter_poly, \
+from .polynomial_flint import RingElement, to_ringelements, to_symexpr, expand, filter_poly, \
     choices, bernoulli_trial
 
 
@@ -41,6 +41,7 @@ __all__ = [
     'RingElement',
     'to_ringelements',
     'to_symexpr',
+    'expand',
     'round_rational',
     'create_vars',
     "format_np_complex",

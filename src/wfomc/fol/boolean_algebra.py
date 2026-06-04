@@ -46,6 +46,9 @@ def Implies(*args):
     return boolalg.Implies(*args)
 
 def get_atoms(expr: Expr) -> frozenset[AtomicFormula]:
+    # Top / Bot (where expr is None) or after simplification it becomes a constant true/false, neither of which has a first-order atom. It will traverse the internal expr and return a set that contains all the AtomicFormula objects that constitute this formula (such as P(c1, c2)).
+    if expr is None or expr in (sympy.true, sympy.false):
+        return frozenset()
     atoms = set()
     for symbol in expr.atoms():
         atoms.add(get_atom(symbol))
