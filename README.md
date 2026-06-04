@@ -35,6 +35,54 @@ where
   - `pin` (default): pin every ground order atom to a canonical sorted order/cycle; `decode_result` applies the `n!` multiplier. Cheap, fast.
   - `axioms`: emit the FO³ axioms / definitions explicitly. Pin-free but materially slower. See *Propositional counter* below for the trade-off.
 
+### Python API
+
+You can also call the solver directly from a Python script:
+
+```python
+from sympy import symbols
+from wfomc import Algo, Const, Pred, Rational, WFOMCProblem, fol_parse, to_sc2, wfomc
+
+x = symbols("x")
+domain = {Const("a"), Const("b"), Const("c")}
+sentence = to_sc2(fol_parse(r"\forall X: (P(X))"))
+weights = {
+    Pred("P", 1): (x, Rational(1, 1)),
+}
+
+problem = WFOMCProblem(sentence, domain, weights)
+result = wfomc(problem, algo=Algo.FASTv2)
+
+print(result)                  # exact result
+print(result.constant_value())  # SymPy Rational, or None for polynomial results
+for degrees, coeff in result.terms([x]):
+    print(degrees, coeff)
+```
+
+`wfomc(...)` returns a `WFOMCResult`, not a raw FLINT polynomial. Use:
+
+- `result.is_zero()`
+- `result.is_constant()`
+- `result.constant_value()`
+- `result.is_polynomial()`
+- `result.variable_names()`
+- `result.terms([...])`
+
+The underlying solver still uses FLINT internally for exact polynomial arithmetic,
+but callers should treat that as an implementation detail.
+
+`WFOMCProblem(..., weights=...)` accepts a dictionary from `Pred` to
+`(positive_weight, negative_weight)`. Each weight may be:
+
+- a Python `int`;
+- a Python `float`, converted exactly through `fractions.Fraction(float_value)`;
+- a SymPy expression (`sympy.Expr`), including `sympy.Rational`, symbols, and
+  polynomial expressions such as `x`, `2*x + 1`, or `x*y`.
+
+Avoid passing raw FLINT values or `sympy.Poly` objects as weights. If you need a
+polynomial weight, pass the corresponding SymPy expression instead, e.g.
+`x**2 + 3*x + 1`.
+
 ### Propositional counter
 
 The `propositional` algorithm grounds the universally quantified (Skolemized) sentence over every pair of domain elements and hands the resulting weighted CNF to [ganak](https://github.com/meelgroup/ganak). It is intended as a textbook-definition ground-truth baseline against which the lifted algorithms can be checked.

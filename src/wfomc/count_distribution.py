@@ -37,7 +37,7 @@ def count_distribution(problem: WFOMCProblem, preds: list[Pred],
 
     symbols = [pred2sym[pred] for pred in preds]
     count_dist = {}
-    for degrees, coef in coeff_dict(res, symbols):
+    for degrees, coef in res.terms(symbols):
         count_dist[degrees] = coef
     return count_dist
 

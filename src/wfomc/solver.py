@@ -11,7 +11,8 @@ from wfomc.problems import WFOMCProblem
 from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, \
     recursive_wfomc, propositional_wfomc, LinearOrderEncoding, \
     resolve_linear_order_encoding
-from wfomc.utils import MultinomialCoefficients, Rational, round_rational, Poly
+from wfomc.result import WFOMCResult
+from wfomc.utils import MultinomialCoefficients, round_rational
 from wfomc.context import WFOMCContext
 from wfomc.parser import parse_input
 
@@ -26,7 +27,7 @@ _LOG_FORMAT = (
 def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
           unary_evidence_encoding: UnaryEvidenceEncoding = UnaryEvidenceEncoding.CCS,
           linear_order_encoding: Optional[Union[LinearOrderEncoding, str]] = None,
-          debug: bool = False) -> Rational:
+          debug: bool = False) -> WFOMCResult:
     level = "DEBUG" if debug else "INFO"
     _handler_id = logger.add(
         sys.stderr, level=level, filter="wfomc", colorize=True, format=_LOG_FORMAT,
@@ -104,7 +105,7 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
             if algo is not Algo.PROPOSITIONAL:
                 res = context.decode_result(res)
         logger.info('WFOMC time: {}', t.elapsed)
-        return res
+        return WFOMCResult(res)
     finally:
         logger.remove(_handler_id)
         logger.disable("wfomc")
@@ -172,6 +173,7 @@ def main() -> None:
     )
 
     print(f'WFOMC (arbitrary precision): {res}')
-    if isinstance(res, Rational):
-        round_val = round_rational(res)
+    const_res = res.constant_value()
+    if const_res is not None:
+        round_val = round_rational(const_res)
         print(f'WFOMC (round): {round_val} (exp({round_val.ln()}))')

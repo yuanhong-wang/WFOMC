@@ -9,6 +9,7 @@ from .parser.fol_parser import parse as fol_parse
 from .fol import *
 from .network import CardinalityConstraint, UnaryEvidenceEncoding
 from .solver import wfomc
+from .result import WFOMCResult
 from .count_distribution import count_distribution
 from .utils import Rational, Expr, Poly, round_rational, MultinomialCoefficients, \
     multinomial, multinomial_less_than
@@ -22,6 +23,7 @@ __all__ = [
     'MLN_to_WFOMC',
     'parse_input',
     'wfomc',
+    'WFOMCResult',
     'CardinalityConstraint',
     'UnaryEvidenceEncoding',
     'count_distribution',

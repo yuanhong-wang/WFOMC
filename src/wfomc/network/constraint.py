@@ -8,7 +8,8 @@ from dataclasses import dataclass
 
 from wfomc.fol import AUXILIARY_PRED_NAME, AtomicFormula, Const, Pred, X, QFFormula, top
 from wfomc.fol import exactly_one_qf, new_predicate
-from wfomc.utils import Expr, MultinomialCoefficients, create_vars, EPoly, filter_poly
+from wfomc.utils import Expr, MultinomialCoefficients, create_vars
+from wfomc.utils.polynomial_flint import EPoly, filter_poly
 from wfomc.utils.polynomial_flint import to_symexpr
 
 

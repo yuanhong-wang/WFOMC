@@ -4,7 +4,21 @@ import json
 
 from pathlib import Path
 
-from wfomc import wfomc, parse_input, Algo, UnaryEvidenceEncoding
+from sympy import symbols
+
+from wfomc import (
+    Algo,
+    Const,
+    Pred,
+    Rational,
+    UnaryEvidenceEncoding,
+    WFOMCProblem,
+    WFOMCResult,
+    fol_parse,
+    parse_input,
+    to_sc2,
+    wfomc,
+)
 
 
 current_path = Path(__file__).parent.absolute()
@@ -61,6 +75,29 @@ def test_model(model_file):
         problem = parse_input(model_file)
         results.append(wfomc(problem, *args))
     assert all([r == results[0] for r in results])
+
+
+def test_wfomc_returns_public_result_wrapper():
+    problem = parse_input(str(current_path.parent / "models" / "2-colored-graph.wfomcs"))
+    result = wfomc(problem, Algo.FASTv2)
+    assert isinstance(result, WFOMCResult)
+    assert result.is_constant()
+    assert result.constant_value() is not None
+
+
+def test_wfomc_result_exposes_projected_polynomial_terms():
+    x = symbols("x")
+    sentence = to_sc2(fol_parse(r"\forall X: (P(X))"))
+    problem = WFOMCProblem(
+        sentence,
+        {Const("a"), Const("b")},
+        {Pred("P", 1): (x, Rational(1, 1))},
+    )
+
+    result = wfomc(problem, Algo.FASTv2)
+
+    assert result.is_polynomial()
+    assert dict(result.terms([x])) == {(2,): Rational(1, 1)}
 
 
 # answer_json = json.load(open(current_path.parent / 'models' / 'MATH' / 'all.json'))
