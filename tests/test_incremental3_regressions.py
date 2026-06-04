@@ -2,8 +2,27 @@ from __future__ import annotations
 
 import pytest
 
-from wfomc import Algo, Const, Pred, Rational, WFOMCProblem, fol_parse, to_sc2, wfomc
-from wfomc.algo.IncrementalWFOMC3 import ConfigSpace
+from types import SimpleNamespace
+
+from wfomc import (
+    Algo,
+    Const,
+    Counting,
+    Pred,
+    QuantifiedFormula,
+    Rational,
+    Universal,
+    Var,
+    WFOMCProblem,
+    X,
+    Y,
+    fol_parse,
+    to_sc2,
+    wfomc,
+)
+from wfomc.algo.IncrementalWFOMC3 import ConfigSpace, build_weight
+from wfomc.context import CountingState, IncrementalWFOMC3Context, UnaryConstraintHandler
+from wfomc.parser.wfomcs_parser import parse as wfomcs_parse
 
 
 def _domain(size: int) -> set[Const]:
@@ -56,3 +75,83 @@ def test_incremental3_config_space_preserves_counts_above_uint8() -> None:
     config = space.inc(config, (0,))
 
     assert config[space.offset((0,))] == 257
+
+
+def test_wfomcs_parse_returns_problem_object() -> None:
+    problem = wfomcs_parse(r"\forall X: (P(X))" "\n" "V = 1")
+
+    assert isinstance(problem, WFOMCProblem)
+
+
+def test_counting_quantifier_rejects_invalid_inputs_without_asserts() -> None:
+    with pytest.raises(ValueError, match="Unsupported comparator"):
+        Counting(Var("X"), "??", 1)
+
+    with pytest.raises(ValueError, match="Require 0 ≤ r < k"):
+        Counting(Var("X"), "mod", (0, 0))
+
+
+def test_incremental3_rejects_non_atomic_binary_counting_bodies() -> None:
+    ctx = IncrementalWFOMC3Context.__new__(IncrementalWFOMC3Context)
+    ctx.unary_handler = UnaryConstraintHandler()
+    ctx._cnt_preds = []
+    ctx._cnt_params = []
+    ctx._cnt_remainder = []
+    ctx._mod_pred_index = []
+    ctx._exist_mod = False
+    ctx._exist_le = False
+    ctx._le_pred = []
+    ctx._comparator_handlers = {
+        "mod": ctx._handle_mod,
+        "=": ctx._handle_eq,
+        "<=": ctx._handle_le,
+    }
+    ctx.sentence = SimpleNamespace(
+        cnt_formulas=[
+            QuantifiedFormula(
+                Universal(X),
+                QuantifiedFormula(
+                    Counting(Y, "<=", 1),
+                    Pred("R", 2)(X, Y) | Pred("S", 2)(X, Y),
+                ),
+            )
+        ]
+    )
+
+    with pytest.raises(TypeError, match="Binary counting quantifier requires a binary atomic formula"):
+        ctx._handle_counting_quantifier()
+
+
+def test_build_weight_wraps_modulo_remainder_for_positive_cells() -> None:
+    class _Cell:
+        def __init__(self, positive: bool):
+            self.positive = positive
+
+        def is_positive(self, _pred):
+            return self.positive
+
+    class _CellGraph:
+        @staticmethod
+        def get_cell_weight(_cell):
+            return Rational(1, 1)
+
+        @staticmethod
+        def get_two_table_weight(_pair, _evidence):
+            return Rational(0, 1)
+
+    state = CountingState(
+        ext_preds=[],
+        cnt_preds=[Pred("R", 1)],
+        cnt_params=[2],
+        cnt_remainder=[0],
+        exist_mod=True,
+        mod_pred_index=[0],
+        exist_le=False,
+        le_index=[],
+        binary_evidence=[],
+        c_type_shape=[2],
+    )
+
+    w2t, _, _ = build_weight([_Cell(True)], _CellGraph(), state)
+
+    assert w2t[0] == (1,)

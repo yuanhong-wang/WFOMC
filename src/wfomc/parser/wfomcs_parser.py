@@ -87,14 +87,13 @@ class WFOMSTransformer(FOLTransformer, CCTransfomer):
         return sentence, domain, weightings, cardinality_constraint, unary_evidence
 
 
-def parse(text: str) -> \
-        tuple[SC2, set[Const], dict[Pred, tuple[Rational, Rational]], CardinalityConstraint]:
+def parse(text: str) -> WFOMCProblem:
     """
     Parse the WFOMS text into a WFOMCProblem object.
     Args:
         text (str): A text string containing the definition of the WFOMS problem.
     Returns:
-        WFOMC Problem: A structured object that contains the derived formula, domain, weights, and constraints.
+        WFOMCProblem: A structured object that contains the derived formula, domain, weights, and constraints.
     """
     wfomcs_parser = Lark(grammar,
                         start='wfomcs') # Create a Lark parser instance. `grammar` is a predefined variable containing the complete grammar rules for the WFOMS language. `start='wfomcs'` specifies that the parsing process should begin from the 'wfomcs' rule in the grammar.

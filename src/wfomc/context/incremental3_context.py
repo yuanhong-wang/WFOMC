@@ -173,34 +173,50 @@ class IncrementalWFOMC3Context(WFOMCContext):
                 kind, idx, inner_formula, qscope, cnt_param_raw, comparator
             )
 
+    def _get_counting_predicate(self, kind: str, inner_formula: Formula) -> Pred:
+        expected_arity = 1 if kind == "unary" else 2
+        if not (
+            isinstance(inner_formula, AtomicFormula) and
+            inner_formula.pred.arity == expected_arity
+        ):
+            raise TypeError(
+                f"{kind.capitalize()} counting quantifier requires a "
+                f"{'unary' if kind == 'unary' else 'binary'} atomic formula "
+                f"inside, but got {inner_formula}"
+            )
+        return inner_formula.pred
+
     def _handle_mod(self, kind, idx, inner_formula, qscope, param, _):
         """Handle ∃_{≡r (mod k)}."""
         r, k = param
+        pred = self._get_counting_predicate(kind, inner_formula)
         if kind == "unary":
-            self.unary_handler.add_mod(inner_formula.pred, r, k)
+            self.unary_handler.add_mod(pred, r, k)
         else:
             self._exist_mod = True
             self._mod_pred_index.append(idx)
             self._cnt_remainder.append(r)
             self._cnt_params.append(k)
-            self._cnt_preds.append(inner_formula.pred)
+            self._cnt_preds.append(pred)
 
     def _handle_eq(self, kind, idx, inner_formula, qscope, param, _):
         """Handle ∃_{=k}."""
+        pred = self._get_counting_predicate(kind, inner_formula)
         if kind == "unary":
-            self.unary_handler.add_eq(inner_formula.pred, param)
+            self.unary_handler.add_eq(pred, param)
         else:
             self._cnt_remainder.append(None)
             self._cnt_params.append(param)
-            self._cnt_preds.append(inner_formula.pred)
+            self._cnt_preds.append(pred)
 
     def _handle_le(self, kind, idx, inner_formula, qscope, param, _):
         """Handle ∃_{≤k}."""
+        pred = self._get_counting_predicate(kind, inner_formula)
         if kind == "unary":
-            self.unary_handler.add_le(inner_formula.pred, param)
+            self.unary_handler.add_le(pred, param)
         else:
             self._cnt_remainder.append(None)
             self._cnt_params.append(param)
-            self._cnt_preds.append(inner_formula.pred)
-            self._le_pred.append(inner_formula.pred)
+            self._cnt_preds.append(pred)
+            self._le_pred.append(pred)
             self._exist_le = True

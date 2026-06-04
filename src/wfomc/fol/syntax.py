@@ -408,11 +408,12 @@ class Counting(Quantifier):
 
     def __post_init__(self):
         allowed = ['=', '!=', '<', '>', '<=', '>=', 'mod']
-        assert self.comparator in allowed, \
-            f"Unsupported comparator '{self.comparator}'"
+        if self.comparator not in allowed:
+            raise ValueError(f"Unsupported comparator '{self.comparator}'")
         if self.comparator == 'mod':
             r, k = self.count_param
-            assert 0 <= r < k, "Require 0 ≤ r < k"
+            if not 0 <= r < k:
+                raise ValueError("Require 0 ≤ r < k")
 
         object.__setattr__(self, 'quantifier', '\\exists')
 

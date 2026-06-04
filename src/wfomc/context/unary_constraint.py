@@ -87,14 +87,16 @@ class UnaryConstraintHandler:
         )
 
     def check_mod(self, config, mod_mask) -> bool:
+        vec = np.fromiter(config, dtype=np.int32)
         for mask, r_mod, k_mod in mod_mask:
-            if (mask @ np.fromiter(config, dtype=np.int32)) % k_mod != r_mod:
+            if (mask @ vec) % k_mod != r_mod:
                 return True
         return False
 
     def check_eq(self, config, eq_mask) -> bool:
+        vec = np.fromiter(config, dtype=np.int32)
         for mask, k_eq in eq_mask:
-            if (mask @ np.fromiter(config, dtype=np.int32)) != k_eq:
+            if (mask @ vec) != k_eq:
                 return True
         return False
 

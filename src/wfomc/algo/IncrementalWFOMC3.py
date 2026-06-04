@@ -143,7 +143,7 @@ def build_weight(cells, cell_graph, state: CountingState) -> tuple:
         for idx, (pred, param) in enumerate(zip(state.cnt_preds, state.cnt_params)):
             if cells[i].is_positive(pred):
                 t.append(
-                    state.cnt_remainder[idx] - 1
+                    (state.cnt_remainder[idx] - 1) % param
                     if state.exist_mod and idx in state.mod_pred_index
                     else param - 1
                 )
