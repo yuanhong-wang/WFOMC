@@ -127,7 +127,8 @@ The installer clones `https://github.com/meelgroup/ganak.git`, checks out the
 pinned commit, initializes submodules, builds target `ganak-bin`, and copies the
 binary to `.venv/bin/ganak` (or the active environment's equivalent `bin`
 directory). It requires the native build dependencies used by ganak: `git`,
-`cmake`, a C++ compiler, `gmp`, `mpfr`, and `flint`.
+`cmake`, a C++ compiler, `gmp`, `mpfr`, and `flint`. The installer entry point
+lives in `scripts/tools/install_ganak.py`.
 
 The runtime lookup order is:
 

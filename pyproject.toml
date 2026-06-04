@@ -27,11 +27,15 @@ dependencies = [
 
 [project.scripts]
 wfomc = "wfomc.solver:main"
-wfomc-install-ganak = "wfomc.install_ganak:main"
+wfomc-install-ganak = "scripts.tools.install_ganak:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wfomc"]
+force-include = { "scripts/__init__.py" = "scripts/__init__.py", "scripts/tools" = "scripts/tools" }
 
 [dependency-groups]
 dev = [

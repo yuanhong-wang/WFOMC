@@ -132,6 +132,9 @@ outputs/
 forclift.jar
 forclift_complex.jar
 tools/
+!scripts/tools/
+!scripts/tools/**
+scripts/tools/__pycache__/
 exp/
 .ycm_extra_conf.py
 .vscode/
