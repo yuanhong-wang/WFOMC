@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import random
 from itertools import accumulate, repeat
-import typing
-from typing import Iterable, Generator, Union, TypeAlias
+from typing import Callable, Iterable, Generator, TypeAlias
 from functools import reduce
 from collections import defaultdict
 from math import lcm
@@ -13,12 +12,10 @@ from sympy import Rational, Expr, Poly
 from flint import fmpq, fmpq_mpoly_ctx, fmpq_mpoly
 
 
-# for efficiency, we directly use flint's multivariate polynomial for implementation
-EPoly: TypeAlias = fmpq_mpoly
 RingElement: TypeAlias = fmpq | fmpq_mpoly
 
 
-def align_ctx(polys: list[EPoly]) -> list[EPoly]:
+def align_ctx(polys: list[fmpq_mpoly]) -> list[fmpq_mpoly]:
     """
     Align the contexts of the given polynomials.
 
@@ -36,7 +33,7 @@ def align_ctx(polys: list[EPoly]) -> list[EPoly]:
     return aligned_polys
 
 
-def sympoly2fmpq_mpoly(p: Poly) -> EPoly:
+def sympoly2fmpq_mpoly(p: Poly) -> fmpq_mpoly:
     d = p.as_dict()
     gens = p.gens
     ctx = fmpq_mpoly_ctx.get([str(g) for g in gens], 'lex')
@@ -66,7 +63,7 @@ def to_ringelements(values: list[Expr]) -> list[RingElement]:
     polys = list()
     polys_index = list()
     for idx, re in enumerate(ring_elements):
-        if isinstance(re, EPoly):
+        if isinstance(re, fmpq_mpoly):
             polys.append(re)
             polys_index.append(idx)
     aligned_polys = align_ctx(polys)
@@ -88,7 +85,7 @@ def to_symexpr(e: RingElement) -> Expr:
         raise ValueError(f'Unsupported type: {type(e)}')
 
 
-def coeff_dict(p: EPoly, gens: list[Expr]) -> Generator[tuple[tuple[int, ...], Rational], None, None]:
+def coeff_dict(p: fmpq_mpoly, gens: list[Expr]) -> Generator[tuple[tuple[int, ...], Rational], None, None]:
     p_gens = p.context().names()
     coeffs = defaultdict(lambda: Rational(0, 1))
     gens_map = {i: list(p_gens).index(str(g)) for i, g in enumerate(gens)}
@@ -99,8 +96,8 @@ def coeff_dict(p: EPoly, gens: list[Expr]) -> Generator[tuple[tuple[int, ...], R
         yield degrees, coeff
 
 
-def filter_poly(p: EPoly, corr_vars: list[Expr],
-                filter_func: callable([[list[int]], bool])) -> EPoly:
+def filter_poly(p: fmpq_mpoly, corr_vars: list[Expr],
+                filter_func: Callable[[list[int]], bool]) -> RingElement:
     gens = p.context().names()
     indices = [list(gens).index(str(var)) for var in corr_vars]
     filtered = dict()

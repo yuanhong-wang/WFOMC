@@ -6,10 +6,12 @@ from typing import Callable, Iterable
 from loguru import logger
 from dataclasses import dataclass
 
+from flint import fmpq_mpoly
+
 from wfomc.fol import AUXILIARY_PRED_NAME, AtomicFormula, Const, Pred, X, QFFormula, top
 from wfomc.fol import exactly_one_qf, new_predicate
-from wfomc.utils import Expr, MultinomialCoefficients, create_vars
-from wfomc.utils.polynomial_flint import EPoly, filter_poly
+from wfomc.utils import Expr, MultinomialCoefficients, RingElement, create_vars
+from wfomc.utils.polynomial_flint import filter_poly
 from wfomc.utils.polynomial_flint import to_symexpr
 
 
@@ -55,7 +57,7 @@ class CardinalityConstraint(Constraint):
             self.gen_vars.append(sym)
         return new_weights
 
-    def decode_poly(self, poly: EPoly) -> Expr:
+    def decode_poly(self, poly: fmpq_mpoly) -> RingElement:
         res = filter_poly(poly, self.gen_vars, self.valid)
         return res
 
