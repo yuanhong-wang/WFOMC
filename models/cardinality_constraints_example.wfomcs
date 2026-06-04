@@ -1,0 +1,4 @@
+\forall X: (\forall Y: (P(X)|~P(X)))
+
+n = 4
+|P| = 2

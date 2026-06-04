@@ -1,9 +1,0 @@
-\forall X: (~E(X,X)) &
-\forall X: (\forall Y: ((E(X,Y) -> E(Y,X)) &
-                        (E(X,Y) <-> (F1(X,Y) | F2(X,Y))) &
-                        (~F1(X, Y) | ~F2(X,Y)))) &
-\forall X: (\exists Y: (F1(X,Y))) & 
-\forall X: (\exists Y: (F2(X,Y)))
-
-V = 10
-|E| = 20
