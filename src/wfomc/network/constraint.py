@@ -114,6 +114,13 @@ class UnaryEvidenceEncoding(Enum):
     # RETAIN = "retain"
     CCS = "ccs"
     PC = "pc"
+    # NONE: do not preprocess unary evidence at all. WFOMCContext leaves
+    # ``unary_evidence`` untouched (no aux predicates, no cardinality /
+    # partition constraint, no repeat factor) and the algorithm is
+    # responsible for handling the evidence directly. Used by the
+    # propositional counter, which can simply add unit clauses for each
+    # ground evidence atom.
+    NONE = "none"
 
     def __str__(self):
         return self.value

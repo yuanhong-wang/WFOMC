@@ -4,9 +4,13 @@ import argparse
 from loguru import logger
 from contexttimer import Timer
 
+from typing import Optional, Union
+
 from wfomc.network import UnaryEvidenceEncoding
 from wfomc.problems import WFOMCProblem
-from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, recursive_wfomc
+from wfomc.algo import Algo, standard_wfomc, fast_wfomc, incremental_wfomc, \
+    recursive_wfomc, propositional_wfomc, LinearOrderEncoding, \
+    resolve_linear_order_encoding
 from wfomc.utils import MultinomialCoefficients, Rational, round_rational, Poly
 from wfomc.context import WFOMCContext
 from wfomc.parser import parse_input
@@ -21,6 +25,7 @@ _LOG_FORMAT = (
 
 def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
           unary_evidence_encoding: UnaryEvidenceEncoding = UnaryEvidenceEncoding.CCS,
+          linear_order_encoding: Optional[Union[LinearOrderEncoding, str]] = None,
           debug: bool = False) -> Rational:
     level = "DEBUG" if debug else "INFO"
     _handler_id = logger.add(
@@ -32,16 +37,43 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
 
         if problem.contain_linear_order_axiom():
             logger.info('Linear order axiom with the predicate LEQ is found')
-            if algo != Algo.INCREMENTAL and algo != Algo.RECURSIVE:
+            if algo not in (Algo.INCREMENTAL, Algo.RECURSIVE, Algo.PROPOSITIONAL):
                 raise RuntimeError("Linear order axiom is only supported by the "
-                                   "incremental and recursive WFOMC algorithms")
+                                   "incremental, recursive, and propositional "
+                                   "WFOMC algorithms")
         if problem.contain_predecessor_axiom():
             logger.info('Predecessor predicate PRED is found')
-            if algo != Algo.INCREMENTAL:
+            if algo not in (Algo.INCREMENTAL, Algo.PROPOSITIONAL):
                 raise RuntimeError("Predecessor axiom is only supported by the "
-                                   "incremental WFOMC algorithm")
+                                   "incremental and propositional WFOMC "
+                                   "algorithms")
 
         if problem.contain_unary_evidence():
+            # The propositional counter picks its unary-evidence encoding
+            # based on whether the linear-order axioms (if any) are pinned
+            # or axiomatized. Direct (NONE) evidence is element-specific and
+            # therefore breaks the pin-and-multiply symmetry argument when
+            # an order axiom is present, so in that case we keep the CCS
+            # encoding (symmetric fingerprint counts + repeat_factor).
+            # Otherwise direct evidence is correct and much cheaper.
+            if algo == Algo.PROPOSITIONAL:
+                effective_loe = resolve_linear_order_encoding(linear_order_encoding)
+                has_order = problem.contain_linear_order_axiom()
+                if has_order and effective_loe == LinearOrderEncoding.PIN:
+                    required = UnaryEvidenceEncoding.CCS
+                    reason = 'pin-and-multiply needs symmetric evidence (CCS)'
+                else:
+                    required = UnaryEvidenceEncoding.NONE
+                    reason = ('FO³ axiomatization handles element identity'
+                              if has_order else
+                              'no order axiom; direct unit clauses suffice')
+                if unary_evidence_encoding != required:
+                    logger.info(
+                        'Forcing unary_evidence_encoding=%s for the '
+                        'propositional counter (was %s; %s)',
+                        required, unary_evidence_encoding, reason,
+                    )
+                    unary_evidence_encoding = required
             logger.info(f'Unary evidence is found, using {unary_evidence_encoding} encoding')
             if unary_evidence_encoding == UnaryEvidenceEncoding.PC and \
                     algo != Algo.FASTv2 and algo != Algo.INCREMENTAL:
@@ -62,7 +94,15 @@ def wfomc(problem: WFOMCProblem, algo: Algo = Algo.STANDARD,
                 res = incremental_wfomc(context, problem.circle_len)
             elif algo == Algo.RECURSIVE:
                 res = recursive_wfomc(context)
-            res = context.decode_result(res)
+            elif algo == Algo.PROPOSITIONAL:
+                # propositional_wfomc decodes its own result so it can choose
+                # its post-processing (e.g., skip the n! multiplier when LEQ
+                # is axiomatized rather than pinned).
+                res = propositional_wfomc(
+                    context, linear_order_encoding=linear_order_encoding,
+                )
+            if algo is not Algo.PROPOSITIONAL:
+                res = context.decode_result(res)
         logger.info('WFOMC time: {}', t.elapsed)
         return res
     finally:
@@ -84,6 +124,13 @@ def parse_args():
     parser.add_argument('--unary_evidence_encoding', '-e', type=UnaryEvidenceEncoding,
                         choices=list(UnaryEvidenceEncoding),
                         default=UnaryEvidenceEncoding.CCS)
+    parser.add_argument('--linear-order-encoding', '-l',
+                        type=LinearOrderEncoding,
+                        choices=list(LinearOrderEncoding),
+                        default=None,
+                        help='How the propositional counter encodes order '
+                             'axioms (LEQ / PRED / CIRCULAR_PRED). Ignored by '
+                             'the other algorithms. Default: pin.')
     parser.add_argument('--debug', action='store_true', default=False)
     args = parser.parse_args()
     return args
@@ -120,6 +167,7 @@ def main() -> None:
     res = wfomc(
         problem, algo=args.algo,
         unary_evidence_encoding=args.unary_evidence_encoding,
+        linear_order_encoding=args.linear_order_encoding,
         debug=args.debug,
     )
 

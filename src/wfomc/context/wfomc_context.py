@@ -125,28 +125,35 @@ class WFOMCContext(object):
             self.formula = self.formula.quantified_formula
 
         if self.unary_evidence:
-            self.element2evidence = organize_evidence(self.unary_evidence)
-            if self.unary_evidence_encoding == UnaryEvidenceEncoding.PC:
-                logger.info('Use partition constraint to encode unary evidence')
-                evi_formula, partition = unary_evidence_to_pc(
-                    self.element2evidence, self.domain
-                )
-                logger.info('formula to encode unary evidence: {}', evi_formula)
-                logger.info('partition constraint: {}', partition)
-                self.formula = self.formula & evi_formula
-                self.partition_constraint = partition
-            elif self.unary_evidence_encoding == UnaryEvidenceEncoding.CCS:
-                logger.info('Use cardinality constraint to encode unary evidence')
-                evi_formula, ccs, repeat_factor = unary_evidence_to_ccs(
-                    self.element2evidence, self.domain
-                )
-                logger.info('formula to encode unary evidence: {}', evi_formula)
-                logger.info('cardinality constraints: {}', ccs)
-                self.formula = self.formula & evi_formula
-                if not self.contain_cardinality_constraint():
-                    self.cardinality_constraint = CardinalityConstraint()
-                self.cardinality_constraint.extend_simple_constraints(ccs)
-                self.repeat_factor *= repeat_factor
+            if self.unary_evidence_encoding == UnaryEvidenceEncoding.NONE:
+                # Skip preprocessing -- the algorithm (currently only the
+                # propositional counter) will consume ``self.unary_evidence``
+                # directly. No aux preds, no cardinality / partition
+                # constraint, no repeat factor.
+                logger.info('No encoding for unary evidence; handed off raw')
+            else:
+                self.element2evidence = organize_evidence(self.unary_evidence)
+                if self.unary_evidence_encoding == UnaryEvidenceEncoding.PC:
+                    logger.info('Use partition constraint to encode unary evidence')
+                    evi_formula, partition = unary_evidence_to_pc(
+                        self.element2evidence, self.domain
+                    )
+                    logger.info('formula to encode unary evidence: {}', evi_formula)
+                    logger.info('partition constraint: {}', partition)
+                    self.formula = self.formula & evi_formula
+                    self.partition_constraint = partition
+                elif self.unary_evidence_encoding == UnaryEvidenceEncoding.CCS:
+                    logger.info('Use cardinality constraint to encode unary evidence')
+                    evi_formula, ccs, repeat_factor = unary_evidence_to_ccs(
+                        self.element2evidence, self.domain
+                    )
+                    logger.info('formula to encode unary evidence: {}', evi_formula)
+                    logger.info('cardinality constraints: {}', ccs)
+                    self.formula = self.formula & evi_formula
+                    if not self.contain_cardinality_constraint():
+                        self.cardinality_constraint = CardinalityConstraint()
+                    self.cardinality_constraint.extend_simple_constraints(ccs)
+                    self.repeat_factor *= repeat_factor
 
         self.ext_formulas = self.sentence.ext_formulas
         if self.sentence.contain_counting_quantifier():
