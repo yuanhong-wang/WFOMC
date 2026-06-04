@@ -7,16 +7,18 @@ from math import comb
 
 from loguru import logger
 
+from wfomc.cell_graph import Cell, build_cell_graphs as _build_cell_graphs
 from wfomc.fol.sc2 import SC2
 from wfomc.fol.syntax import *
 from wfomc.fol.utils import new_predicate, tseitin_transform
 from wfomc.network import (
     CardinalityConstraint,
-    PartitionConstraint,
-    UnaryEvidenceEncoding,
-    organize_evidence,
-    unary_evidence_to_ccs,
-    unary_evidence_to_pc,
+)
+from .unary_evidence import (
+    CellEvidenceAllocation,
+    UnaryEvidencePartition,
+    UnaryEvidencePlan,
+    UnaryEvidenceStrategy,
 )
 from wfomc.problems import WFOMCProblem
 from wfomc.utils import Expr, Rational, RingElement, to_ringelements
@@ -32,7 +34,7 @@ class WFOMCContext:
     """
 
     def __init__(self, problem: WFOMCProblem,
-                 unary_evidence_encoding: UnaryEvidenceEncoding = UnaryEvidenceEncoding.CCS):
+                 unary_evidence_strategy: UnaryEvidenceStrategy = UnaryEvidenceStrategy.AUTO):
         self.problem = deepcopy(problem)
         self.domain: set[Const] = self.problem.domain
         self.sentence: SC2 = self.problem.sentence
@@ -43,9 +45,8 @@ class WFOMCContext:
         self.repeat_factor = 1
         self.unary_evidence = self.problem.unary_evidence
 
-        self.unary_evidence_encoding = unary_evidence_encoding
-        self.partition_constraint: PartitionConstraint | None = None
-        self.element2evidence: dict[Const, set[AtomicFormula]] = dict()
+        self.unary_evidence_strategy = unary_evidence_strategy
+        self.unary_evidence_plan: UnaryEvidencePlan | None = None
 
         logger.info('sentence: \n{}', self.sentence)
         logger.info('domain: \n{}', self.domain)
@@ -69,14 +70,58 @@ class WFOMCContext:
         logger.info('weights for WFOMC: \n{}', self.weights)
         logger.info('repeat factor: {}', self.repeat_factor)
         logger.info('unary evidence: {}', self.unary_evidence)
-        logger.info('partition constraint: {}', self.partition_constraint)
+        logger.info('unary evidence strategy: {}', self.unary_evidence_strategy)
 
     def contain_cardinality_constraint(self) -> bool:
         return self.cardinality_constraint is not None and \
             not self.cardinality_constraint.empty()
 
-    def contain_partition_constraint(self) -> bool:
-        return self.partition_constraint is not None
+    def _prepare_cardinality_weights(self) -> None:
+        """Attach polynomial weights used to enforce cardinality constraints."""
+        if self.contain_cardinality_constraint():
+            self.cardinality_constraint.build()
+            self.weights.update(
+                self.cardinality_constraint.transform_weighting(self.get_weight)
+            )
+
+    @property
+    def required_unary_preds(self) -> frozenset[Pred]:
+        if self.unary_evidence_plan is None:
+            return frozenset()
+        return self.unary_evidence_plan.required_unary_preds
+
+    @property
+    def unary_evidence_partition(self) -> UnaryEvidencePartition | None:
+        if self.unary_evidence_plan is None:
+            return None
+        return self.unary_evidence_plan.partition
+
+    @property
+    def uses_lifted_unary_evidence(self) -> bool:
+        return (
+            self.unary_evidence_plan is not None
+            and self.unary_evidence_plan.uses_cell_allocation
+        )
+
+    def cell_evidence_allocation(
+        self,
+        cells: list[Cell] | tuple[Cell, ...],
+    ) -> CellEvidenceAllocation | None:
+        if self.unary_evidence_plan is None:
+            return None
+        return self.unary_evidence_plan.compile_for_cells(cells)
+
+    def build_cell_graphs(self, **kwargs):
+        """Build cell graphs with all context-owned unary evidence metadata."""
+        kwargs.setdefault("required_unary_preds", self.required_unary_preds)
+        if (
+            kwargs.get("optimized", False)
+            and self.uses_lifted_unary_evidence
+        ):
+            kwargs.setdefault(
+                "unary_evidence_partition", self.unary_evidence_partition
+            )
+        return _build_cell_graphs(self.formula, self._get_weight, **kwargs)
 
     def contain_existential_quantifier(self) -> bool:
         return self.sentence.contain_existential_quantifier()
@@ -246,33 +291,34 @@ class WFOMCContext:
         self.cardinality_constraint.add_simple_constraint(*card_constraint)
         self.repeat_factor *= repeat_factor
 
-    def _encode_unary_evidence(self) -> None:
-        if self.unary_evidence_encoding == UnaryEvidenceEncoding.NONE:
-            logger.info('No encoding for unary evidence; handed off raw')
-            return
+    def _apply_unary_evidence(self) -> None:
+        plan = UnaryEvidencePlan.build(
+            self.unary_evidence,
+            self.domain,
+            self.sentence,
+            self.unary_evidence_strategy,
+        )
+        self.unary_evidence_plan = plan
+        self.formula &= plan.formula
 
-        self.element2evidence = organize_evidence(self.unary_evidence)
-        if self.unary_evidence_encoding == UnaryEvidenceEncoding.PC:
-            logger.info('Use partition constraint to encode unary evidence')
-            evi_formula, partition = unary_evidence_to_pc(
-                self.element2evidence, self.domain
+        if plan.cardinality_constraints:
+            logger.info('Use cardinality constraints to encode unary evidence')
+            logger.info('formula to encode unary evidence: {}', plan.formula)
+            logger.info(
+                'cardinality constraints: {}',
+                plan.cardinality_constraints,
             )
-            logger.info('formula to encode unary evidence: {}', evi_formula)
-            logger.info('partition constraint: {}', partition)
-            self.formula = self.formula & evi_formula
-            self.partition_constraint = partition
-        elif self.unary_evidence_encoding == UnaryEvidenceEncoding.CCS:
-            logger.info('Use cardinality constraint to encode unary evidence')
-            evi_formula, ccs, repeat_factor = unary_evidence_to_ccs(
-                self.element2evidence, self.domain
-            )
-            logger.info('formula to encode unary evidence: {}', evi_formula)
-            logger.info('cardinality constraints: {}', ccs)
-            self.formula = self.formula & evi_formula
             if not self.contain_cardinality_constraint():
                 self.cardinality_constraint = CardinalityConstraint()
-            self.cardinality_constraint.extend_simple_constraints(ccs)
-            self.repeat_factor *= repeat_factor
+            self.cardinality_constraint.extend_simple_constraints(
+                plan.cardinality_constraints
+            )
+        else:
+            logger.info(
+                "Prepared lifted unary evidence with {} evidence profile(s)",
+                len(plan.partition.evidence_profiles),
+            )
+        self.repeat_factor *= plan.repeat_factor
 
     def _handle_linear_order_axiom(self) -> None:
         if self.problem.contain_linear_order_axiom():
@@ -316,7 +362,7 @@ class WFOMCContext:
             self.formula = self.formula.quantified_formula
 
         if self.unary_evidence:
-            self._encode_unary_evidence()
+            self._apply_unary_evidence()
 
         if self.sentence.contain_counting_quantifier():
             logger.info("Translating SC2 to SNF using the NEW encoding logic.")
@@ -327,13 +373,7 @@ class WFOMCContext:
 
         self._skolemize()
 
-        if self.contain_cardinality_constraint():
-            self.cardinality_constraint.build()
-            self.weights.update(
-                self.cardinality_constraint.transform_weighting(
-                    self.get_weight,
-                )
-            )
+        self._prepare_cardinality_weights()
 
         self._handle_linear_order_axiom()
         self._convert_weights_to_ring_elements()

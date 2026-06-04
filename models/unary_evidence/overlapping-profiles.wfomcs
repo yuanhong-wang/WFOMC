@@ -1,0 +1,5 @@
+\forall X: (P(X) | Q(X))
+
+domain = 4
+
+P(domain0), Q(domain1)

@@ -1,0 +1,5 @@
+\forall X: (~P(X))
+
+domain = 2
+
+P(domain0)

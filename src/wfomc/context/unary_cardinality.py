@@ -1,18 +1,17 @@
 from __future__ import annotations
+
 import numpy as np
+
 from wfomc.fol.syntax import Pred
 
 
-class UnaryConstraintHandler:
-    """
-    Manages unary cardinality constraints (mod, equality, less-than-or-equal)
-    and provides mask-building and fast constraint-checking for IncrementalWFOMC3.
-    """
+class UnaryCardinalityConstraintHandler:
+    """Incremental3 masks for unary cardinality constraints."""
 
     def __init__(self):
-        self.mod_constraints: list[tuple[Pred, int, int]] = []   # (pred, r, k)
-        self.eq_constraints: list[tuple[Pred, int]] = []          # (pred, k)
-        self.le_constraints: list[tuple[Pred, int]] = []          # (pred, k_max)
+        self.mod_constraints: list[tuple[Pred, int, int]] = []
+        self.eq_constraints: list[tuple[Pred, int]] = []
+        self.le_constraints: list[tuple[Pred, int]] = []
 
     def add_mod(self, pred: Pred, r: int, k: int) -> None:
         self.mod_constraints.append((pred, r, k))
@@ -23,12 +22,7 @@ class UnaryConstraintHandler:
     def add_le(self, pred: Pred, k_max: int) -> None:
         self.le_constraints.append((pred, k_max))
 
-    # ------------------------------------------------------------------
-    # Mask building (called once per cell graph)
-    # ------------------------------------------------------------------
-
     def build_mask(self, cells) -> tuple[list, list, list]:
-        """Return (mod_masks, eq_masks, le_masks) for the given cell list."""
         return (
             self.build_mod_mask(cells),
             self.build_eq_mask(cells),
@@ -41,9 +35,11 @@ class UnaryConstraintHandler:
             (
                 np.fromiter(
                     (1 if cell.is_positive(pred) else 0 for cell in cells),
-                    dtype=np.int8, count=n_cells,
+                    dtype=np.int8,
+                    count=n_cells,
                 ),
-                r, k,
+                r,
+                k,
             )
             for pred, r, k in self.mod_constraints
         ]
@@ -54,7 +50,8 @@ class UnaryConstraintHandler:
             (
                 np.fromiter(
                     (1 if cell.is_positive(pred) else 0 for cell in cells),
-                    dtype=np.int8, count=n_cells,
+                    dtype=np.int8,
+                    count=n_cells,
                 ),
                 k_eq,
             )
@@ -67,16 +64,13 @@ class UnaryConstraintHandler:
             (
                 np.fromiter(
                     (1 if cell.is_positive(pred) else 0 for cell in cells),
-                    dtype=np.int8, count=n_cells,
+                    dtype=np.int8,
+                    count=n_cells,
                 ),
                 k_max,
             )
             for pred, k_max in self.le_constraints
         ]
-
-    # ------------------------------------------------------------------
-    # Constraint checking (called in the hot loop)
-    # ------------------------------------------------------------------
 
     def check(self, config, mask) -> tuple[bool, bool, bool]:
         """Return (mod_violated, eq_violated, le_violated)."""
