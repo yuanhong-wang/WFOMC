@@ -27,6 +27,7 @@ dependencies = [
 
 [project.scripts]
 wfomc = "wfomc.solver:main"
+wfomc-install-ganak = "wfomc.install_ganak:main"
 
 [build-system]
 requires = ["hatchling"]

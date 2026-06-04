@@ -68,7 +68,7 @@ def _ganak_available() -> bool:
 @pytest.fixture(scope='session', autouse=True)
 def _require_ganak():
     if not _ganak_available():
-        pytest.skip('ganak binary not found; set GANAK to a devel-branch build')
+        pytest.skip('ganak binary not found; run `uv run wfomc-install-ganak`')
 
 
 def _reference_algo(problem) -> Algo:

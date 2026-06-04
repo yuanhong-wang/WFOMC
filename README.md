@@ -113,19 +113,32 @@ ganak is invoked in two modes:
 - exact rational weighted counting (`--mode 1`) when no symbolic/polynomial weights are involved,
 - multivariate-polynomial weighted counting (`--mode 3`) when cardinality constraints or counting quantifiers introduce symbolic weights.
 
-The polynomial mode only emits its result on the **`devel` branch** of ganak — the released v2.6.1 binary does not print mode-3 output. Build ganak from `devel` and point the integration at the binary in one of the following ways (search order):
+WFOMC expects a ganak build with mode-3 polynomial output. For reproducibility,
+the supported ganak source is pinned to commit
+`82a1d1fb6f0d6fb4a46b825f84b29567728ae483`.
+
+Install the pinned binary into the active uv environment with:
+
+```
+uv run wfomc-install-ganak
+```
+
+The installer clones `https://github.com/meelgroup/ganak.git`, checks out the
+pinned commit, initializes submodules, builds target `ganak-bin`, and copies the
+binary to `.venv/bin/ganak` (or the active environment's equivalent `bin`
+directory). It requires the native build dependencies used by ganak: `git`,
+`cmake`, a C++ compiler, `gmp`, `mpfr`, and `flint`.
+
+The runtime lookup order is:
 
 - `--ganak-path` argument when calling `propositional_wfomc()` programmatically;
 - the `GANAK` environment variable;
 - `ganak` on `PATH`.
 
-Build instructions (macOS / Linux, requires `cmake`, `gmp`, `mpfr`, `flint`):
+If you need to install somewhere else, pass `--install-dir`:
 
 ```
-git clone --recurse-submodules -b devel https://github.com/meelgroup/ganak
-cd ganak && mkdir build && cd build
-cmake -DBUILD_SHARED_LIBS=ON .. && make -j ganak-bin
-export GANAK=$(pwd)/ganak
+uv run wfomc-install-ganak --install-dir /path/to/bin
 ```
 
 Then run:

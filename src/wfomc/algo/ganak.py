@@ -8,8 +8,9 @@ format and invokes ganak as an external process:
 * multivariate-polynomial (symbolic) weighted counting via
   ``--mode 3 --npolyvars N`` (output ``c s exact poly``).
 
-Note: the polynomial mode only prints its result on the ``devel`` branch of
-ganak, so a build from that branch is required for symbolic weights.
+WFOMC pins the ganak source commit because the propositional backend relies on
+mode-3 polynomial output. Run ``uv run wfomc-install-ganak`` to build the
+supported binary into the active uv environment.
 """
 from __future__ import annotations
 
@@ -34,14 +35,16 @@ from flint import fmpq, fmpq_mpoly, fmpq_mpoly_ctx
 from wfomc.utils import Rational, RingElement
 
 
+GANAK_REPO_URL: str = 'https://github.com/meelgroup/ganak.git'
+GANAK_COMMIT: str = '82a1d1fb6f0d6fb4a46b825f84b29567728ae483'
 GANAK_ENV_VAR: str = 'GANAK'
 _FRAC_PREFIX: str = 'c s exact arb frac '
 _POLY_PREFIX: str = 'c s exact poly '
 _BUILD_HINT: str = (
-    "ganak binary not found. Build it from the `devel` branch of "
-    "https://github.com/meelgroup/ganak (the polynomial mode only emits "
-    "output on that branch), put it on PATH, or set the "
-    f"{GANAK_ENV_VAR} environment variable to the binary path."
+    "ganak binary not found. Run `uv run wfomc-install-ganak` to build the "
+    f"pinned ganak binary ({GANAK_COMMIT}) into the uv environment, put "
+    f"`ganak` on PATH, or set the {GANAK_ENV_VAR} environment variable to "
+    "the binary path."
 )
 
 
