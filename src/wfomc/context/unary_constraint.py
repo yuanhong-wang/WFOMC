@@ -80,28 +80,32 @@ class UnaryConstraintHandler:
 
     def check(self, config, mask) -> tuple[bool, bool, bool]:
         """Return (mod_violated, eq_violated, le_violated)."""
+        vec = np.fromiter(config, dtype=np.int32)
         return (
-            self.check_mod(config, mask[0]),
-            self.check_eq(config, mask[1]),
-            self.check_le(config, mask[2]),
+            self.check_mod(config, mask[0], vec),
+            self.check_eq(config, mask[1], vec),
+            self.check_le(config, mask[2], vec),
         )
 
-    def check_mod(self, config, mod_mask) -> bool:
-        vec = np.fromiter(config, dtype=np.int32)
+    def check_mod(self, config, mod_mask, vec=None) -> bool:
+        if vec is None:
+            vec = np.fromiter(config, dtype=np.int32)
         for mask, r_mod, k_mod in mod_mask:
             if (mask @ vec) % k_mod != r_mod:
                 return True
         return False
 
-    def check_eq(self, config, eq_mask) -> bool:
-        vec = np.fromiter(config, dtype=np.int32)
+    def check_eq(self, config, eq_mask, vec=None) -> bool:
+        if vec is None:
+            vec = np.fromiter(config, dtype=np.int32)
         for mask, k_eq in eq_mask:
             if (mask @ vec) != k_eq:
                 return True
         return False
 
-    def check_le(self, config, le_mask) -> bool:
-        vec = np.fromiter(config, dtype=np.int32)
+    def check_le(self, config, le_mask, vec=None) -> bool:
+        if vec is None:
+            vec = np.fromiter(config, dtype=np.int32)
         for mask, k_max in le_mask:
             if (mask @ vec) > k_max:
                 return True
