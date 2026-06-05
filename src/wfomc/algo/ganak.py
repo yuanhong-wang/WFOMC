@@ -202,6 +202,13 @@ def ganak_count(n_vars: int,
     Raises:
         GanakError: When ganak is missing, fails, or returns bad output.
     """
+    if n_vars == 0:
+        # Empty CNF (no propositional variables): exactly one model with
+        # weight 1. ganak asserts on empty input, so return the identity
+        # directly without invoking the binary (it also avoids needing ganak
+        # installed for trivially-true groundings).
+        return fmpq(1)
+
     binary = find_ganak(ganak_path)
     clauses = [list(clause) for clause in clauses]
 
