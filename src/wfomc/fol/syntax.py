@@ -229,11 +229,16 @@ class QFFormula(Formula):
         if not self.satisfiable():
             return
 
+        # A formula with no atoms (e.g. a tautology like ``top``) has exactly
+        # one model: the empty assignment. The backend would otherwise yield a
+        # boolean constant (sympy ``True`` / ``None``) that is not a registered
+        # atom, so it is filtered out below.
         for model in backend.get_models(self.expr):
             yield frozenset(
                 backend.get_atom(
                     symbol) if value else ~backend.get_atom(symbol)
                 for symbol, value in model.items()
+                if symbol in backend.sym2atom
             )
 
     def substitute(self, substitution: dict[Term, Term]) -> QFFormula:
