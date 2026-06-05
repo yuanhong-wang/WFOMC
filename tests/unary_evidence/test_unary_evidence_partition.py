@@ -24,6 +24,7 @@ def test_groups_duplicate_profiles_and_negative_literals_deterministically():
         EvidenceProfile(frozenset({q(X)}), 1),
     )
     assert partition.predicates == frozenset({p, q})
+    assert not partition.covers_all_elements
     assert partition.evidence_assignment_count == Rational(12, 1)
 
 
@@ -33,6 +34,7 @@ def test_empty_evidence_creates_one_unrestricted_evidence_profile():
     partition = UnaryEvidencePartition.from_evidence(set(), domain)
 
     assert partition.evidence_profiles == (EvidenceProfile(frozenset(), 2),)
+    assert not partition.covers_all_elements
     assert partition.coverage_formula().preds() == frozenset()
 
 
@@ -44,6 +46,7 @@ def test_coverage_formula_contains_only_nonempty_evidence_profile_predicates():
 
     partition = UnaryEvidencePartition.from_evidence({p(a), q(b)}, {a, b})
 
+    assert partition.covers_all_elements
     assert partition.coverage_formula().preds() == frozenset({p, q})
 
 

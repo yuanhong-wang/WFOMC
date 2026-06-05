@@ -114,10 +114,7 @@ class WFOMCContext:
     def build_cell_graphs(self, **kwargs):
         """Build cell graphs with all context-owned unary evidence metadata."""
         kwargs.setdefault("required_unary_preds", self.required_unary_preds)
-        if (
-            kwargs.get("optimized", False)
-            and self.uses_lifted_unary_evidence
-        ):
+        if self.uses_lifted_unary_evidence:
             kwargs.setdefault(
                 "unary_evidence_partition", self.unary_evidence_partition
             )

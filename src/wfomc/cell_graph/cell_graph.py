@@ -12,7 +12,18 @@ from copy import deepcopy
 
 from flint import fmpq as Rational
 
-from wfomc.fol import AtomicFormula, Const, Pred, QFFormula, X, a, b, c, top
+from wfomc.fol import (
+    AtomicFormula,
+    Const,
+    Pred,
+    QFFormula,
+    X,
+    a,
+    b,
+    c,
+    exactly_one_qf,
+    top,
+)
 from wfomc.utils import RingElement, MultinomialCoefficients
 from .components import Cell, TwoTable
 from .utils import conditional_on
@@ -47,7 +58,8 @@ class CellGraph(object):
                  get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
                  leq_pred: Pred = None,
                  predecessor_preds: dict[int, Pred] = None,
-                 required_unary_preds: frozenset[Pred] = frozenset()):
+                 required_unary_preds: frozenset[Pred] = frozenset(),
+                 cell_formulas: tuple[QFFormula, ...] | None = None):
         """
         Cell graph that handles cells (1-types) and the WMC between them
 
@@ -71,6 +83,7 @@ class CellGraph(object):
                                   tuple[RingElement, RingElement]] = get_weight
         self.leq_pred: Pred = leq_pred
         self.predecessor_preds: dict[int, Pred] = predecessor_preds
+        self.cell_formulas = cell_formulas
         self.preds: tuple[Pred] = tuple(self.formula.preds())
         logger.debug('prednames: {}', self.preds)
 
@@ -277,11 +290,24 @@ class CellGraph(object):
     def _build_cells(self):
         """Build all possible cells (1-types)."""
         cells = []
-        code = {}
-        for model in self.gnd_formula_cc.models(): # Iterate over all models of the single-element grounded formula `gnd_formula_cc`. Each model represents a valid element type.
-            for lit in model: # Convert the model (a set of truth assignments) into a code.
-                code[lit.pred] = lit.positive
-            cells.append(Cell(tuple(code[p] for p in self.preds), self.preds)) # Create a Cell object with this code.
+        seen = set()
+        cell_formulas = self.cell_formulas
+        if cell_formulas is None:
+            cell_formulas = (top,)
+
+        for cell_formula in cell_formulas:
+            gnd_formula = self.gnd_formula_cc
+            if cell_formula is not top:
+                gnd_formula = gnd_formula & self._ground_on_tuple(cell_formula, c)
+            for model in gnd_formula.models(): # Iterate over all models of the single-element grounded formula `gnd_formula_cc`. Each model represents a valid element type.
+                code = {}
+                for lit in model: # Convert the model (a set of truth assignments) into a code.
+                    code[lit.pred] = lit.positive
+                cell = Cell(tuple(code[p] for p in self.preds), self.preds) # Create a Cell object with this code.
+                if cell in seen:
+                    continue
+                seen.add(cell)
+                cells.append(cell)
         return cells
 
     def _compute_cell_weights(self):
@@ -310,12 +336,44 @@ class CellGraph(object):
 
     def _build_two_tables(self, gnd_formula_ab: QFFormula):
         # build a pd.DataFrame containing all model as well as the weight
+        if all(pred.arity == 1 for pred in gnd_formula_ab.preds()):
+            gnd_lits = gnd_formula_ab.atoms()
+            gnd_lits = gnd_lits.union(
+                frozenset(map(lambda x: ~x, gnd_lits))
+            )
+            tables = dict()
+            for cell in self.cells:
+                cell_evidences = cell.get_evidences(a)
+                for other_cell in self.cells:
+                    model = frozenset(
+                        cell_evidences | other_cell.get_evidences(b)
+                    )
+                    tables[(cell, other_cell)] = TwoTable(
+                        {model: Rational(1, 1)}, gnd_lits
+                    )
+            return tables
+
+        internal_predicates = frozenset()
+        if self.cell_formulas is not None:
+            gnd_formula_ab, internal_predicates = (
+                self._add_profile_selectors(gnd_formula_ab)
+            )
+
         models = dict()
-        gnd_lits = gnd_formula_ab.atoms()
+        gnd_lits = frozenset(
+            atom
+            for atom in gnd_formula_ab.atoms()
+            if atom.pred not in internal_predicates
+        )
         gnd_lits = gnd_lits.union(
             frozenset(map(lambda x: ~x, gnd_lits))
         )
         for model in gnd_formula_ab.models():
+            model = frozenset(
+                lit
+                for lit in model
+                if lit.pred not in internal_predicates
+            )
             weight = 1
             for lit in model:
                 # ignore the weight appearing in cell weight
@@ -338,6 +396,45 @@ class CellGraph(object):
                     models_2, gnd_lits
                 )
         return tables
+
+    def _add_profile_selectors(
+        self,
+        gnd_formula_ab: QFFormula,
+    ) -> tuple[QFFormula, frozenset[Pred]]:
+        if not self.cell_formulas:
+            return gnd_formula_ab, frozenset()
+
+        selector_predicates: set[Pred] = set()
+        for const in (a, b):
+            selector_formula, predicates = self._profile_selector_formula(
+                const
+            )
+            gnd_formula_ab = gnd_formula_ab & selector_formula
+            selector_predicates.update(predicates)
+        return gnd_formula_ab, frozenset(selector_predicates)
+
+    def _profile_selector_formula(
+        self,
+        const: Const,
+    ) -> tuple[QFFormula, frozenset[Pred]]:
+        if len(self.cell_formulas) == 1:
+            formula = self._ground_on_tuple(self.cell_formulas[0], const)
+            return formula, frozenset()
+
+        selector_preds = tuple(
+            Pred(f"@cell_profile_{const.name}_{idx}", 1)
+            for idx, _ in enumerate(self.cell_formulas)
+        )
+        formula = self._ground_on_tuple(
+            exactly_one_qf(list(selector_preds)), const
+        )
+        for selector_pred, cell_formula in zip(
+            selector_preds, self.cell_formulas
+        ):
+            formula = formula & selector_pred(const).implies(
+                self._ground_on_tuple(cell_formula, const)
+            )
+        return formula, frozenset(selector_preds)
 
 
 class OptimizedCellGraph(CellGraph):
@@ -605,6 +702,9 @@ class OptimizedCellGraphWithEvidence:
             formula,
             get_weight,
             required_unary_preds=required_unary_preds,
+            cell_formulas=_cell_formulas_from_evidence_partition(
+                unary_evidence_partition
+            ),
         )
         self.formula = self.base_graph.formula
         self.preds = self.base_graph.preds
@@ -894,6 +994,25 @@ class OptimizedCellGraphWithEvidence:
         return result
 
 
+def _cell_formulas_from_evidence_partition(
+    unary_evidence_partition: "UnaryEvidencePartition | None",
+) -> tuple[QFFormula, ...] | None:
+    if (
+        unary_evidence_partition is None
+        or not unary_evidence_partition.covers_all_elements
+    ):
+        return None
+
+    return tuple(
+        functools.reduce(
+            lambda left, right: left & right,
+            evidence_profile.evidence,
+            top,
+        )
+        for evidence_profile in unary_evidence_partition.evidence_profiles
+    )
+
+
 def build_cell_graphs(
     formula: QFFormula,
     get_weight: Callable[[Pred], tuple[RingElement, RingElement]],
@@ -905,13 +1024,17 @@ def build_cell_graphs(
     required_unary_preds: frozenset[Pred] = frozenset(),
     unary_evidence_partition: "UnaryEvidencePartition | None" = None,
 ) -> Generator[tuple[CellGraph, RingElement]]:
+    cell_formulas = _cell_formulas_from_evidence_partition(
+        unary_evidence_partition
+    )
     nullary_atoms = [atom for atom in formula.atoms() if atom.pred.arity == 0]
     if len(nullary_atoms) == 0:
         logger.info('No nullary atoms found, building a single cell graph')
         if not optimized: # Decide whether to create the basic version or the optimized version based on the `optimized` parameter.
             yield CellGraph(
                 formula, get_weight, leq_pred, predecessor_preds,
-                required_unary_preds
+                required_unary_preds,
+                cell_formulas=cell_formulas,
             ), Rational(1, 1)
         else:
             if unary_evidence_partition is not None:
@@ -936,7 +1059,8 @@ def build_cell_graphs(
             if not optimized:
                 cell_graph = CellGraph(
                     subs_formula, get_weight, leq_pred, predecessor_preds,
-                    required_unary_preds
+                    required_unary_preds,
+                    cell_formulas=cell_formulas,
                 )
             else:
                 if unary_evidence_partition is not None:

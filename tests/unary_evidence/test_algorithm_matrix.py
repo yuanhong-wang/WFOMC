@@ -1,8 +1,11 @@
 from pathlib import Path
 
 import pytest
+from flint import fmpq as Rational
 
-from wfomc import Algo, UnaryEvidenceStrategy, parse_input, wfomc
+from wfomc import Algo, Pred, UnaryEvidenceStrategy, X, Y, parse_input, wfomc
+from wfomc.cell_graph import CellGraph
+from wfomc.context import WFOMCContext
 from wfomc.parser.wfomcs_parser import parse as parse_wfomcs
 from wfomc.solver import resolve_unary_evidence_strategy
 
@@ -86,3 +89,90 @@ P(domain0)
 
     with pytest.raises(ValueError, match="exchangeable domain"):
         wfomc(problem, Algo.INCREMENTAL)
+
+
+def test_fastv2_auto_handles_many_singleton_evidence_profiles():
+    const_names = ("e_1", "e_10", "e_2", "e_3", "e_4",
+                   "e_5", "e_6", "e_7", "e_8", "e_9")
+    entity_preds = tuple(f"E{name.removeprefix('e_')}" for name in const_names)
+    evidence = [f"S({name})" for name in const_names]
+    for const_name, entity_pred in zip(const_names, entity_preds):
+        evidence.extend(
+            f"{'' if const_name == other_name else '~'}{entity_pred}({other_name})"
+            for other_name in const_names
+        )
+
+    problem = parse_wfomcs(
+        "\\forall X: (S(X) | ~S(X))\n\n"
+        f"domain = {{{', '.join(const_names)}}}\n\n"
+        f"{', '.join(evidence)}"
+    )
+
+    context = WFOMCContext(problem)
+    cell_graph, _ = next(context.build_cell_graphs())
+
+    assert len(cell_graph.cells) == len(const_names)
+    assert wfomc(problem, Algo.FASTv2) == 1
+    assert wfomc(problem, Algo.FASTv2, UnaryEvidenceStrategy.CCS) == 1
+
+
+def test_profile_guided_two_tables_condition_on_cell_pairs():
+    const_names = ("e_1", "e_2", "e_3", "e_4")
+    entity_preds = tuple(f"E{name.removeprefix('e_')}" for name in const_names)
+    evidence = [f"S({name})" for name in const_names]
+    for const_name, entity_pred in zip(const_names, entity_preds):
+        evidence.extend(
+            f"{'' if const_name == other_name else '~'}{entity_pred}({other_name})"
+            for other_name in const_names
+        )
+
+    problem = parse_wfomcs(
+        "\\forall X: (\\forall Y: ((S(X) | ~S(X)) & (R(X,Y) | ~R(X,Y))))\n\n"
+        f"domain = {{{', '.join(const_names)}}}\n\n"
+        f"{', '.join(evidence)}"
+    )
+
+    context = WFOMCContext(problem)
+    cell_graph, _ = next(context.build_cell_graphs())
+
+    assert any(pred.arity == 2 for pred in cell_graph.gnd_formula_ab.preds())
+    assert len(cell_graph.cells) == 2 * len(const_names)
+    assert all(two_table.models for two_table in cell_graph.two_tables.values())
+
+
+def test_profile_selector_two_tables_project_internal_atoms_once():
+    p = Pred("ProfileP", 1)
+    q = Pred("ProfileQ", 1)
+    r = Pred("ProfileR", 2)
+    formula = (
+        (p(X) | ~p(X))
+        & (q(X) | ~q(X))
+        & (r(X, Y) | ~r(X, Y))
+    )
+
+    def get_weight(pred):
+        if pred == r:
+            return Rational(2, 1), Rational(3, 1)
+        return Rational(1, 1), Rational(1, 1)
+
+    cell_graph = CellGraph(
+        formula,
+        get_weight,
+        cell_formulas=(p(X), p(X) & q(X)),
+    )
+    overlapping_cell = next(
+        cell
+        for cell in cell_graph.cells
+        if cell.is_positive(p) and cell.is_positive(q)
+    )
+    table = cell_graph.two_tables[(overlapping_cell, overlapping_cell)]
+
+    assert cell_graph.get_two_table_weight(
+        (overlapping_cell, overlapping_cell)
+    ) == Rational(25, 1)
+    assert not any(
+        "@cell_profile" in str(lit)
+        for model in table.models
+        for lit in model
+    )
+    assert not any("@cell_profile" in str(lit) for lit in table.gnd_lits)

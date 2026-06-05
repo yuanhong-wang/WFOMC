@@ -149,6 +149,13 @@ class UnaryEvidencePartition:
         )
 
     @property
+    def covers_all_elements(self) -> bool:
+        return bool(self.evidence_profiles) and all(
+            evidence_profile.evidence
+            for evidence_profile in self.evidence_profiles
+        )
+
+    @property
     def evidence_assignment_count(self) -> Rational:
         """Number of fixed-size evidence-profile assignments over a labeled domain."""
         value = Rational(math.factorial(self.domain_size), 1)
@@ -355,7 +362,7 @@ class UnaryEvidencePlan:
             return cls(
                 strategy=strategy,
                 partition=partition,
-                formula=partition.coverage_formula(),
+                formula=top,
                 cardinality_constraints=(),
                 repeat_factor=1,
             )
