@@ -17,6 +17,7 @@ from wfomc import (
     to_sc2,
     wfomc,
 )
+from wfomc.parser.wfomcs_parser import parse as parse_wfomcs_text
 
 
 current_path = Path(__file__).parent.absolute()
@@ -84,6 +85,22 @@ def test_wfomc_result_exposes_projected_polynomial_terms():
 
     assert result.is_polynomial()
     assert dict(result.terms([x])) == {(2,): Rational(1, 1)}
+
+
+def test_unsatisfiable_wfomc_returns_zero():
+    problem = parse_wfomcs_text(r"""
+\forall X: ((S(X) -> C(X)) & ~(S(X) & C(X)))
+domain = {e_1, e_10, e_2, e_3, e_4, e_5, e_6, e_7, e_8, e_9}
+
+|C| = 5
+
+S(e_1), S(e_10), S(e_2), S(e_3), S(e_4), S(e_5), S(e_6), S(e_7), S(e_8), S(e_9)
+""")
+
+    result = wfomc(problem, Algo.FASTv2)
+
+    assert isinstance(result, WFOMCResult)
+    assert result == 0
 
 
 answer_json = json.load(open(current_path.parent / 'models' / 'MATH' / 'all.json'))

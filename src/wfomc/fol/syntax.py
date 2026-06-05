@@ -227,7 +227,7 @@ class QFFormula(Formula):
         :rtype Iterable[frozenset[Lit]]: models
         """
         if not self.satisfiable():
-            raise RuntimeError("Formula is not satisfiable")
+            return
 
         for model in backend.get_models(self.expr):
             yield frozenset(

@@ -98,6 +98,8 @@ class IncrementalWFOMC3Context(WFOMCContext):
         if self.leq_pred is not None:
             res = res * math.factorial(len(self.domain))
         res = res / self.repeat_factor
+        if res == 0:
+            return res
         if self.contain_cardinality_constraint():
             res = self.cardinality_constraint.decode_poly(res)
         return res

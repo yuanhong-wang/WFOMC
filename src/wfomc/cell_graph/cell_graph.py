@@ -621,6 +621,19 @@ class OptimizedCellGraphWithEvidence:
             for evidence_profile_idx in evidence_profile_indices
         ]
 
+        if not self.cells:
+            self.i1_ind = []
+            self.cliques = []
+            self.nonind = []
+            self.nonind_map = {}
+            self.clique_evidence_profile_partitions = {}
+            self.evidence_profile_cliques = defaultdict(list)
+            self.i1_evidence_profile_partition = [
+                [] for _ in range(len(self.evidence_profile_sizes))
+            ]
+            logger.info("No evidence-compatible cells found")
+            return
+
         i1_ind_set, i2_ind_set, nonind_set = self.find_independent_sets()
         self.i1_ind = i1_ind_set
         nonind_set = i2_ind_set + nonind_set
