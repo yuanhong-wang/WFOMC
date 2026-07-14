@@ -32,3 +32,14 @@ jobs:
 
       - name: "Run tests"
         run: uv run pytest tests
+
+      - name: "Run lint"
+        run: uv run ruff check src tests benchmarks
+
+      - name: "Build package"
+        run: uv build
+
+      - name: "Smoke test installed CLI"
+        run: |
+          uv run wfomc --help
+          uv run wfomc --input models/unary_evidence/evidence-only.wfomcs --algo standard
