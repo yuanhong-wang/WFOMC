@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Mapping
 
-from flint import fmpq, fmpq_mpoly, fmpq_mpoly_ctx
+from flint import fmpq, fmpq_mpoly
 
 from wfomc.arithmetic import ArithmeticBackend, ArithmeticContext
 from wfomc.cardinality_constraints import (
@@ -113,10 +113,10 @@ def _decode_result(
     filtered = filtered.subs(
         {marker: 1 for _predicate, marker in predicate_markers}
     )
-    result = filtered.project_to_context(
-        fmpq_mpoly_ctx.get(arithmetic.output_symbols, "lex")
-    )
-    return result.leading_coefficient() if result.is_constant() else result
+    # Keep the expanded arithmetic ring until earlier reduction decoders have
+    # applied their correction factors.  The engine projects away marker
+    # symbols once the complete decoder chain has finished.
+    return filtered
 
 
 def _valid_degrees(

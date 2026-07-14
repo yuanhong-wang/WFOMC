@@ -31,7 +31,7 @@ ALGORITHMS = (
 AUTO_STRATEGIES = {
     AlgoName.STANDARD: EvidenceStrategy.LIFTED_PROFILES,
     AlgoName.FAST: EvidenceStrategy.CCS,
-    AlgoName.FASTV2: EvidenceStrategy.CCS,
+    AlgoName.FASTV2: EvidenceStrategy.LIFTED_PROFILES,
     AlgoName.INCREMENTAL: EvidenceStrategy.LIFTED_PROFILES,
     AlgoName.INCREMENTAL3: EvidenceStrategy.LIFTED_PROFILES,
     AlgoName.RECURSIVE: EvidenceStrategy.CCS,

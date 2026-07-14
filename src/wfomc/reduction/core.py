@@ -111,6 +111,7 @@ def begin_reduction(problem: "Problem") -> "ReducedProblem":
         weights=problem.weights,
         cardinality_constraints=problem.cardinality_constraints,
         evidence=problem.evidence,
+        circular_order_size=problem.circular_order_size,
     )
 
 

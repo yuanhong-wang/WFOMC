@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 from flint import arb, arb_poly, fmpq_mpoly_ctx
-from wfomc.algo import AlgoName, AlgoOptions, algo_spec
+from wfomc.algo import AlgoName, AlgoOptions, EvidenceStrategy, algo_spec
 from wfomc.api import compile_problem, solve
 from wfomc.arithmetic import ArithmeticBackend
 from wfomc.engine.features import analyze_features
 from wfomc.errors import ArithmeticBackendError
+from wfomc.evidence import Evidence, GroundUnaryLiteral, UnaryEvidence
 from wfomc.parser import parse_input, parse_problem
 from wfomc.problem import Problem
 from wfomc.weights import (
@@ -175,3 +178,34 @@ def test_cardinality_reduction_injects_internal_weight_symbols():
     assert set(branch.internal_weight_symbols) <= set(arithmetic.symbolic_variables)
     assert arithmetic.output_symbols == ()
     assert arithmetic.backend is ArithmeticBackend.FMPQ_MPOLY
+
+
+def test_symbolic_weights_survive_evidence_cardinality_decoder_chain():
+    from wfomc.fol import FOLContext, forall
+
+    fol = FOLContext()
+    variable = fol.variable("X")
+    predicate = fol.predicate("P", 1)
+    first = fol.constant("a")
+    second = fol.constant("b")
+    symbol_context = fmpq_mpoly_ctx.get(("w",), "lex")
+    problem = Problem(
+        sentence=forall(variable, predicate(variable) | ~predicate(variable)),
+        domain=frozenset((first, second)),
+        weights={predicate: (symbol_context.gen(0), 1)},
+        evidence=Evidence(
+            unary=UnaryEvidence((GroundUnaryLiteral(predicate, first, True),))
+        ),
+    )
+
+    result = solve(
+        problem,
+        algo=AlgoName.FASTV2,
+        options=AlgoOptions(evidence_strategy=EvidenceStrategy.CCS),
+    )
+
+    assert result.variable_names() == ("w",)
+    assert tuple(sorted(result.terms())) == (
+        ((1,), Fraction(1, 1)),
+        ((2,), Fraction(1, 1)),
+    )

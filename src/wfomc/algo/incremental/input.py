@@ -72,7 +72,11 @@ def build_input(
         predecessor_orders=orders,
         predecessor_max_order=max(orders) if orders else 0,
         has_circular_predecessor=circular is not None,
-        circle_len=len(reduced.domain),
+        circle_len=(
+            reduced.circular_order_size
+            if reduced.circular_order_size is not None
+            else len(reduced.domain)
+        ),
     )
 
 

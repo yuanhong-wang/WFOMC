@@ -209,6 +209,22 @@ class ArithmeticContext:
             total = total + self.coerce(value)
         return total
 
+    def project_to_output(self, value):
+        """Remove internal solver symbols after every decoder has run.
+
+        Cardinality reductions temporarily extend an ``fmpq_mpoly`` ring with
+        marker variables.  Decoder correction factors must still run in that
+        extended ring, so projection belongs at the engine boundary rather
+        than inside the cardinality decoder.
+        """
+
+        if not isinstance(value, fmpq_mpoly):
+            return value
+        projected = value.project_to_context(
+            fmpq_mpoly_ctx.get(list(self.output_symbols), "lex")
+        )
+        return projected.leading_coefficient() if projected.is_constant() else projected
+
     # -- backend dispatch ------------------------------------------------
 
     def _from_fraction(self, numerator: int, denominator: int):

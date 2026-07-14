@@ -96,6 +96,23 @@ def test_problem_stages_reject_wrong_formula_representation():
         )
 
 
+def test_problem_rejects_invalid_circular_order_size():
+    from wfomc.fol import true
+
+    with pytest.raises(ValueError, match="circular_order_size"):
+        Problem(
+            sentence=true(),
+            domain=frozenset(("a", "b")),
+            circular_order_size=3,
+        )
+
+    assert Problem(
+        sentence=true(),
+        domain=frozenset(("a", "b")),
+        circular_order_size=0,
+    ).circular_order_size == 0
+
+
 def test_compose_decoders_runs_inner_then_outer():
     decoder = compose_decoders(
         lambda value, **_: value * 2,

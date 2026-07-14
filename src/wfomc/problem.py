@@ -38,6 +38,10 @@ class Problem:
     weights: Mapping[object, tuple[object, object]] = field(default_factory=dict)
     cardinality_constraints: CardinalityConstraints = field(default_factory=CardinalityConstraints)
     evidence: Evidence = field(default_factory=Evidence)
+    # Number of domain elements participating in CIRCULAR_PRED.  This may be
+    # smaller than the full WFOMC domain when a client also uses auxiliary
+    # elements (for example, Cofola's bag-type representatives).
+    circular_order_size: int | None = None
     options: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -45,6 +49,13 @@ class Problem:
 
         if not isinstance(self.sentence, Formula):
             raise TypeError("Problem.sentence must be a typed Formula")
+        if self.circular_order_size is not None and not (
+            0 <= self.circular_order_size <= len(self.domain)
+        ):
+            raise ValueError(
+                "Problem.circular_order_size must be non-negative and no "
+                "larger than the domain"
+            )
 
     @property
     def has_unary_evidence(self) -> bool:
@@ -108,6 +119,7 @@ class Problem:
             ),
             self.evidence.cache_key_parts(),
             self.cardinality_constraints.cache_key_parts(),
+            self.circular_order_size,
             tuple(sorted((str(k), repr(v)) for k, v in self.options.items())),
         )
 
@@ -134,6 +146,7 @@ class ReducedProblem:
     evidence: Evidence = field(default_factory=Evidence)
     profile_capacity_constraint: ProfileCapacityConstraint | None = None
     internal_weight_symbols: tuple[str, ...] = ()
+    circular_order_size: int | None = None
 
     def __post_init__(self) -> None:
         from wfomc.fol.normal_form import C2NormalForm
@@ -169,6 +182,7 @@ class CompiledProblem:
     weights: "CompiledWeightMapping" = field(default_factory=dict)
     evidence: Evidence = field(default_factory=Evidence)
     profile_capacity_constraint: ProfileCapacityConstraint | None = None
+    circular_order_size: int | None = None
 
     def __post_init__(self) -> None:
         from wfomc.fol import Formula, is_quantifier_free

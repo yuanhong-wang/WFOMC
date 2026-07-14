@@ -110,6 +110,19 @@ def test_parser_uses_one_context_for_repeated_symbols_and_nodes():
     assert body.args[0]._context is formula._context
 
 
+def test_pretty_printed_compound_negation_round_trips_without_scope_loss():
+    ctx = FOLContext()
+    (x,) = ctx.vars("X")
+    p = ctx.predicate("P", 1)
+    q = ctx.predicate("Q", 1)
+    formula = ~(p(x) & q(x))
+
+    reparsed = parse(str(formula))
+
+    assert isinstance(reparsed, Not)
+    assert isinstance(reparsed.body, And)
+
+
 def test_rewrite_eliminates_implications_and_pushes_negation():
     ctx = FOLContext()
     (x,) = ctx.vars("X")

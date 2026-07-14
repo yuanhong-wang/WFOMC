@@ -197,6 +197,7 @@ def _run_reduced_problems(
             arithmetic=algo_input.arithmetic,
             include_order_factorial=algo_input.include_order_factorial(),
         )
+        decoded = algo_input.arithmetic.project_to_output(decoded)
         total = decoded if total is None else total + decoded
     if total is None:
         raise RuntimeError("reduction produced no problems")

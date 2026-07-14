@@ -25,7 +25,10 @@ def format_formula(formula: object) -> str:
     if isinstance(formula, Eq):
         return f"{formula.left} = {formula.right}"
     if isinstance(formula, Not):
-        return f"~{format_formula(formula.body)}"
+        body = format_formula(formula.body)
+        if isinstance(formula.body, (Atom, BoolConst, Eq)):
+            return f"~{body}"
+        return f"~({body})"
     if isinstance(formula, And):
         return _join_formula_args(formula.args, "&")
     if isinstance(formula, Or):

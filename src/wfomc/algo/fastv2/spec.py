@@ -50,8 +50,11 @@ SPEC = AlgoSpec(
     name=AlgoName.FASTV2,
     resolve_options=option_resolver(
         algo=AlgoName.FASTV2,
-        default_unary_evidence=EvidenceStrategy.CCS,
-        supported_unary_evidence=(EvidenceStrategy.CCS,),
+        default_unary_evidence=EvidenceStrategy.LIFTED_PROFILES,
+        supported_unary_evidence=(
+            EvidenceStrategy.CCS,
+            EvidenceStrategy.LIFTED_PROFILES,
+        ),
     ),
     prepare=prepare,
     solve=solve,

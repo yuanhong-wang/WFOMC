@@ -136,6 +136,26 @@ domain = 2
     assert artifacts.algo_input.has_circular_predecessor is is_circular
 
 
+def test_circular_order_size_survives_all_problem_stages():
+    from dataclasses import replace
+    from wfomc.parser import parse_problem
+
+    problem = parse_problem(
+        r"""
+\forall X: (\forall Y: (CIRCULAR_PRED(X,Y) | ~CIRCULAR_PRED(X,Y)))
+domain = 3
+"""
+    )
+    problem = replace(problem, circular_order_size=2)
+
+    artifacts = compile_problem(problem, algo=AlgoName.INCREMENTAL)
+
+    assert artifacts.reduced_problem is not None
+    assert artifacts.reduced_problem.problems[0].problem.circular_order_size == 2
+    assert isinstance(artifacts.algo_input, OrderedCellGraphInput)
+    assert artifacts.algo_input.circle_len == 2
+
+
 def test_compile_problem_materializes_propositional_input_without_decoder():
     problem = parse_input("models/unary_evidence/evidence-only.wfomcs")
 

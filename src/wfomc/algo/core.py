@@ -280,6 +280,7 @@ def compile_reduced_problem(
         weights=_compile_reduced_weights(problem, arithmetic),
         evidence=problem.evidence,
         profile_capacity_constraint=problem.profile_capacity_constraint,
+        circular_order_size=problem.circular_order_size,
     )
     from wfomc.engine.features import analyze_features
 

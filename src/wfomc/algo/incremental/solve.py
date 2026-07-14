@@ -24,7 +24,11 @@ def solve(
         raise TypeError("incremental algorithm expects an OrderedCellGraphInput")
 
     MultinomialCoefficients.setup(algo_input.domain_size)
-    circle_len = algo_input.circle_len or algo_input.domain_size
+    circle_len = (
+        algo_input.circle_len
+        if algo_input.circle_len is not None
+        else algo_input.domain_size
+    )
     arithmetic = algo_input.arithmetic
     result = arithmetic.zero()
     for component in algo_input.components:
