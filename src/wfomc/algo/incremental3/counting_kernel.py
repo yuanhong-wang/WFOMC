@@ -84,6 +84,7 @@ class ConfigUpdater:
         self.t_update_dict = t_update_dict
         self.space = space
         self.arithmetic = arithmetic
+        self.add_product = arithmetic.add_product
         self._cache: dict[tuple[State, State], dict[int, dict]] = {}
 
     def f(self, target_c: State, other_c: State, other_count: int):
@@ -112,14 +113,83 @@ class ConfigUpdater:
                 ].items():
                     hc_new = self.space.inc(hc_old, oc_new)
                     outcome = (tc_new, hc_new)
-                    H_new[outcome] = self.arithmetic.add(
+                    H_new[outcome] = self.add_product(
                         H_new[outcome],
-                        self.arithmetic.multiply(W, rij),
+                        W,
+                        rij,
                     )
             H = H_new
             sub[j] = H
 
         return H
+
+
+def _build_elimination_orders(
+    t_update_dict,
+    states: tuple[State, ...],
+) -> tuple[tuple[State, ...], dict[State, tuple[State, ...]]]:
+    """Plan deterministic fail-first orders from transition structure.
+
+    Transition structure determines the priority; state offsets are only the
+    final tie-break for structurally indistinguishable states.  A state is
+    preferred when it is incompatible with more partners, then when its
+    compatible transitions create fewer successor states.  For a chosen
+    target, incompatible and low-fanout partners are visited first so dead
+    branches and small frontiers are exposed early.
+    """
+
+    pair_keys = {
+        (target, other): _transition_order_key(t_update_dict, target, other)
+        for target in states
+        for other in states
+    }
+    fingerprints = {
+        target: tuple(sorted(pair_keys[(target, other)] for other in states))
+        for target in states
+    }
+
+    def target_key(target: State):
+        keys = tuple(pair_keys[(target, other)] for other in states)
+        incompatible = sum(key[0] == 0 for key in keys)
+        branching_excess = sum(max(0, key[1] - 1) for key in keys)
+        successor_spread = sum(key[2] * key[3] for key in keys)
+        return (
+            -incompatible,
+            branching_excess,
+            successor_spread,
+            fingerprints[target],
+            target,
+        )
+
+    target_order = tuple(sorted(states, key=target_key))
+    other_orders = {
+        target: tuple(
+            sorted(
+                states,
+                key=lambda other: (
+                    pair_keys[(target, other)],
+                    fingerprints[other],
+                    other,
+                ),
+            )
+        )
+        for target in states
+    }
+    return target_order, other_orders
+
+
+def _transition_order_key(t_update_dict, target: State, other: State):
+    outcomes = t_update_dict.get((target, other))
+    if not outcomes:
+        return (0, 0, 0, 0)
+    target_successors = {outcome[0] for outcome in outcomes}
+    other_successors = {outcome[1] for outcome in outcomes}
+    return (
+        1,
+        len(outcomes),
+        len(target_successors),
+        len(other_successors),
+    )
 
 
 def build_t_update_dict(
@@ -217,7 +287,17 @@ def _make_domain_recursion(
     """Return a memoised domain_recursion function scoped to one cell graph."""
     updater = ConfigUpdater(t_update_dict, space, arithmetic)
     f = updater.f
+    add_product = arithmetic.add_product
     cache: dict[Config, ArithmeticValue] = {}
+    target_order, other_orders = _build_elimination_orders(
+        t_update_dict,
+        space.offset_to_state,
+    )
+    target_rank = {state: rank for rank, state in enumerate(target_order)}
+    other_ranks = {
+        target: {state: rank for rank, state in enumerate(order)}
+        for target, order in other_orders.items()
+    }
 
     def domain_recursion(config: Config):
         if config in cache:
@@ -232,7 +312,7 @@ def _make_domain_recursion(
         if has_linear_order:
             target_c_list = nonzero_states
         else:
-            target_c_list = (nonzero_states[-1],)
+            target_c_list = (min(nonzero_states, key=target_rank.__getitem__),)
 
         for target_c in target_c_list:
             T = defaultdict(arithmetic.zero)
@@ -240,7 +320,11 @@ def _make_domain_recursion(
 
             G = {(target_c, space.zero): arithmetic.one()}
 
-            for other_c in space.nonzero_states(config_new):
+            other_states = space.nonzero_states(config_new)
+            for other_c in sorted(
+                other_states,
+                key=other_ranks[target_c].__getitem__,
+            ):
                 G_new = defaultdict(arithmetic.zero)
                 other_count = space.count(config_new, other_c)
 
@@ -266,11 +350,14 @@ def _make_domain_recursion(
                             )
 
                         outcome = (tc_new, G_config_new)
-                        G_new[outcome] = arithmetic.add(
+                        G_new[outcome] = add_product(
                             G_new[outcome],
-                            arithmetic.multiply(W, weight_H),
+                            W,
+                            weight_H,
                         )
                 G = G_new
+                if not G:
+                    break
 
             for (target_c, G_config), W in G.items():
                 if _stop_condition(target_c, cs):
@@ -278,9 +365,10 @@ def _make_domain_recursion(
 
             result_of_target_c = arithmetic.zero()
             for T_config, weight in T.items():
-                result_of_target_c = arithmetic.add(
+                result_of_target_c = add_product(
                     result_of_target_c,
-                    arithmetic.multiply(weight, domain_recursion(T_config)),
+                    weight,
+                    domain_recursion(T_config),
                 )
             result = arithmetic.add(result, result_of_target_c)
 
@@ -294,5 +382,6 @@ __all__ = [
     "ConfigSpace",
     "ConfigUpdater",
     "build_t_update_dict",
+    "_build_elimination_orders",
     "_make_domain_recursion",
 ]

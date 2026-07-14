@@ -12,7 +12,7 @@ arithmetic type stack end to end.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from fractions import Fraction
 from typing import TYPE_CHECKING, Iterable, TypeAlias
@@ -112,6 +112,9 @@ class ArithmeticContext:
     symbolic_variables: tuple[str, ...] = ()
     output_symbols: tuple[str, ...] = ()
     degree_limits: tuple[tuple[str, int], ...] = ()
+    _direct_fmpq: bool = field(init=False, repr=False, compare=False)
+    _cached_zero: fmpq | None = field(init=False, repr=False, compare=False)
+    _cached_one: fmpq | None = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         normalized = tuple(sorted(self.degree_limits))
@@ -128,15 +131,23 @@ class ArithmeticContext:
         if any(limit < 0 for _name, limit in normalized):
             raise ValueError("ArithmeticContext degree limits must be non-negative")
         object.__setattr__(self, "degree_limits", normalized)
+        direct_fmpq = self.backend is ArithmeticBackend.FMPQ and not normalized
+        object.__setattr__(self, "_direct_fmpq", direct_fmpq)
+        object.__setattr__(self, "_cached_zero", fmpq(0) if direct_fmpq else None)
+        object.__setattr__(self, "_cached_one", fmpq(1) if direct_fmpq else None)
 
     # -- public numeric factory API --------------------------------------
 
     def zero(self):
         """Additive identity for this backend."""
+        if self._cached_zero is not None:
+            return self._cached_zero
         return self.from_int(0)
 
     def one(self):
         """Multiplicative identity for this backend."""
+        if self._cached_one is not None:
+            return self._cached_one
         return self.from_int(1)
 
     def neg_one(self):
@@ -247,6 +258,9 @@ class ArithmeticContext:
     def multiply(self, left, right):
         """Multiply two backend values with exact zero/one fast paths."""
 
+        if self._direct_fmpq:
+            return left * right
+
         if self.is_zero(left):
             return left
         if self.is_zero(right):
@@ -259,6 +273,9 @@ class ArithmeticContext:
 
     def power(self, base, exponent: int):
         """Raise a backend value to an integer power with identity fast paths."""
+
+        if self._direct_fmpq:
+            return self.one() if exponent == 0 else base**exponent
 
         if exponent == 0:
             return self.one()
@@ -288,11 +305,27 @@ class ArithmeticContext:
     def add(self, left, right):
         """Add two backend values while preserving the truncation invariant."""
 
+        if self._direct_fmpq:
+            return left + right
+
         if self.is_zero(left):
             return self.truncate(right)
         if self.is_zero(right):
             return self.truncate(left)
         return self.truncate(left + right)
+
+    def add_product(self, accumulator, left, right):
+        """Return ``accumulator + left * right`` in the active backend.
+
+        Plain scalar rationals need neither identity checks nor degree
+        truncation, so their hot path performs the two FLINT operations
+        directly.  Symbolic and rounded backends retain the regular public
+        operations and therefore all existing truncation semantics.
+        """
+
+        if self._direct_fmpq:
+            return accumulator + left * right
+        return self.add(accumulator, self.multiply(left, right))
 
     def truncate(self, value):
         """Discard monomials above proven-safe internal degree limits."""

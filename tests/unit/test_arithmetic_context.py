@@ -43,6 +43,18 @@ def test_fmpq_context_creates_fmpq_zero_one_fraction():
     assert ctx.neg_one() == fmpq(-1)
 
 
+def test_plain_fmpq_context_reuses_identities_and_adds_products_directly():
+    ctx = _ctx(ArithmeticBackend.FMPQ)
+
+    assert ctx.zero() is ctx.zero()
+    assert ctx.one() is ctx.one()
+    assert ctx.add_product(
+        ctx.from_fraction(1, 7),
+        ctx.from_fraction(2, 3),
+        ctx.from_fraction(3, 5),
+    ) == fmpq(19, 35)
+
+
 def test_float_context_creates_float_zero_one_fraction():
     ctx = _ctx(ArithmeticBackend.FLOAT)
 
@@ -158,6 +170,9 @@ def test_fmpq_poly_operations_truncate_to_declared_degree_limit():
 
     assert isinstance(value, fmpq_poly)
     assert value == fmpq_poly([1, 10, 45])
+
+    # Non-scalar backends must retain the regular multiply/add truncation path.
+    assert ctx.add_product(ctx.one(), marker**2, marker) == ctx.one()
 
 
 def test_fmpq_poly_context_coerces_and_truncates_univariate_mpoly():

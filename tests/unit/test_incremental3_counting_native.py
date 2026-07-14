@@ -3,7 +3,10 @@ from __future__ import annotations
 import pytest
 
 from wfomc.algo import AlgoName, AlgoOptions, ExistentialStrategy
-from wfomc.algo.incremental3.counting_kernel import ConfigSpace
+from wfomc.algo.incremental3.counting_kernel import (
+    ConfigSpace,
+    _build_elimination_orders,
+)
 from wfomc.algo.incremental3.counting_state import CountingState
 from wfomc.algo.incremental3.input import _initial_state
 from wfomc.cell_graph import Cell
@@ -20,6 +23,39 @@ def test_config_space_preserves_counts_above_uint8():
     config = space.inc(config, (0,))
 
     assert config[space.offset((0,))] == 257
+
+
+def test_elimination_order_is_fail_first_and_independent_of_state_enumeration():
+    unconstrained = (0,)
+    constrained = (1,)
+    branching = (2,)
+    states = (unconstrained, constrained, branching)
+    deterministic = {((0,), (0,)): 1}
+    two_outcomes = {
+        ((0,), (0,)): 1,
+        ((1,), (1,)): 1,
+    }
+    transitions = {
+        (unconstrained, unconstrained): deterministic,
+        (unconstrained, constrained): deterministic,
+        (unconstrained, branching): deterministic,
+        (constrained, unconstrained): deterministic,
+        (constrained, constrained): deterministic,
+        # constrained -> branching is deliberately incompatible.
+        (branching, unconstrained): two_outcomes,
+        (branching, constrained): two_outcomes,
+        (branching, branching): two_outcomes,
+    }
+
+    target_order, other_orders = _build_elimination_orders(transitions, states)
+    reversed_target_order, _ = _build_elimination_orders(
+        transitions,
+        tuple(reversed(states)),
+    )
+
+    assert target_order[0] == constrained
+    assert reversed_target_order[0] == constrained
+    assert other_orders[constrained][0] == branching
 
 
 def test_positive_mod_cell_wraps_initial_remainder():
