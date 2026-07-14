@@ -28,13 +28,20 @@ def optimized_term(
         for j in ops.i1_ind:
             tmp = ops.get_cell_weight(ops.cliques[j][0])
             for i in ops.nonind:
-                tmp = (
-                    tmp
-                    * ops.get_two_table_weight((ops.cliques[i][0], ops.cliques[j][0]))
-                    ** partition[ops.nonind_map[i]]
+                tmp = ops.arithmetic.multiply(
+                    tmp,
+                    ops.arithmetic.power(
+                        ops.get_two_table_weight(
+                            (ops.cliques[i][0], ops.cliques[j][0])
+                        ),
+                        partition[ops.nonind_map[i]],
+                    ),
                 )
-            accum = accum + tmp
-        accum = accum ** (ops.domain_size - sum(partition) - bign)
+            accum = ops.arithmetic.add(accum, tmp)
+        accum = ops.arithmetic.power(
+            accum,
+            ops.domain_size - sum(partition) - bign,
+        )
         ops.term_cache[key] = accum
         return accum
 
@@ -47,15 +54,30 @@ def optimized_term(
                 nval,
             )
         )
-        smul = smul * optimized_J_term(ops, s, nval)
+        smul = ops.arithmetic.multiply(smul, optimized_J_term(ops, s, nval))
         if not ops.modified_cell_symmetry:
-            smul = smul * ops.get_cell_weight(ops.cliques[s][0]) ** nval
+            smul = ops.arithmetic.multiply(
+                smul,
+                ops.arithmetic.power(
+                    ops.get_cell_weight(ops.cliques[s][0]),
+                    nval,
+                ),
+            )
         for i in ops.nonind:
-            smul = smul * ops.get_two_table_weight(
-                (ops.cliques[i][0], ops.cliques[s][0])
-            ) ** (partition[ops.nonind_map[i]] * nval)
-        smul = smul * optimized_term(ops, iv - 1, bign + nval, partition)
-        sumtoadd = sumtoadd + smul
+            smul = ops.arithmetic.multiply(
+                smul,
+                ops.arithmetic.power(
+                    ops.get_two_table_weight(
+                        (ops.cliques[i][0], ops.cliques[s][0])
+                    ),
+                    partition[ops.nonind_map[i]] * nval,
+                ),
+            )
+        smul = ops.arithmetic.multiply(
+            smul,
+            optimized_term(ops, iv - 1, bign + nval, partition),
+        )
+        sumtoadd = ops.arithmetic.add(sumtoadd, smul)
     ops.term_cache[key] = sumtoadd
     return sumtoadd
 
@@ -66,11 +88,20 @@ def optimized_J_term(ops, clique_idx: int, nhat: int) -> ArithmeticValue:
         return ops.j_term_cache[key]
 
     if len(ops.cliques[clique_idx]) == 1:
-        thesum = ops.get_two_table_weight(
-            (ops.cliques[clique_idx][0], ops.cliques[clique_idx][0])
-        ) ** (int(nhat * (nhat - 1) / 2))
+        thesum = ops.arithmetic.power(
+            ops.get_two_table_weight(
+                (ops.cliques[clique_idx][0], ops.cliques[clique_idx][0])
+            ),
+            int(nhat * (nhat - 1) / 2),
+        )
         if ops.modified_cell_symmetry:
-            thesum = thesum * ops.get_cell_weight(ops.cliques[clique_idx][0]) ** nhat
+            thesum = ops.arithmetic.multiply(
+                thesum,
+                ops.arithmetic.power(
+                    ops.get_cell_weight(ops.cliques[clique_idx][0]),
+                    nhat,
+                ),
+            )
     else:
         thesum = optimized_d_term(ops, clique_idx, nhat)
     ops.j_term_cache[key] = thesum
@@ -91,33 +122,60 @@ def optimized_d_term(ops, clique_idx: int, n: int, cur: int = 0) -> ArithmeticVa
     )
     if cur == clique_size - 1:
         if ops.modified_cell_symmetry:
-            w = ops.get_cell_weight(ops.cliques[clique_idx][cur]) ** n
+            w = ops.arithmetic.power(
+                ops.get_cell_weight(ops.cliques[clique_idx][cur]),
+                n,
+            )
             s = ops.get_two_table_weight(
                 (
                     ops.cliques[clique_idx][cur],
                     ops.cliques[clique_idx][cur],
                 )
             )
-            ret = w * s ** MultinomialCoefficients.comb(n, 2)
+            ret = ops.arithmetic.multiply(
+                w,
+                ops.arithmetic.power(
+                    s,
+                    MultinomialCoefficients.comb(n, 2),
+                ),
+            )
         else:
-            ret = s ** MultinomialCoefficients.comb(n, 2)
+            ret = ops.arithmetic.power(
+                s,
+                MultinomialCoefficients.comb(n, 2),
+            )
     else:
         ret = ops.arithmetic.zero()
         for ni in range(n + 1):
             mult = ops.arithmetic.from_int(MultinomialCoefficients.comb(n, ni))
             if ops.modified_cell_symmetry:
-                w = ops.get_cell_weight(ops.cliques[clique_idx][cur]) ** ni
+                w = ops.arithmetic.power(
+                    ops.get_cell_weight(ops.cliques[clique_idx][cur]),
+                    ni,
+                )
                 s = ops.get_two_table_weight(
                     (
                         ops.cliques[clique_idx][cur],
                         ops.cliques[clique_idx][cur],
                     )
                 )
-                mult = mult * w
-            mult = mult * (s ** MultinomialCoefficients.comb(ni, 2))
-            mult = mult * r ** (ni * (n - ni))
-            mult = mult * optimized_d_term(ops, clique_idx, n - ni, cur + 1)
-            ret = ret + mult
+                mult = ops.arithmetic.multiply(mult, w)
+            mult = ops.arithmetic.multiply(
+                mult,
+                ops.arithmetic.power(
+                    s,
+                    MultinomialCoefficients.comb(ni, 2),
+                ),
+            )
+            mult = ops.arithmetic.multiply(
+                mult,
+                ops.arithmetic.power(r, ni * (n - ni)),
+            )
+            mult = ops.arithmetic.multiply(
+                mult,
+                optimized_d_term(ops, clique_idx, n - ni, cur + 1),
+            )
+            ret = ops.arithmetic.add(ret, mult)
     ops.d_term_cache[key] = ret
     return ret
 

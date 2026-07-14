@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Optional, Union
 
-from flint import fmpq_mpoly, fmpq_mpoly_ctx
+from flint import fmpq_mpoly, fmpq_mpoly_ctx, fmpq_poly
 
-from wfomc.arithmetic import ArithmeticValue
+from wfomc.arithmetic import ArithmeticContext, ArithmeticValue
 from wfomc.fol.grounding import (
     LinearOrderEncoding,
     resolve_linear_order_encoding,
@@ -30,6 +30,7 @@ def _max_var_id(
 
 def _align_ganak_weights(
     weights: dict[int, tuple[ArithmeticValue, ArithmeticValue]],
+    arithmetic: ArithmeticContext,
 ) -> tuple[
     dict[int, tuple[ArithmeticValue, ArithmeticValue]],
     bool,
@@ -46,24 +47,47 @@ def _align_ganak_weights(
         w
         for pos, neg in weights.values()
         for w in (pos, neg)
-        if isinstance(w, fmpq_mpoly)
+        if isinstance(w, (fmpq_poly, fmpq_mpoly))
     ]
     if not poly_weights:
         return weights, False, 0, None
 
     names = sorted(
-        {name for polynomial in poly_weights for name in polynomial.context().names()}
+        {
+            name
+            for polynomial in poly_weights
+            if isinstance(polynomial, fmpq_mpoly)
+            for name in polynomial.context().names()
+        }
+        | {
+            name
+            for polynomial in poly_weights
+            if isinstance(polynomial, fmpq_poly)
+            for name in arithmetic.symbolic_variables
+        }
     )
     aligned_context = fmpq_mpoly_ctx.get(names, "lex")
-    aligned = [
-        polynomial.project_to_context(aligned_context) for polynomial in poly_weights
-    ]
-    poly_ctx = aligned[0].context()
+
+    def align(value: ArithmeticValue) -> ArithmeticValue:
+        if isinstance(value, fmpq_mpoly):
+            return value.project_to_context(aligned_context)
+        if isinstance(value, fmpq_poly):
+            if aligned_context.nvars() != 1:
+                raise ValueError(
+                    "fmpq_poly Ganak weights require one symbolic variable"
+                )
+            return aligned_context.from_dict(
+                {
+                    (degree,): coefficient
+                    for degree, coefficient in enumerate(value.coeffs())
+                    if coefficient
+                }
+            )
+        return value
+
+    poly_ctx = aligned_context
     aligned_weights = {
-        vid: (
-            pos.project_to_context(poly_ctx) if isinstance(pos, fmpq_mpoly) else pos,
-            neg.project_to_context(poly_ctx) if isinstance(neg, fmpq_mpoly) else neg,
-        )
+        vid: (align(pos), align(neg))
         for vid, (pos, neg) in weights.items()
     }
     return aligned_weights, True, poly_ctx.nvars(), poly_ctx
@@ -87,7 +111,10 @@ def propositional_ground_wfomc(
         logger.debug("Ground CNF is unsatisfiable; propositional WFOMC is zero")
         raw = arithmetic.zero()
     else:
-        weights, symbolic, npolyvars, poly_ctx = _align_ganak_weights(dict(weights))
+        weights, symbolic, npolyvars, poly_ctx = _align_ganak_weights(
+            dict(weights),
+            arithmetic,
+        )
         n_vars = _max_var_id(clauses, weights)
         logger.info(
             "Propositional ground WFOMC: vars=%d clauses=%d weights=%s encoding=%s",

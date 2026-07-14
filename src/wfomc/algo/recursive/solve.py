@@ -38,7 +38,10 @@ def solve(
             algo_input.domain_size,
             nauty_ctx,
         )
-        result += component.graph_weight * subtotal
+        result = arithmetic.add(
+            result,
+            arithmetic.multiply(component.graph_weight, subtotal),
+        )
 
     return WFOMCResult(result)
 

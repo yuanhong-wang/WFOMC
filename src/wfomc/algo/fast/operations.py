@@ -111,14 +111,23 @@ class MaterializedOptimizedEvidenceOperations:
             for cell_idx in i1_indices:
                 term = self.get_cell_weight(self.cells[cell_idx])
                 for clique_idx in self.nonind:
-                    term *= (
-                        self.get_two_table_weight(
-                            (self.cliques[clique_idx][0], self.cells[cell_idx])
-                        )
-                        ** config[self.nonind_map[clique_idx]]
+                    term = self.arithmetic.multiply(
+                        term,
+                        self.arithmetic.power(
+                            self.get_two_table_weight(
+                                (
+                                    self.cliques[clique_idx][0],
+                                    self.cells[cell_idx],
+                                )
+                            ),
+                            config[self.nonind_map[clique_idx]],
+                        ),
                     )
-                accum += term
-            result *= accum**count
+                accum = self.arithmetic.add(accum, term)
+            result = self.arithmetic.multiply(
+                result,
+                self.arithmetic.power(accum, count),
+            )
         return result
 
     @functools.lru_cache(maxsize=None)
@@ -140,10 +149,18 @@ class MaterializedOptimizedEvidenceOperations:
             for right_idx, right_count in enumerate(clique_config)
             if left_idx < right_idx
         )
-        result *= relation**cross_pairs
+        result = self.arithmetic.multiply(
+            result,
+            self.arithmetic.power(relation, cross_pairs),
+        )
         for partition_idx in range(len(evidence_profile_groups)):
-            result *= self.get_partitioned_J_term(
-                clique_idx, partition_idx, clique_config[partition_idx]
+            result = self.arithmetic.multiply(
+                result,
+                self.get_partitioned_J_term(
+                    clique_idx,
+                    partition_idx,
+                    clique_config[partition_idx],
+                ),
             )
         return result
 
@@ -160,10 +177,12 @@ class MaterializedOptimizedEvidenceOperations:
         clique = self.cliques[clique_idx]
         if len(cell_indices) == 1:
             cell = clique[cell_indices[0]]
-            return (
-                self.get_two_table_weight((cell, cell))
-                ** MultinomialCoefficients.comb(count, 2)
-                * self.get_cell_weight(cell) ** count
+            return self.arithmetic.multiply(
+                self.arithmetic.power(
+                    self.get_two_table_weight((cell, cell)),
+                    MultinomialCoefficients.comb(count, 2),
+                ),
+                self.arithmetic.power(self.get_cell_weight(cell), count),
             )
         return self.get_d_term(clique_idx, count, partition_idx)
 
@@ -186,8 +205,12 @@ class MaterializedOptimizedEvidenceOperations:
         weight = self.get_cell_weight(cell)
 
         if cur == len(cell_indices) - 1:
-            return weight**count * self_relation ** MultinomialCoefficients.comb(
-                count, 2
+            return self.arithmetic.multiply(
+                self.arithmetic.power(weight, count),
+                self.arithmetic.power(
+                    self_relation,
+                    MultinomialCoefficients.comb(count, 2),
+                ),
             )
 
         result = self.arithmetic.zero()
@@ -195,16 +218,34 @@ class MaterializedOptimizedEvidenceOperations:
             term = self.arithmetic.from_int(
                 MultinomialCoefficients.comb(count, cell_count)
             )
-            term *= weight**cell_count
-            term *= self_relation ** MultinomialCoefficients.comb(cell_count, 2)
-            term *= relation ** (cell_count * (count - cell_count))
-            term *= self.get_d_term(
-                clique_idx,
-                count - cell_count,
-                partition_idx,
-                cur + 1,
+            term = self.arithmetic.multiply(
+                term,
+                self.arithmetic.power(weight, cell_count),
             )
-            result += term
+            term = self.arithmetic.multiply(
+                term,
+                self.arithmetic.power(
+                    self_relation,
+                    MultinomialCoefficients.comb(cell_count, 2),
+                ),
+            )
+            term = self.arithmetic.multiply(
+                term,
+                self.arithmetic.power(
+                    relation,
+                    cell_count * (count - cell_count),
+                ),
+            )
+            term = self.arithmetic.multiply(
+                term,
+                self.get_d_term(
+                    clique_idx,
+                    count - cell_count,
+                    partition_idx,
+                    cur + 1,
+                ),
+            )
+            result = self.arithmetic.add(result, term)
         return result
 
 

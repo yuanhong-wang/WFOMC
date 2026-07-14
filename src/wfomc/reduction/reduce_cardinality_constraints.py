@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Mapping
 
-from flint import fmpq, fmpq_mpoly
+from flint import fmpq, fmpq_mpoly, fmpq_poly
 
 from wfomc.arithmetic import ArithmeticBackend, ArithmeticContext
 from wfomc.cardinality_constraints import (
@@ -38,16 +38,35 @@ def reduce_cardinality_constraints(
         },
         key=str,
     )
-    predicate_markers = tuple(
-        (predicate, f"__wfomc_cardinality_{index}")
-        for index, predicate in enumerate(predicates)
-    )
-    marker_names = tuple(marker for _predicate, marker in predicate_markers)
     user_symbols = collect_output_weight_variables(problem)
+    used_symbols = set(user_symbols) | set(problem.internal_weight_symbols)
+    predicate_markers_list = []
+    for index, predicate in enumerate(predicates):
+        marker = f"__wfomc_cardinality_{index}"
+        while marker in used_symbols:
+            marker += "_"
+        used_symbols.add(marker)
+        predicate_markers_list.append((predicate, marker))
+    predicate_markers = tuple(predicate_markers_list)
+    marker_names = tuple(marker for _predicate, marker in predicate_markers)
+    solver_symbols = tuple(sorted(set(user_symbols) | set(marker_names)))
+    predicate_upper_bounds = constraints.safe_predicate_upper_bounds()
+    marker_degree_limits = tuple(
+        sorted(
+            (marker, predicate_upper_bounds[predicate])
+            for predicate, marker in predicate_markers
+            if predicate in predicate_upper_bounds
+        )
+    )
     arithmetic = ArithmeticContext(
-        backend=ArithmeticBackend.FMPQ_MPOLY,
-        symbolic_variables=tuple(sorted(set(user_symbols) | set(marker_names))),
+        backend=(
+            ArithmeticBackend.FMPQ_POLY
+            if len(solver_symbols) == 1
+            else ArithmeticBackend.FMPQ_MPOLY
+        ),
+        symbolic_variables=solver_symbols,
         output_symbols=user_symbols,
+        degree_limits=marker_degree_limits,
     )
     weights = compile_weight_mapping(dict(problem.weights), arithmetic)
     for predicate, marker in predicate_markers:
@@ -55,7 +74,17 @@ def reduce_cardinality_constraints(
             predicate,
             (arithmetic.one(), arithmetic.one()),
         )
-        weights[predicate] = (positive * arithmetic.symbol(marker), negative)
+        weights[predicate] = (
+            arithmetic.multiply(positive, arithmetic.symbol(marker)),
+            negative,
+        )
+
+    combined_degree_limits = dict(problem.internal_weight_degree_limits)
+    for marker, limit in marker_degree_limits:
+        combined_degree_limits[marker] = min(
+            combined_degree_limits.get(marker, limit),
+            limit,
+        )
 
     reduced = replace(
         problem,
@@ -64,6 +93,7 @@ def reduce_cardinality_constraints(
         internal_weight_symbols=tuple(
             sorted(set(problem.internal_weight_symbols) | set(marker_names))
         ),
+        internal_weight_degree_limits=tuple(sorted(combined_degree_limits.items())),
     )
 
     def decode(result: object, **kwargs: object) -> object:
@@ -88,6 +118,19 @@ def _decode_result(
 ) -> object:
     if isinstance(value, fmpq):
         return value if _valid_degrees(constraints, {}) else arithmetic.zero()
+    if isinstance(value, fmpq_poly):
+        if len(predicate_markers) != 1:
+            raise TypeError(
+                "univariate cardinality result requires exactly one marker"
+            )
+        predicate, _marker = predicate_markers[0]
+        accepted = fmpq(0)
+        for degree, coefficient in enumerate(value.coeffs()):
+            if _valid_degrees(constraints, {predicate: degree}):
+                accepted += coefficient
+        # Keep the selected backend until all earlier reduction decoders have
+        # applied their factors; the engine projects this constant afterwards.
+        return fmpq_poly([accepted])
     if not isinstance(value, fmpq_mpoly):
         raise TypeError(f"Unsupported cardinality result type: {type(value)}")
 

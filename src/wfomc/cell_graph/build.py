@@ -248,9 +248,15 @@ class _CellGraphBuilder:
             for i, pred in zip(cell.code, cell.preds):
                 assert pred.arity > 0, "Nullary predicates should have been removed"
                 if i:
-                    weight = weight * self._get_weight(pred)[0]
+                    weight = self.arithmetic.multiply(
+                        weight,
+                        self._get_weight(pred)[0],
+                    )
                 else:
-                    weight = weight * self._get_weight(pred)[1]
+                    weight = self.arithmetic.multiply(
+                        weight,
+                        self._get_weight(pred)[1],
+                    )
             weights[cell] = weight
         return weights
 
@@ -435,10 +441,10 @@ def build_cell_graphs(
             cell_graph = builder.snapshot()
             weight = arithmetic.one()
             for atom, val in zip(nullary_atoms, values):
-                weight = weight * (
-                    _weight_pair(weights, atom.predicate, arithmetic)[0]
-                    if val
-                    else _weight_pair(weights, atom.predicate, arithmetic)[1]
+                pair = _weight_pair(weights, atom.predicate, arithmetic)
+                weight = arithmetic.multiply(
+                    weight,
+                    pair[0] if val else pair[1],
                 )
             yield cell_graph, weight
 

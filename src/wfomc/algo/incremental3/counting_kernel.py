@@ -111,7 +111,11 @@ class ConfigUpdater:
                     (tc_old, other_c)
                 ].items():
                     hc_new = self.space.inc(hc_old, oc_new)
-                    H_new[(tc_new, hc_new)] += W * rij
+                    outcome = (tc_new, hc_new)
+                    H_new[outcome] = self.arithmetic.add(
+                        H_new[outcome],
+                        self.arithmetic.multiply(W, rij),
+                    )
             H = H_new
             sub[j] = H
 
@@ -174,9 +178,14 @@ def build_t_update_dict(
 
                         c1 = (i,) + t1
                         c2 = (j,) + t2
-                        t_update_dict[(c1, c2)][
-                            ((i,) + tuple(t1_new), (j,) + tuple(t2_new))
-                        ] += rijt
+                        transition = (
+                            (i,) + tuple(t1_new),
+                            (j,) + tuple(t2_new),
+                        )
+                        t_update_dict[(c1, c2)][transition] = arithmetic.add(
+                            t_update_dict[(c1, c2)][transition],
+                            rijt,
+                        )
 
     return t_update_dict
 
@@ -248,22 +257,32 @@ def _make_domain_recursion(
                             for count in H_config_new:
                                 if count > 1:
                                     denom *= math.factorial(count)
-                            weight_H = weight_H * arithmetic.from_fraction(
-                                1,
-                                math.factorial(other_count) // denom,
+                            weight_H = arithmetic.multiply(
+                                weight_H,
+                                arithmetic.from_fraction(
+                                    1,
+                                    math.factorial(other_count) // denom,
+                                ),
                             )
 
-                        G_new[(tc_new, G_config_new)] += W * weight_H
+                        outcome = (tc_new, G_config_new)
+                        G_new[outcome] = arithmetic.add(
+                            G_new[outcome],
+                            arithmetic.multiply(W, weight_H),
+                        )
                 G = G_new
 
             for (target_c, G_config), W in G.items():
                 if _stop_condition(target_c, cs):
-                    T[G_config] += W
+                    T[G_config] = arithmetic.add(T[G_config], W)
 
             result_of_target_c = arithmetic.zero()
             for T_config, weight in T.items():
-                result_of_target_c += weight * domain_recursion(T_config)
-            result += result_of_target_c
+                result_of_target_c = arithmetic.add(
+                    result_of_target_c,
+                    arithmetic.multiply(weight, domain_recursion(T_config)),
+                )
+            result = arithmetic.add(result, result_of_target_c)
 
         cache[config] = result
         return result

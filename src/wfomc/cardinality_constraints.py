@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 
@@ -87,6 +88,42 @@ class CardinalityConstraints:
             )
             for constraint in self.constraints
         )
+
+    def safe_predicate_upper_bounds(self) -> dict[object, int]:
+        """Return independently safe count caps implied by the constraints.
+
+        A finite cap is available for ``=``, ``<=`` and ``<`` constraints
+        whose normalized predicate coefficients are all non-negative. Mixed
+        signs are intentionally ignored because one predicate's high degree
+        may then be cancelled by another predicate.
+        """
+
+        bounds: dict[object, int] = {}
+        for constraint in self.constraints:
+            if constraint.comparator in (Comparator.EQ, Comparator.LE):
+                total_upper_bound = constraint.rhs
+            elif constraint.comparator is Comparator.LT:
+                total_upper_bound = constraint.rhs - 1
+            else:
+                continue
+            if total_upper_bound < 0:
+                continue
+
+            coefficients: defaultdict[object, int] = defaultdict(int)
+            for term in constraint.terms:
+                coefficients[term.predicate] += term.coefficient
+            if any(coefficient < 0 for coefficient in coefficients.values()):
+                continue
+
+            for predicate, coefficient in coefficients.items():
+                if coefficient <= 0:
+                    continue
+                upper_bound = total_upper_bound // coefficient
+                current = bounds.get(predicate)
+                bounds[predicate] = (
+                    upper_bound if current is None else min(current, upper_bound)
+                )
+        return bounds
 
 
 def combine_cardinality_constraints(

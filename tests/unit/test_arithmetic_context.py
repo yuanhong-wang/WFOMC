@@ -10,7 +10,7 @@ not exist) is rejected at planning time rather than silently falling back to
 from __future__ import annotations
 
 import pytest
-from flint import arb, fmpq, fmpq_mpoly_ctx, fmpz
+from flint import arb, fmpq, fmpq_mpoly_ctx, fmpq_poly, fmpz
 
 from wfomc.arithmetic import (
     ArithmeticBackend,
@@ -118,3 +118,73 @@ def test_unsupported_arb_mpoly_fails_early():
         )
         is ArithmeticBackend.FMPQ_MPOLY
     )
+
+
+def test_mpoly_identity_operations_reuse_existing_values():
+    ctx = _ctx(ArithmeticBackend.FMPQ_MPOLY, ("x", "y"))
+    x = ctx.symbol("x")
+    zero = ctx.zero()
+    one = ctx.one()
+
+    assert ctx.is_zero(zero)
+    assert ctx.is_one(one)
+    assert ctx.multiply(one, x) is x
+    assert ctx.multiply(x, one) is x
+    assert ctx.multiply(zero, x) is zero
+    assert ctx.power(x, 0) == one
+    assert ctx.power(x, 1) is x
+    assert ctx.power(one, 100) is one
+    assert ctx.power(zero, 100) is zero
+
+
+def test_mpoly_nontrivial_operations_keep_exact_semantics():
+    ctx = _ctx(ArithmeticBackend.FMPQ_MPOLY, ("x", "y"))
+    x = ctx.symbol("x")
+    y = ctx.symbol("y")
+
+    assert ctx.multiply(x, y) == x * y
+    assert ctx.power(x + y, 3) == (x + y) ** 3
+
+
+def test_fmpq_poly_operations_truncate_to_declared_degree_limit():
+    ctx = ArithmeticContext(
+        ArithmeticBackend.FMPQ_POLY,
+        ("marker",),
+        degree_limits=(("marker", 2),),
+    )
+    marker = ctx.symbol("marker")
+
+    value = ctx.power(ctx.one() + marker, 10)
+
+    assert isinstance(value, fmpq_poly)
+    assert value == fmpq_poly([1, 10, 45])
+
+
+def test_fmpq_poly_context_coerces_and_truncates_univariate_mpoly():
+    ctx = ArithmeticContext(
+        ArithmeticBackend.FMPQ_POLY,
+        ("marker",),
+        degree_limits=(("marker", 2),),
+    )
+    source_ctx = fmpq_mpoly_ctx.get(("marker",), "lex")
+    source = source_ctx.from_dict({(0,): 1, (2,): 3, (4,): 5})
+
+    assert ctx.coerce(source) == fmpq_poly([1, 0, 3])
+
+
+def test_fmpq_mpoly_operations_only_truncate_bounded_symbols():
+    ctx = ArithmeticContext(
+        ArithmeticBackend.FMPQ_MPOLY,
+        ("marker", "user"),
+        output_symbols=("user",),
+        degree_limits=(("marker", 2),),
+    )
+    marker = ctx.symbol("marker")
+    user = ctx.symbol("user")
+
+    value = ctx.power(ctx.one() + marker + user, 5)
+    marker_index = value.context().names().index("marker")
+    user_index = value.context().names().index("user")
+
+    assert all(monomial[marker_index] <= 2 for monomial in value.to_dict())
+    assert max(monomial[user_index] for monomial in value.to_dict()) == 5

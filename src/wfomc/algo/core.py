@@ -248,24 +248,26 @@ def compile_reduced_problem(
     if sentence is None:
         sentence = true()
     output_symbols = collect_output_weight_variables(problem)
-    solver_symbols = collect_symbolic_weight_variables(problem)
+    solver_symbols = tuple(
+        sorted(
+            set(collect_symbolic_weight_variables(problem))
+            | set(problem.internal_weight_symbols)
+        )
+    )
     if problem.internal_weight_symbols and options.weight_options.precision == "round":
         raise ArithmeticBackendError(
             "rounded arithmetic does not support cardinality marker variables; "
             "python-flint has no arb_mpoly backend"
         )
-    backend = (
-        ArithmeticBackend.FMPQ_MPOLY
-        if problem.internal_weight_symbols
-        else choose_arithmetic_backend(
-            options.weight_options,
-            symbolic_variables=solver_symbols,
-        )
+    backend = choose_arithmetic_backend(
+        options.weight_options,
+        symbolic_variables=solver_symbols,
     )
     arithmetic = ArithmeticContext(
         backend=backend,
         symbolic_variables=solver_symbols,
         output_symbols=output_symbols,
+        degree_limits=problem.internal_weight_degree_limits,
     )
     logger.info(
         "Prepared arithmetic: backend=%s solver_symbols=%d output_symbols=%d",

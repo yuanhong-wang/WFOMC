@@ -121,19 +121,26 @@ class CellEvidenceAllocation:
                     for cell_idx, count in zip(compatible, distribution):
                         new_config[cell_idx] += count
                     config = tuple(new_config)
-                    new_states[config] = new_states.get(
-                        config,
-                        arithmetic.zero(),
-                    ) + coefficient * arithmetic.from_int(
-                        MultinomialCoefficients.coef(distribution)
+                    term = arithmetic.multiply(
+                        coefficient,
+                        arithmetic.from_int(
+                            MultinomialCoefficients.coef(distribution)
+                        ),
+                    )
+                    new_states[config] = arithmetic.add(
+                        new_states.get(config, arithmetic.zero()),
+                        term,
                     )
             states = new_states
 
         for config, coefficient in states.items():
             if basis is CellConfigCoefficientBasis.RELATIVE_TO_CELL_MULTINOMIAL:
-                coefficient *= arithmetic.from_fraction(
-                    1,
-                    MultinomialCoefficients.coef(config),
+                coefficient = arithmetic.multiply(
+                    coefficient,
+                    arithmetic.from_fraction(
+                        1,
+                        MultinomialCoefficients.coef(config),
+                    ),
                 )
             yield config, coefficient
 

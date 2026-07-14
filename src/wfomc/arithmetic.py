@@ -111,6 +111,23 @@ class ArithmeticContext:
     backend: ArithmeticBackend
     symbolic_variables: tuple[str, ...] = ()
     output_symbols: tuple[str, ...] = ()
+    degree_limits: tuple[tuple[str, int], ...] = ()
+
+    def __post_init__(self) -> None:
+        normalized = tuple(sorted(self.degree_limits))
+        if len({name for name, _limit in normalized}) != len(normalized):
+            raise ValueError("ArithmeticContext degree limits must be unique")
+        unknown = set(name for name, _limit in normalized) - set(
+            self.symbolic_variables
+        )
+        if unknown:
+            raise ValueError(
+                f"ArithmeticContext degree limits reference unknown symbols: "
+                f"{sorted(unknown)!r}"
+            )
+        if any(limit < 0 for _name, limit in normalized):
+            raise ValueError("ArithmeticContext degree limits must be non-negative")
+        object.__setattr__(self, "degree_limits", normalized)
 
     # -- public numeric factory API --------------------------------------
 
@@ -163,14 +180,28 @@ class ArithmeticContext:
         if isinstance(value, fmpz_poly) and self.backend is ArithmeticBackend.FMPZ_POLY:
             return value
         if isinstance(value, fmpq_poly) and self.backend is ArithmeticBackend.FMPQ_POLY:
-            return value
+            return self.truncate(value)
         if isinstance(value, arb_poly) and self.backend is ArithmeticBackend.ARB_POLY:
             return value
         if (
             isinstance(value, fmpq_mpoly)
             and self.backend is ArithmeticBackend.FMPQ_MPOLY
         ):
-            return value.project_to_context(self._mpoly_ctx(fmpq_mpoly_ctx))
+            return self.truncate(
+                value.project_to_context(self._mpoly_ctx(fmpq_mpoly_ctx))
+            )
+        if (
+            isinstance(value, fmpq_mpoly)
+            and self.backend is ArithmeticBackend.FMPQ_POLY
+        ):
+            if value.context().nvars() != 1:
+                raise ArithmeticBackendError(
+                    "Cannot coerce a multivariate fmpq_mpoly into fmpq_poly"
+                )
+            coefficients = [fmpq(0)] * (max(value.degrees(), default=0) + 1)
+            for monomial, coefficient in value.to_dict().items():
+                coefficients[monomial[0]] += coefficient
+            return self.truncate(fmpq_poly(coefficients))
         raise ArithmeticBackendError(
             f"Cannot coerce {type(value).__name__!s} into backend {self.backend!s}"
         )
@@ -182,7 +213,7 @@ class ArithmeticContext:
             raise ValueError(f"Unknown arithmetic symbol: {name!r}")
         index = self.symbolic_variables.index(name)
         if self.backend is ArithmeticBackend.FMPQ_MPOLY:
-            return self._mpoly_ctx(fmpq_mpoly_ctx).gen(index)
+            return self.truncate(self._mpoly_ctx(fmpq_mpoly_ctx).gen(index))
         if self.backend is ArithmeticBackend.FMPZ_MPOLY:
             return self._mpoly_ctx(fmpz_mpoly_ctx).gen(index)
         if index != 0:
@@ -190,7 +221,7 @@ class ArithmeticContext:
                 f"Backend {self.backend!s} cannot expose symbol {name!r}"
             )
         if self.backend is ArithmeticBackend.FMPQ_POLY:
-            return fmpq_poly([0, 1])
+            return self.truncate(fmpq_poly([0, 1]))
         if self.backend is ArithmeticBackend.FMPZ_POLY:
             return fmpz_poly([0, 1])
         if self.backend is ArithmeticBackend.ARB_POLY:
@@ -200,13 +231,110 @@ class ArithmeticContext:
         )
 
     def is_zero(self, value) -> bool:
-        return value == self.zero()
+        """Return whether *value* is the additive identity.
+
+        Comparing with the Python literal avoids constructing a backend zero,
+        which matters in polynomial hot loops.
+        """
+
+        return value == 0
+
+    def is_one(self, value) -> bool:
+        """Return whether *value* is the multiplicative identity."""
+
+        return value == 1
+
+    def multiply(self, left, right):
+        """Multiply two backend values with exact zero/one fast paths."""
+
+        if self.is_zero(left):
+            return left
+        if self.is_zero(right):
+            return right
+        if self.is_one(left):
+            return self.truncate(right)
+        if self.is_one(right):
+            return self.truncate(left)
+        return self.truncate(left * right)
+
+    def power(self, base, exponent: int):
+        """Raise a backend value to an integer power with identity fast paths."""
+
+        if exponent == 0:
+            return self.one()
+        if exponent == 1:
+            return self.truncate(base)
+        if self.is_one(base):
+            return base
+        if exponent > 0 and self.is_zero(base):
+            return base
+        if (
+            exponent > 1
+            and self.degree_limits
+            and isinstance(base, (fmpq_poly, fmpq_mpoly))
+        ):
+            result = self.one()
+            factor = base
+            remaining = exponent
+            while remaining:
+                if remaining & 1:
+                    result = self.multiply(result, factor)
+                remaining >>= 1
+                if remaining:
+                    factor = self.multiply(factor, factor)
+            return result
+        return self.truncate(base**exponent)
+
+    def add(self, left, right):
+        """Add two backend values while preserving the truncation invariant."""
+
+        if self.is_zero(left):
+            return self.truncate(right)
+        if self.is_zero(right):
+            return self.truncate(left)
+        return self.truncate(left + right)
+
+    def truncate(self, value):
+        """Discard monomials above proven-safe internal degree limits."""
+
+        if not self.degree_limits:
+            return value
+        limits = dict(self.degree_limits)
+        if isinstance(value, fmpq_poly):
+            if len(self.symbolic_variables) != 1:
+                return value
+            limit = limits.get(self.symbolic_variables[0])
+            if limit is None or value.degree() <= limit:
+                return value
+            return value.truncate(limit + 1)
+        if isinstance(value, fmpq_mpoly):
+            names = tuple(value.context().names())
+            indexed_limits = tuple(
+                (names.index(name), limit)
+                for name, limit in self.degree_limits
+                if name in names
+            )
+            if not indexed_limits:
+                return value
+            max_degrees = value.degrees()
+            if all(max_degrees[index] <= limit for index, limit in indexed_limits):
+                return value
+            terms = {
+                monomial: coefficient
+                for monomial, coefficient in value.to_dict().items()
+                if all(
+                    monomial[index] <= limit
+                    for index, limit in indexed_limits
+                )
+            }
+            return value.context().from_dict(terms)
+        return value
 
     def sum(self, values: Iterable):
         """Sum an iterable of coercible values in this backend's type."""
         total = self.zero()
         for value in values:
-            total = total + self.coerce(value)
+            total = self.add(total, self.coerce(value))
         return total
 
     def project_to_output(self, value):
@@ -218,6 +346,10 @@ class ArithmeticContext:
         than inside the cardinality decoder.
         """
 
+        if isinstance(value, fmpq_poly):
+            if not self.output_symbols and value.degree() <= 0:
+                return value[0]
+            return value
         if not isinstance(value, fmpq_mpoly):
             return value
         projected = value.project_to_context(

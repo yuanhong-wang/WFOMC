@@ -53,7 +53,12 @@ def build_input(
     cardinality_constraints: CardinalityConstraints,
 ) -> TailSignatureInput:
     components = tuple(
-        _component(data, graph_weight, len(reduced.domain))
+        _component(
+            data,
+            graph_weight,
+            len(reduced.domain),
+            reduced.arithmetic,
+        )
         for data, graph_weight in build_cell_graphs(
             reduced.sentence,
             reduced.weights,
@@ -105,6 +110,7 @@ def _component(
     data: CellGraphData,
     graph_weight: ArithmeticValue,
     domain_size: int,
+    arithmetic,
 ) -> TailSignatureComponent:
     pair_weights = data.pair_weights()
     return TailSignatureComponent(
@@ -112,6 +118,7 @@ def _component(
             data.cell_weights,
             pair_weights,
             domain_size,
+            arithmetic,
         ),
         r_matrix=pair_weights,
         graph_weight=graph_weight,
@@ -122,11 +129,17 @@ def _local_weight_tables(
     cell_weights: tuple[ArithmeticValue, ...],
     pair_weights: tuple[tuple[ArithmeticValue, ...], ...],
     domain_size: int,
+    arithmetic,
 ) -> tuple[tuple[ArithmeticValue, ...], ...]:
     return tuple(
         tuple(
-            (cell_weight**count)
-            * (pair_weights[idx][idx] ** (count * (count - 1) // 2))
+            arithmetic.multiply(
+                arithmetic.power(cell_weight, count),
+                arithmetic.power(
+                    pair_weights[idx][idx],
+                    count * (count - 1) // 2,
+                ),
+            )
             for count in range(domain_size + 1)
         )
         for idx, cell_weight in enumerate(cell_weights)

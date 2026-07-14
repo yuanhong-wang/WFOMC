@@ -152,14 +152,17 @@ def compute_pair_factors(
         condition_mask = mask >> counting_bit_count
         counting_mask = mask & relation_mask
         factor = by_condition.setdefault(condition_mask, {})
-        factor[counting_mask] = factor.get(counting_mask, arithmetic.zero()) + value
+        factor[counting_mask] = arithmetic.add(
+            factor.get(counting_mask, arithmetic.zero()),
+            value,
+        )
 
     factors_by_condition: dict[int, PairFactor] = {}
     for condition_mask in condition_masks:
         weights = by_condition.get(condition_mask, {})
         total = arithmetic.zero()
         for value in weights.values():
-            total += value
+            total = arithmetic.add(total, value)
         counting_weights = (
             tuple(
                 (mask, value)
@@ -232,12 +235,18 @@ def _enumerate_bounded(
                 weight = arithmetic.one()
                 for variable in original_variables:
                     weight_pair = literal_weights[variable]
-                    weight *= weight_pair[0 if variable in positive else 1]
+                    weight = arithmetic.multiply(
+                        weight,
+                        weight_pair[0 if variable in positive else 1],
+                    )
                 mask = 0
                 for variable, bit in projection.items():
                     if variable in positive:
                         mask |= 1 << bit
-                combined[mask] = combined.get(mask, arithmetic.zero()) + weight
+                combined[mask] = arithmetic.add(
+                    combined.get(mask, arithmetic.zero()),
+                    weight,
+                )
 
                 if not original_variables:
                     break
@@ -313,7 +322,7 @@ def _free_offdiagonal_factor(
             if atom in cnf.atom_to_var:
                 continue
             if projected_bit is None:
-                value = weight_true + weight_false
+                value = arithmetic.add(weight_true, weight_false)
                 choices = {} if arithmetic.is_zero(value) else {0: value}
             else:
                 choices = {}
@@ -475,7 +484,10 @@ def _factor_add(
 ) -> Factor:
     result = dict(left)
     for mask, value in right.items():
-        result[mask] = result.get(mask, arithmetic.zero()) + value
+        result[mask] = arithmetic.add(
+            result.get(mask, arithmetic.zero()),
+            value,
+        )
         if arithmetic.is_zero(result[mask]):
             del result[mask]
     return result
@@ -492,8 +504,9 @@ def _factor_multiply(
             if left_mask & right_mask:
                 raise AssertionError("Decomposable SDD repeated a projection bit")
             mask = left_mask | right_mask
-            result[mask] = (
-                result.get(mask, arithmetic.zero()) + left_value * right_value
+            result[mask] = arithmetic.add(
+                result.get(mask, arithmetic.zero()),
+                arithmetic.multiply(left_value, right_value),
             )
     return result
 

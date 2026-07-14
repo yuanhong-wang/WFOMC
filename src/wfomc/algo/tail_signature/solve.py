@@ -43,9 +43,15 @@ def solve(
             algo_input.domain_size,
             **(algo_input.engine_options or {}),
         )
-        result += component.graph_weight * _coerce_scalar_result(
-            component_result,
-            algo_input.arithmetic,
+        result = algo_input.arithmetic.add(
+            result,
+            algo_input.arithmetic.multiply(
+                component.graph_weight,
+                _coerce_scalar_result(
+                    component_result,
+                    algo_input.arithmetic,
+                ),
+            ),
         )
 
     return WFOMCResult(result)

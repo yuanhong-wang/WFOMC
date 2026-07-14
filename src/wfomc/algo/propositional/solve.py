@@ -23,11 +23,12 @@ def solve(
         raise TypeError("propositional algorithm expects a GroundCNFInput")
     if algo_input.arithmetic.backend not in {
         ArithmeticBackend.FMPQ,
+        ArithmeticBackend.FMPQ_POLY,
         ArithmeticBackend.FMPQ_MPOLY,
     }:
         raise ArithmeticBackendError(
             "propositional Ganak execution currently supports only exact "
-            "fmpq/fmpq_mpoly arithmetic"
+            "fmpq/fmpq_poly/fmpq_mpoly arithmetic"
         )
 
     ganak_path = (

@@ -146,13 +146,17 @@ def compile_weight_mapping(
 def _compile_weight_value(value: object, context: _ArithmeticContext) -> object:
     backend = context.backend
     if backend is _ArithmeticBackend.FMPZ_POLY:
-        return _to_fmpz_poly(value, context)
+        compiled = _to_fmpz_poly(value, context)
+        return context.truncate(compiled)
     if backend is _ArithmeticBackend.FMPQ_POLY:
-        return _to_fmpq_poly(value, context)
+        compiled = _to_fmpq_poly(value, context)
+        return context.truncate(compiled)
     if backend is _ArithmeticBackend.ARB_POLY:
-        return _to_arb_poly(value, context)
+        compiled = _to_arb_poly(value, context)
+        return context.truncate(compiled)
     if backend is _ArithmeticBackend.FMPQ_MPOLY:
-        return _to_fmpq_mpoly(value, context)
+        compiled = _to_fmpq_mpoly(value, context)
+        return context.truncate(compiled)
     return context.coerce(value)
 
 

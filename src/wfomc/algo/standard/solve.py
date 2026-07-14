@@ -33,12 +33,17 @@ def solve(
 
         subtotal = arithmetic.zero()
         for config, coefficient in allocation.iter_config_coefficients(arithmetic):
-            subtotal += coefficient * _config_weight(
-                component,
-                config,
-                arithmetic,
+            subtotal = arithmetic.add(
+                subtotal,
+                arithmetic.multiply(
+                    coefficient,
+                    _config_weight(component, config, arithmetic),
+                ),
             )
-        result += component.graph_weight * subtotal
+        result = arithmetic.add(
+            result,
+            arithmetic.multiply(component.graph_weight, subtotal),
+        )
 
     return WFOMCResult(result)
 
@@ -52,13 +57,28 @@ def _config_weight(
     for i, count_i in enumerate(config):
         if count_i == 0:
             continue
-        result *= component.cell_weights[i] ** count_i
-        result *= component.pair_weights[i][i] ** (count_i * (count_i - 1) // 2)
+        result = arithmetic.multiply(
+            result,
+            arithmetic.power(component.cell_weights[i], count_i),
+        )
+        result = arithmetic.multiply(
+            result,
+            arithmetic.power(
+                component.pair_weights[i][i],
+                count_i * (count_i - 1) // 2,
+            ),
+        )
         for j in range(i + 1, len(config)):
             count_j = config[j]
             if count_j == 0:
                 continue
-            result *= component.pair_weights[i][j] ** (count_i * count_j)
+            result = arithmetic.multiply(
+                result,
+                arithmetic.power(
+                    component.pair_weights[i][j],
+                    count_i * count_j,
+                ),
+            )
     return result
 
 

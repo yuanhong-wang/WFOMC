@@ -29,13 +29,16 @@ def solve(
     arithmetic = algo_input.arithmetic
     result = arithmetic.zero()
     for component in algo_input.components:
-        result += _solve_component(
-            component,
-            domain_size=algo_input.domain_size,
-            counting_state=algo_input.counting_state,
-            unary_masks=algo_input.unary_cardinality_masks,
-            has_linear_order=algo_input.has_linear_order,
-            arithmetic=arithmetic,
+        result = arithmetic.add(
+            result,
+            _solve_component(
+                component,
+                domain_size=algo_input.domain_size,
+                counting_state=algo_input.counting_state,
+                unary_masks=algo_input.unary_cardinality_masks,
+                has_linear_order=algo_input.has_linear_order,
+                arithmetic=arithmetic,
+            ),
         )
 
     return WFOMCResult(result)
@@ -107,11 +110,16 @@ def _solve_component(
         for idx, count in enumerate(config):
             init_state = (idx,) + w2t[idx]
             init_list[space.offset(init_state)] = count
-            weight *= w[idx] ** count
+            weight = arithmetic.multiply(
+                weight,
+                arithmetic.power(w[idx], count),
+            )
 
-        subtotal += coefficient * weight * domain_recursion(tuple(init_list))
+        term = arithmetic.multiply(coefficient, weight)
+        term = arithmetic.multiply(term, domain_recursion(tuple(init_list)))
+        subtotal = arithmetic.add(subtotal, term)
 
-    return component.graph_weight * subtotal
+    return arithmetic.multiply(component.graph_weight, subtotal)
 
 
 def _build_weight_from_materialized_tables(
@@ -138,7 +146,7 @@ def _build_weight_from_materialized_tables(
     r = defaultdict(lambda: defaultdict(arithmetic.zero))
 
     for idx, weight in enumerate(component.cell_weights):
-        w[idx] += weight
+        w[idx] = arithmetic.add(w[idx], weight)
 
     for left_idx, row in enumerate(component.counting_binary_relation_weights):
         if len(row) != n_cells:
@@ -147,9 +155,11 @@ def _build_weight_from_materialized_tables(
             )
         for right_idx, entries in enumerate(row):
             for forward_delta, reverse_delta, weight in entries:
-                r[(left_idx, right_idx)][
-                    (tuple(forward_delta), tuple(reverse_delta))
-                ] += weight
+                delta = (tuple(forward_delta), tuple(reverse_delta))
+                r[(left_idx, right_idx)][delta] = arithmetic.add(
+                    r[(left_idx, right_idx)][delta],
+                    weight,
+                )
 
     return w2t, w, r
 

@@ -146,6 +146,9 @@ class ReducedProblem:
     evidence: Evidence = field(default_factory=Evidence)
     profile_capacity_constraint: ProfileCapacityConstraint | None = None
     internal_weight_symbols: tuple[str, ...] = ()
+    # Proven-safe degree caps for internal marker variables. These are produced
+    # by logical reductions and consumed only by the arithmetic compiler.
+    internal_weight_degree_limits: tuple[tuple[str, int], ...] = ()
     circular_order_size: int | None = None
 
     def __post_init__(self) -> None:

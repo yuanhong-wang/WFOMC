@@ -49,7 +49,7 @@ def build_input(
     options: AlgoOptions,
     features: FeatureSet,
 ) -> GroundCNFInput:
-    from flint import fmpq_mpoly
+    from flint import fmpq_mpoly, fmpq_poly
     from wfomc.fol.grounding import (
         ground_qf_formula,
         linear_order_clauses,
@@ -119,7 +119,7 @@ def build_input(
         for vid, predicate in id_to_predicate.items()
     }
     symbolic = any(
-        isinstance(weight, fmpq_mpoly)
+        isinstance(weight, (fmpq_poly, fmpq_mpoly))
         for pair in literal_weights.values()
         for weight in pair
     )

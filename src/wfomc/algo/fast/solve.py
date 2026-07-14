@@ -36,7 +36,10 @@ def solve(
                 algo_input.domain_size,
                 arithmetic,
             )
-        result += component.graph_weight * subtotal
+        result = arithmetic.add(
+            result,
+            arithmetic.multiply(component.graph_weight, subtotal),
+        )
 
     return WFOMCResult(result)
 
@@ -66,24 +69,42 @@ def _solve_component_without_evidence(
         for i, clique1 in enumerate(cliques):
             for j, clique2 in enumerate(cliques):
                 if i in nonind and j in nonind and i < j:
-                    body *= operations.get_two_table_weight(
-                        (clique1[0], clique2[0])
-                    ) ** (partition[nonind_map[i]] * partition[nonind_map[j]])
+                    body = arithmetic.multiply(
+                        body,
+                        arithmetic.power(
+                            operations.get_two_table_weight(
+                                (clique1[0], clique2[0])
+                            ),
+                            partition[nonind_map[i]] * partition[nonind_map[j]],
+                        ),
+                    )
 
         for clique_idx in nonind:
-            body *= operations.get_J_term(
-                clique_idx,
-                partition[nonind_map[clique_idx]],
+            body = arithmetic.multiply(
+                body,
+                operations.get_J_term(
+                    clique_idx,
+                    partition[nonind_map[clique_idx]],
+                ),
             )
             if not component.modified_cell_symmetry:
-                body *= (
-                    operations.get_cell_weight(cliques[clique_idx][0])
-                    ** (partition[nonind_map[clique_idx]])
+                body = arithmetic.multiply(
+                    body,
+                    arithmetic.power(
+                        operations.get_cell_weight(cliques[clique_idx][0]),
+                        partition[nonind_map[clique_idx]],
+                    ),
                 )
 
         operations.setup_term_cache()
         multiplier = operations.get_term(len(i2_ind), 0, partition)
-        subtotal += coefficient * multiplier * body
+        subtotal = arithmetic.add(
+            subtotal,
+            arithmetic.multiply(
+                arithmetic.multiply(coefficient, multiplier),
+                body,
+            ),
+        )
     return subtotal
 
 
@@ -123,7 +144,10 @@ def _solve_component_with_evidence(
         ):
             remainings.append(constrained_num - sum(config))
             mu = tuple(config) + (constrained_num - sum(config),)
-            coefficient *= arithmetic.from_int(MultinomialCoefficients.coef(mu))
+            coefficient = arithmetic.multiply(
+                coefficient,
+                arithmetic.from_int(MultinomialCoefficients.coef(mu)),
+            )
             for count, clique_idx in zip(
                 config,
                 evidence_profile_cliques.get(evidence_profile_idx, ()),
@@ -136,16 +160,29 @@ def _solve_component_with_evidence(
         for i, clique1 in enumerate(cliques):
             for j, clique2 in enumerate(cliques):
                 if i in nonind and j in nonind and i < j:
-                    body *= operations.get_two_table_weight(
-                        (clique1[0], clique2[0])
-                    ) ** (overall_config[nonind_map[i]] * overall_config[nonind_map[j]])
+                    body = arithmetic.multiply(
+                        body,
+                        arithmetic.power(
+                            operations.get_two_table_weight(
+                                (clique1[0], clique2[0])
+                            ),
+                            overall_config[nonind_map[i]]
+                            * overall_config[nonind_map[j]],
+                        ),
+                    )
 
         for clique_idx in nonind:
-            body *= operations.get_J_term(
-                clique_idx,
-                tuple(clique_configs[nonind_map[clique_idx]]),
+            body = arithmetic.multiply(
+                body,
+                operations.get_J_term(
+                    clique_idx,
+                    tuple(clique_configs[nonind_map[clique_idx]]),
+                ),
             )
-        subtotal += coefficient * body
+        subtotal = arithmetic.add(
+            subtotal,
+            arithmetic.multiply(coefficient, body),
+        )
     return subtotal
 
 

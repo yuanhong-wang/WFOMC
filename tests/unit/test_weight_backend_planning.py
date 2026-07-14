@@ -176,8 +176,10 @@ def test_cardinality_reduction_injects_internal_weight_symbols():
     assert branch.cardinality_constraints.is_empty
     assert branch.internal_weight_symbols
     assert set(branch.internal_weight_symbols) <= set(arithmetic.symbolic_variables)
+    assert branch.internal_weight_degree_limits
+    assert arithmetic.degree_limits == branch.internal_weight_degree_limits
     assert arithmetic.output_symbols == ()
-    assert arithmetic.backend is ArithmeticBackend.FMPQ_MPOLY
+    assert arithmetic.backend is ArithmeticBackend.FMPQ_POLY
 
 
 def test_symbolic_weights_survive_evidence_cardinality_decoder_chain():

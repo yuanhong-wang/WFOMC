@@ -241,10 +241,14 @@ def dfs_wfomc_real(
     for cell_idx in range(cell_num):
         cell_weight = cell_weights[cell_idx]
         new_cell_weights = [
-            cell_weights[i] * edge_weights[cell_idx][i] for i in range(cell_num)
+            nauty_ctx.arithmetic.multiply(
+                cell_weights[i],
+                edge_weights[cell_idx][i],
+            )
+            for i in range(cell_num)
         ]
         if domain_size - 1 == 1:
-            value = sum(new_cell_weights, nauty_ctx.arithmetic.zero())
+            value = nauty_ctx.arithmetic.sum(new_cell_weights)
         else:
             # convert cell weights to vertex colors
             original_vertex_colors, vertex_color_kind, vertex_color_count = (
@@ -291,7 +295,10 @@ def dfs_wfomc_real(
                     can_label,
                     value,
                 )
-        res += cell_weight * value
+        res = nauty_ctx.arithmetic.add(
+            res,
+            nauty_ctx.arithmetic.multiply(cell_weight, value),
+        )
     return res
 
 

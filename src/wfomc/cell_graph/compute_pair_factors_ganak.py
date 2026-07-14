@@ -212,8 +212,14 @@ def _extract_factor(
         value = arithmetic.from_fraction(int(coefficient.p), int(coefficient.q))
         for name, exponent in zip(base_names, base_exponents):
             if exponent:
-                value *= arithmetic.symbol(name) ** exponent
-        result[mask] = result.get(mask, arithmetic.zero()) + value
+                value = arithmetic.multiply(
+                    value,
+                    arithmetic.power(arithmetic.symbol(name), exponent),
+                )
+        result[mask] = arithmetic.add(
+            result.get(mask, arithmetic.zero()),
+            value,
+        )
 
     return {
         mask: value
