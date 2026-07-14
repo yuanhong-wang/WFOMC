@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from wfomc.algo.ganak import GANAK_COMMIT, GANAK_REPO_URL
+from wfomc.ganak import GANAK_COMMIT, GANAK_REPO_URL
 
 
 def _run(

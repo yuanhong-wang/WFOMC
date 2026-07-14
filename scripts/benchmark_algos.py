@@ -2,9 +2,9 @@
 """Benchmark every WFOMC algorithm across all in-scope models.
 
 Iterates ``models/``, ``models/unary_evidence/``, ``models/linear_order/``,
-``models/linear_order_unary_evidence/``, and ``models/predk/``. Models that
-use ``CIRCULAR_PRED`` are skipped because the propositional counter does not
-yet support them. For every remaining model, this script runs each
+``models/linear_order/unary_evidence/``, and ``models/linear_order/predk/``.
+Models that use ``CIRCULAR_PRED`` are skipped because the propositional counter
+does not yet support them. For every remaining model, this script runs each
 algorithm and records the median wall-clock time. Results are written to::
 
     check-points/benchmark.csv          per-(model, algo) timings + status
@@ -35,7 +35,7 @@ from loguru import logger
 logger.disable("wfomc")
 
 from wfomc import Algo, parse_input, wfomc                       # noqa: E402
-from wfomc.algo import GanakError, find_ganak                   # noqa: E402
+from wfomc.ganak import GanakError, find_ganak                 # noqa: E402
 
 
 ALGOS: list[Algo] = [
@@ -52,8 +52,8 @@ MODEL_DIRS: list[Path] = [
     ROOT / "models",
     ROOT / "models" / "unary_evidence",
     ROOT / "models" / "linear_order",
-    ROOT / "models" / "linear_order_unary_evidence",
-    ROOT / "models" / "predk",
+    ROOT / "models" / "linear_order" / "unary_evidence",
+    ROOT / "models" / "linear_order" / "predk",
 ]
 
 
