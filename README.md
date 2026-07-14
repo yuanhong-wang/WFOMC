@@ -17,14 +17,14 @@ uv sync
 
 ### How to use
 ```
-$ uv run wfomc -i [input] -a [algo] -e [unary_evidence_strategy] [-l [linear_order_encoding]]
+$ uv run wfomc --input [input] --algo [algo]
 ```
 where
 - `input` is the input file with the suffix `.wfomcs` or `.mln`
 - `algo` is the algorithm to use, including:
   - `standard`: the standard WFOMC algorithm in Beame et al. (2015)
   - `fast`: the fast WFOMC algorithm in Timothy van Bremen and Ondrej Kuzelka (2021)
-  - `fastv2` (default): the optimized fast WFOMC algorithm
+  - `fastv2`: the optimized fast WFOMC algorithm
   - `incremental`: the incremental WFOMC algorithm for linear order axiom in Toth and Kuzelka (2022)
   - `incremental3`: the incremental WFOMC algorithm with factorized counting-quantifier
     and unary-evidence support (also handles modulo counting quantifiers)
@@ -32,16 +32,14 @@ where
   - `propositional`: ground the (Skolemized) sentence over the domain and count with the
     external [ganak](https://github.com/meelgroup/ganak) propositional model counter.
     Intended as a ground-truth baseline. Requires a ganak binary; see *Propositional counter* below.
-- `unary_evidence_strategy` is the unary evidence strategy, including:
-  - `auto` (default): selects the best supported implementation for each
-    algorithm
-  - `ccs`: forces the modular auxiliary-predicate and cardinality-constraint
-    encoding
-- `linear_order_encoding` (only used by `-a propositional`) controls how the order axioms
-  (`LEQ` / `PRED` / `CIRCULAR_PRED`) are encoded:
-  - `pin` (default): pin every ground order atom to a canonical sorted order/cycle;
-    `decode_result` applies the `n!` multiplier. Cheap and fast.
-  - `axioms`: emit the FO³ axioms / definitions explicitly. Pin-free but materially slower.
+`tail-signature` is an experimental Python-API adapter requiring an external
+engine factory, so it is intentionally hidden from CLI choices.
+
+The CLI defaults to `standard`. Advanced evidence, order-encoding, arithmetic,
+and external-engine options are currently available through the Python API.
+Use `-v` for phase summaries and timings, or `-vv` for bounded DEBUG details.
+The Python library emits standard `wfomc.*` logging records without configuring
+the application's handlers.
 
 Unary evidence is represented once as a `UnaryEvidencePartition` and compiled
 into a `CellEvidenceAllocation` for each cell graph. With `auto`, the current
@@ -67,23 +65,17 @@ constants. Such inputs fail fast rather than silently overcounting.
 You can also call the solver directly from a Python script:
 
 ```python
-from sympy import symbols
-from wfomc import Algo, Const, Pred, Rational, WFOMCProblem, fol_parse, to_sc2, wfomc
+from wfomc import AlgoName, parse_problem, solve
 
-x = symbols("x")
-domain = {Const("a"), Const("b"), Const("c")}
-sentence = to_sc2(fol_parse(r"\forall X: (P(X))"))
-weights = {
-    Pred("P", 1): (x, Rational(1, 1)),
-}
+problem = parse_problem(r"""
+\forall X: (P(X))
+domain = {a, b, c}
+2 1 P
+""")
+result = solve(problem, algo=AlgoName.FASTV2)
 
-problem = WFOMCProblem(sentence, domain, weights)
-result = wfomc(problem, algo=Algo.FASTv2)
-
-print(result)                  # exact result
-print(result.constant_value())  # SymPy Rational, or None for polynomial results
-for degrees, coeff in result.terms([x]):
-    print(degrees, coeff)
+print(result)
+print(result.constant_value())
 ```
 
 `wfomc(...)` returns a `WFOMCResult`, not a raw FLINT polynomial. Use:
@@ -98,17 +90,9 @@ for degrees, coeff in result.terms([x]):
 The underlying solver still uses FLINT internally for exact polynomial arithmetic,
 but callers should treat that as an implementation detail.
 
-`WFOMCProblem(..., weights=...)` accepts a dictionary from `Pred` to
-`(positive_weight, negative_weight)`. Each weight may be:
-
-- a Python `int`;
-- a Python `float`, converted exactly through `fractions.Fraction(float_value)`;
-- a SymPy expression (`sympy.Expr`), including `sympy.Rational`, symbols, and
-  polynomial expressions such as `x`, `2*x + 1`, or `x*y`.
-
-Avoid passing raw FLINT values or `sympy.Poly` objects as weights. If you need a
-polynomial weight, pass the corresponding SymPy expression instead, e.g.
-`x**2 + 3*x + 1`.
+Programmatic callers may also construct a typed `Problem` with the builders in
+`wfomc.fol`. Exact FLINT values are an internal representation; public callers
+should prefer integers, fractions, and parsed model weights.
 
 ## Input format
 
@@ -142,7 +126,7 @@ For the `head-tail` example in [Lifted Inference with Linear Order Axiom.](https
 ```
 
 The $k$-th predecessors are predifined as `PREk`, e.g., `PRE2(X, Y)` means `Y` is the 2nd predecessor of `X` in the linear order.
-See [predk](models/predk/) for more examples.
+See [predk](models/linear_order/predk/) for more examples.
 The circular predecessor `CIRCULAR_PRED` is also predefined with `CIRCULAR_PRED(X, Y)` means `Y` is the predecessor of `X` in a circular order.
 The output count of circular order is always divided by the domain size to avoid overcounting.
 
@@ -249,7 +233,7 @@ ganak is invoked in two modes: exact rational weighted counting (`--mode 1`) whe
 uv run wfomc-install-ganak
 ```
 
-The runtime lookup order is the `--ganak-path` argument to `propositional_wfomc()`, the `GANAK` environment variable, then `ganak` on `PATH`.
+The runtime lookup order is the `--ganak-path` argument to `propositional_wfomc()`, the `GANAK` environment variable, then `ganak` on `PATH`. Lifted algorithms also reuse this Ganak installation after their bounded PySAT pair-factor fast path; if Ganak is unavailable or times out, they automatically use the installed PySDD backend instead.
 
 ## References
 
