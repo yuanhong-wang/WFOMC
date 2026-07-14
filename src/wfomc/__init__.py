@@ -1,74 +1,69 @@
-from loguru import logger
-logger.disable("wfomc")  # Suppress wfomc logs by default (library best practice).
-                         # Enable via logger.enable("wfomc") or call wfomc().
+"""Native public package surface for WFOMC."""
 
-from .algo import Algo
-from .problems import WFOMCProblem, MLNProblem, MLN_to_WFOMC
-from .parser import parse_input
-from .parser.fol_parser import parse as fol_parse
-from .fol import *
-from .network import CardinalityConstraint
-from .context import UnaryEvidenceStrategy
-from .solver import wfomc
-from .result import WFOMCResult
-from .utils import Rational, Expr, Poly, round_rational, MultinomialCoefficients, \
-    multinomial, multinomial_less_than
+from __future__ import annotations
 
+import logging
+
+from wfomc.api import (
+    AlgoName,
+    AlgoMaturity,
+    AlgoOptions,
+    CompileArtifacts,
+    EvidenceStrategy,
+    ExistentialStrategy,
+    RuntimeContext,
+    RuntimeOptions,
+    WFOMCResult,
+    compile_problem,
+    solve,
+)
+from wfomc.cardinality_constraints import (
+    CardinalityConstraints,
+    CardinalityTerm,
+    Comparator,
+    LinearCardinalityConstraint,
+)
+from wfomc.evidence import (
+    Evidence,
+    GroundUnaryLiteral,
+    UnaryEvidence,
+)
+from wfomc.parser import (
+    parse_formula,
+    parse_input,
+    parse_mln_problem,
+    parse_mln_problem_file,
+    parse_problem,
+    parse_problem_file,
+)
+from wfomc.problem import Problem
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
-    'Algo',
-    'WFOMCProblem',
-    'MLNProblem',
-    'MLN_to_WFOMC',
-    'parse_input',
-    'wfomc',
-    'WFOMCResult',
-    'CardinalityConstraint',
-    'UnaryEvidenceStrategy',
-    'SC2',
-    'to_sc2',
-    'fol_parse',
-    'Rational',
-    'round_rational',
-    'Rational',
-    'Expr',
-    'Poly',
-    'MultinomialCoefficients',
-    'multinomial',
-    'multinomial_less_than',
-    'exactly_one',
-    'exactly_one_qf',
-    'exclusive_qf',
-    'exclusive',
-    'Pred',
-    'Term',
-    'Var',
-    'Const',
-    'Formula',
-    'QFFormula',
-    'AtomicFormula',
-    'Quantifier',
-    'Universal',
-    'Existential',
-    'Counting',
-    'QuantifiedFormula',
-    'CompoundFormula',
-    'Conjunction',
-    'Disjunction',
-    'Implication',
-    'Equivalence',
-    'Negation',
-    'BinaryFormula',
-    'SCOTT_PREDICATE_PREFIX',
-    'AUXILIARY_PRED_NAME',
-    'TSEITIN_PRED_NAME',
-    'SKOLEM_PRED_NAME',
-    'EVIDOM_PRED_NAME',
-    'PREDS_FOR_EXISTENTIAL',
-    'pretty_print',
-    'X', 'Y', 'Z',
-    'U', 'V', 'W',
-    'top', 'bot',
-    'CardinalityConstraint',
-    'UnaryEvidenceStrategy',
+    "AlgoName",
+    "AlgoMaturity",
+    "AlgoOptions",
+    "CardinalityConstraints",
+    "CardinalityTerm",
+    "Comparator",
+    "CompileArtifacts",
+    "Evidence",
+    "EvidenceStrategy",
+    "ExistentialStrategy",
+    "GroundUnaryLiteral",
+    "LinearCardinalityConstraint",
+    "Problem",
+    "RuntimeContext",
+    "RuntimeOptions",
+    "UnaryEvidence",
+    "WFOMCResult",
+    "compile_problem",
+    "parse_formula",
+    "parse_input",
+    "parse_mln_problem",
+    "parse_mln_problem_file",
+    "parse_problem",
+    "parse_problem_file",
+    "solve",
 ]

@@ -1,19 +1,32 @@
-from .cell_graph import (
-    CellGraph,
-    CellWithEvidenceProfile,
-    OptimizedCellGraph,
-    OptimizedCellGraphWithEvidence,
-    build_cell_graphs,
+"""Cell-graph construction and immutable output models."""
+
+from .build import build_cell_graphs
+from .evidence import (
+    CellConfigCoefficientBasis,
+    CellEvidenceAllocation,
+    materialize_cell_evidence,
+    profile_cell_formulas,
+    required_profile_predicates,
 )
-from .components import Cell, TwoTable
+from .data import (
+    Cell,
+    CellGraphComponent,
+    CellGraphData,
+    PairFactor,
+    PairWeightMatrix,
+)
 
 
 __all__ = [
-    'CellGraph',
-    'OptimizedCellGraph',
-    'OptimizedCellGraphWithEvidence',
-    'CellWithEvidenceProfile',
-    'build_cell_graphs',
-    'Cell',
-    'TwoTable'
+    "Cell",
+    "CellConfigCoefficientBasis",
+    "CellEvidenceAllocation",
+    "CellGraphComponent",
+    "CellGraphData",
+    "PairFactor",
+    "PairWeightMatrix",
+    "build_cell_graphs",
+    "materialize_cell_evidence",
+    "profile_cell_formulas",
+    "required_profile_predicates",
 ]

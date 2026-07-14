@@ -8,24 +8,17 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "contexttimer>=0.3.3",
     "lark>=1.2.2",
-    "loguru>=0.7.0",
     "networkx>=3.2.1",
     "numpy>=2.0.2",
-    "pandas>=2.3.1",
-    "prettyprinttree==2.0.1",
-    "cmd2==2.7.0",
     "pynauty==2.8.6",
+    "pysdd>=1.0.0",
     "python-flint>=0.8.0",
-    "python-sat>=1.8.dev17",
-    "symengine>=0.14.1",
-    "sympy>=1.14.0",
-    "tqdm>=4.67.1",
+    "python-sat>=1.9.dev5",
 ]
 
 [project.scripts]
-wfomc = "wfomc.solver:main"
+wfomc = "wfomc.cli:main"
 wfomc-install-ganak = "scripts.tools.install_ganak:main"
 
 [build-system]
@@ -44,3 +37,7 @@ dev = [
     "tabulate>=0.9.0",
     "psutil>=7.1.2",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
