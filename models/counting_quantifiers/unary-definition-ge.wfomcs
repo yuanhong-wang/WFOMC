@@ -1,0 +1,4 @@
+\forall X: (A(X) <-> (\exists_{>=1} Y: R(X,Y)))
+
+domain = 2
+2 3 A

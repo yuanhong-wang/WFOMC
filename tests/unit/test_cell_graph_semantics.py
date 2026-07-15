@@ -78,6 +78,10 @@ def test_nullary_branches_keep_original_non_nullary_predicate_universe():
         all(predicate in cell.preds for cell in data.cells)
         for data, _weight in branches
     )
+    assert {
+        dict(data.nullary_assignments)[switch]
+        for data, _weight in branches
+    } == {False, True}
 
 
 def test_standard_counts_the_empty_structure_for_true_sentence():

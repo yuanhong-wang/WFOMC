@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import logging
 from collections.abc import Mapping
+from dataclasses import replace
 from functools import reduce
 from itertools import product
 from time import perf_counter
@@ -389,7 +390,10 @@ def build_cell_graphs(
         predicate_universe.update(predicates(cell_formula))
     frozen_predicate_universe = frozenset(predicate_universe)
 
-    nullary_atoms = [atom for atom in atoms(formula) if atom.predicate.arity == 0]
+    nullary_atoms = sorted(
+        (atom for atom in atoms(formula) if atom.predicate.arity == 0),
+        key=lambda atom: atom.predicate.cache_key_parts(),
+    )
     logger.info(
         "Starting cell-graph build: predicates=%d nullary=%d "
         "required_unary=%d projected_binary=%d leq=%s predecessor_orders=%s "
@@ -438,7 +442,13 @@ def build_cell_graphs(
                 cell_formulas=cell_formulas,
                 projected_binary_preds=projected_binary_preds,
             )
-            cell_graph = builder.snapshot()
+            cell_graph = replace(
+                builder.snapshot(),
+                nullary_assignments=tuple(
+                    (atom.predicate, value)
+                    for atom, value in zip(nullary_atoms, values)
+                ),
+            )
             weight = arithmetic.one()
             for atom, val in zip(nullary_atoms, values):
                 pair = _weight_pair(weights, atom.predicate, arithmetic)

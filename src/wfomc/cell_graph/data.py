@@ -98,6 +98,7 @@ class CellGraphData:
     arithmetic: "ArithmeticContext"
     cell_weights: tuple[ArithmeticValue, ...]
     pair_factors: tuple[tuple[PairFactor, ...], ...]
+    nullary_assignments: tuple[tuple[Predicate, bool], ...] = ()
     predecessor_pair_factors: tuple[
         tuple[int, tuple[tuple[PairFactor, ...], ...]], ...
     ] = ()

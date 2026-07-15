@@ -1,0 +1,3 @@
+\forall X: (\exists_{!=1} Y: R(X,Y))
+
+domain = 2

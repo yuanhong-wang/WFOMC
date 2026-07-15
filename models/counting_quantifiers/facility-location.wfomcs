@@ -1,0 +1,8 @@
+\forall X: (F(X) | C(X)) &
+\forall X: (~(F(X) & C(X))) &
+\forall X: (\forall Y: (S(X,Y) -> (C(X) & F(Y)))) &
+\forall X: (C(X) -> (\exists_{=2} Y: (S(X,Y)))) &
+\forall Y: (F(Y) -> (\exists_{=2} X: (S(X,Y)))) &
+(\exists_{=5} X: F(X))
+
+domain = 10

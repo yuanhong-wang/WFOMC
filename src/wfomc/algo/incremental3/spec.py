@@ -39,7 +39,8 @@ def prepare(problem: Problem, options: AlgoOptions) -> tuple[PreparedBranch, ...
     prepared = []
     for branch in reduced.problems:
         counting_state, unary_masks = build_counting_state_for_normal_form(
-            branch.problem.normal_form
+            branch.problem.normal_form,
+            domain_size=len(branch.problem.domain),
         )
         compiled, features = compile_reduced_problem(branch.problem, options)
         algo_input = build_input(

@@ -1,0 +1,3 @@
+\forall X: (P(X) | (\exists_{=2} Y: R(X,Y)))
+
+domain = 2

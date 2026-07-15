@@ -11,13 +11,15 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from itertools import product
-from typing import Any, Callable, TypeAlias
+from typing import TYPE_CHECKING, Callable, TypeAlias
 
 from wfomc.arithmetic import ArithmeticValue
 
+if TYPE_CHECKING:
+    from .counting_state import CountingState
+
 State: TypeAlias = tuple[int, ...]
 Config: TypeAlias = tuple[int, ...]
-CountingState: TypeAlias = Any
 
 
 class ConfigSpace:
@@ -200,57 +202,38 @@ def build_t_update_dict(
 ) -> defaultdict:
     """Build the state transition lookup table for all cell-pair combinations."""
     t_update_dict = defaultdict(lambda: defaultdict(arithmetic.zero))
+    all_ts = list(
+        product(*(range(counter.state_count) for counter in state.row_counters))
+    )
 
-    n_ext = len(state.ext_preds)
-    n_cnt = len(state.cnt_params)
-
-    if state.exist_mod:
-        ranges = [tuple(range(2)) for _ in state.ext_preds]
-        for p, k in enumerate(state.cnt_params):
-            ranges.append(
-                tuple(range(k)) if p in state.mod_pred_index else tuple(range(k + 1))
-            )
-        all_ts = list(product(*ranges))
-    else:
-        all_ts = list(
-            product(
-                *(
-                    [tuple(range(2)) for _ in state.ext_preds]
-                    + [tuple(range(k + 1)) for k in state.cnt_params]
-                )
-            )
-        )
+    def advance(counter_state, delta):
+        updated = []
+        for value, observed, counter in zip(
+            counter_state,
+            delta,
+            state.row_counters,
+        ):
+            next_value = counter.true_transitions[value] if observed else value
+            if next_value is None:
+                return None
+            updated.append(next_value)
+        return tuple(updated)
 
     for i in range(n_cells):
         for j in range(n_cells):
             for t1 in all_ts:
                 for t2 in all_ts:
                     for (dt, reverse_dt), rijt in r[(i, j)].items():
-                        t1_new = [x - y for x, y in zip(t1, dt)]
-                        t2_new = [x - y for x, y in zip(t2, reverse_dt)]
-
-                        if state.exist_mod:
-                            for p, k_i in enumerate(state.cnt_params):
-                                slot = n_ext + p
-                                if p in state.mod_pred_index:
-                                    t1_new[slot] %= k_i
-                                    t2_new[slot] %= k_i
-
-                        if any(
-                            t1_new[n_ext + p] < 0 or t2_new[n_ext + p] < 0
-                            for p in range(n_cnt)
-                        ):
+                        t1_new = advance(t1, dt)
+                        t2_new = advance(t2, reverse_dt)
+                        if t1_new is None or t2_new is None:
                             continue
-
-                        for slot in range(n_ext):
-                            t1_new[slot] = max(t1_new[slot], 0)
-                            t2_new[slot] = max(t2_new[slot], 0)
 
                         c1 = (i,) + t1
                         c2 = (j,) + t2
                         transition = (
-                            (i,) + tuple(t1_new),
-                            (j,) + tuple(t2_new),
+                            (i,) + t1_new,
+                            (j,) + t2_new,
                         )
                         t_update_dict[(c1, c2)][transition] = arithmetic.add(
                             t_update_dict[(c1, c2)][transition],
@@ -260,16 +243,19 @@ def build_t_update_dict(
     return t_update_dict
 
 
-def _stop_condition(target_c: State, state: CountingState) -> bool:
+def _stop_condition(
+    target_c: State,
+    accepting_states: tuple[tuple[frozenset[int], ...], ...],
+) -> bool:
     """Check whether the target element's state satisfies all counting constraints."""
-    pred_state = target_c[1:]
-    if state.exist_le:
-        for i in range(len(pred_state)):
-            if i not in state.le_index and pred_state[i] != 0:
-                return False
-        return True
-    else:
-        return all(s == 0 for s in pred_state)
+    cell_index = target_c[0]
+    return all(
+        value in accepted
+        for value, accepted in zip(
+            target_c[1:],
+            accepting_states[cell_index],
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +266,7 @@ def _stop_condition(target_c: State, state: CountingState) -> bool:
 def _make_domain_recursion(
     t_update_dict,
     space: ConfigSpace,
-    cs: CountingState,
+    accepting_states: tuple[tuple[frozenset[int], ...], ...],
     has_linear_order: bool,
     arithmetic,
 ) -> Callable[[Config], ArithmeticValue]:
@@ -360,7 +346,7 @@ def _make_domain_recursion(
                     break
 
             for (target_c, G_config), W in G.items():
-                if _stop_condition(target_c, cs):
+                if _stop_condition(target_c, accepting_states):
                     T[G_config] = arithmetic.add(T[G_config], W)
 
             result_of_target_c = arithmetic.zero()

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from wfomc.arithmetic import ArithmeticValue
 from wfomc.algo.core import AlgoInput, AlgoOptions
+from wfomc.fol import Predicate
 from .counting_state import CountingState, UnaryCardinalityMasks
 from wfomc.cell_graph import (
     Cell,
@@ -22,7 +23,9 @@ from wfomc.engine.features import FeatureSet
 
 @dataclass(frozen=True)
 class CountingCellGraphComponent(CellGraphComponent):
-    counting_initial_states: tuple[tuple[int, ...], ...] = ()
+    counting_initial_states: tuple[tuple[int, ...] | None, ...] = ()
+    counting_accepting_states: tuple[tuple[frozenset[int], ...], ...] = ()
+    nullary_assignments: tuple[tuple[Predicate, bool], ...] = ()
     counting_binary_relation_weights: (
         tuple[tuple[tuple[tuple[int, ...], tuple[int, ...], ArithmeticValue], ...], ...]
         | None
@@ -59,8 +62,7 @@ def build_input(
             leq_pred=leq,
             required_unary_preds=required_unary_preds,
             cell_formulas=profile_cell_formulas(reduced.profile_capacity_constraint),
-            projected_binary_preds=tuple(counting_state.ext_preds)
-            + tuple(counting_state.cnt_preds),
+            projected_binary_preds=counting_state.projected_predicates,
         )
     )
     return CountingDPInput(
@@ -82,7 +84,15 @@ def _counting_component(
     state: CountingState,
 ) -> CountingCellGraphComponent:
     initial_states = tuple(_initial_state(cell, state) for cell in data.cells)
-    all_counting_preds = tuple(state.ext_preds) + tuple(state.cnt_preds)
+    accepting_states = tuple(
+        tuple(
+            counter.accepting_states_for_cell(cell)
+            for counter in state.row_counters
+        )
+        for cell in data.cells
+    )
+    projected_preds = state.projected_predicates
+    counter_indices = state.counter_projection_indices
     relation_rows = []
     for left_idx in range(len(data.cells)):
         row = []
@@ -90,18 +100,24 @@ def _counting_component(
             entries = []
             factor = data.pair_factors[left_idx][right_idx]
             projected_weights = factor.counting_weights or (
-                ((0, factor.total_weight),) if not all_counting_preds else ()
+                ((0, factor.total_weight),) if not projected_preds else ()
             )
             for evidence_idx, weight in projected_weights:
                 if reduced.arithmetic.is_zero(weight):
                     continue
-                reverse_delta = tuple(
+                reverse_projected = tuple(
                     int(bool((evidence_idx >> (2 * pred_idx)) & 1))
-                    for pred_idx in range(len(all_counting_preds))
+                    for pred_idx in range(len(projected_preds))
+                )
+                forward_projected = tuple(
+                    int(bool((evidence_idx >> (2 * pred_idx + 1)) & 1))
+                    for pred_idx in range(len(projected_preds))
+                )
+                reverse_delta = tuple(
+                    reverse_projected[index] for index in counter_indices
                 )
                 forward_delta = tuple(
-                    int(bool((evidence_idx >> (2 * pred_idx + 1)) & 1))
-                    for pred_idx in range(len(all_counting_preds))
+                    forward_projected[index] for index in counter_indices
                 )
                 entries.append((forward_delta, reverse_delta, weight))
             row.append(tuple(entries))
@@ -116,25 +132,19 @@ def _counting_component(
             data.cells,
         ),
         counting_initial_states=initial_states,
+        counting_accepting_states=accepting_states,
         counting_binary_relation_weights=tuple(relation_rows),
+        nullary_assignments=data.nullary_assignments,
     )
 
 
-def _initial_state(cell: Cell, state: CountingState) -> tuple[int, ...]:
-    slots = [0 if cell.is_positive(pred) else 1 for pred in state.ext_preds]
-    for idx, (pred, param) in enumerate(zip(state.cnt_preds, state.cnt_params)):
-        if cell.is_positive(pred):
-            slots.append(
-                (state.cnt_remainder[idx] - 1) % param
-                if state.exist_mod and idx in state.mod_pred_index
-                else param - 1
-            )
-        else:
-            slots.append(
-                state.cnt_remainder[idx]
-                if state.exist_mod and idx in state.mod_pred_index
-                else param
-            )
+def _initial_state(cell: Cell, state: CountingState) -> tuple[int, ...] | None:
+    slots = []
+    for counter in state.row_counters:
+        initial = counter.initial_state(cell.is_positive(counter.predicate))
+        if initial is None:
+            return None
+        slots.append(initial)
     return tuple(slots)
 
 

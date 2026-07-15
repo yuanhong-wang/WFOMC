@@ -1,0 +1,6 @@
+(A <-> (\exists_{1mod3} X: U(X))) &
+\forall X: (B(X) <-> (\exists_{1mod2} Y: R(X,Y)))
+
+domain = 3
+2 3 A
+2 3 B

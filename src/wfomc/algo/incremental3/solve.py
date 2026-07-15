@@ -11,6 +11,7 @@ from wfomc.multinomial import MultinomialCoefficients
 from wfomc.result import WFOMCResult
 
 if TYPE_CHECKING:
+    from .counting_state import CountingState, UnaryCardinalityMasks
     from wfomc.engine.runtime import RuntimeContext
 
 
@@ -48,8 +49,8 @@ def _solve_component(
     component: CountingCellGraphComponent,
     *,
     domain_size: int,
-    counting_state: object,
-    unary_masks: object,
+    counting_state: "CountingState",
+    unary_masks: "UnaryCardinalityMasks",
     has_linear_order: bool,
     arithmetic,
 ) -> object:
@@ -72,7 +73,7 @@ def _solve_component(
     ):
         raise RuntimeError("counting cell-graph weight tables are not materialized")
     w2t, w, r = _build_weight_from_materialized_tables(component, arithmetic)
-    unary_mask = unary_masks.build_mask(cells)
+    unary_mask = unary_masks.build_mask(cells, component.nullary_assignments)
     t_update_dict = build_t_update_dict(
         r,
         n_cells,
@@ -83,7 +84,7 @@ def _solve_component(
     domain_recursion = _make_domain_recursion(
         t_update_dict,
         space,
-        counting_state,
+        component.counting_accepting_states,
         has_linear_order,
         arithmetic,
     )
@@ -102,18 +103,27 @@ def _solve_component(
         arithmetic,
         coefficient_basis,
     ):
-        if any(unary_masks.check(config, unary_mask)):
+        if unary_masks.check(config, unary_mask):
             continue
 
         init_list = list(space.zero)
         weight = arithmetic.one()
+        valid_config = True
         for idx, count in enumerate(config):
-            init_state = (idx,) + w2t[idx]
+            if count == 0:
+                continue
+            counter_state = w2t[idx]
+            if counter_state is None:
+                valid_config = False
+                break
+            init_state = (idx,) + counter_state
             init_list[space.offset(init_state)] = count
             weight = arithmetic.multiply(
                 weight,
                 arithmetic.power(w[idx], count),
             )
+        if not valid_config:
+            continue
 
         term = arithmetic.multiply(coefficient, weight)
         term = arithmetic.multiply(term, domain_recursion(tuple(init_list)))
@@ -133,13 +143,17 @@ def _build_weight_from_materialized_tables(
         raise RuntimeError(
             "counting component initial-state table does not match cell count"
         )
+    if len(component.counting_accepting_states) != n_cells:
+        raise RuntimeError(
+            "counting component accepting-state table does not match cell count"
+        )
     if len(component.counting_binary_relation_weights) != n_cells:
         raise RuntimeError(
             "counting component binary relation table does not match cell count"
         )
 
     w2t = {
-        idx: tuple(initial_state)
+        idx: tuple(initial_state) if initial_state is not None else None
         for idx, initial_state in enumerate(component.counting_initial_states)
     }
     w = defaultdict(arithmetic.zero)

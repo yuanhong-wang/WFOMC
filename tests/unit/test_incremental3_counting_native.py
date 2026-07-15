@@ -7,7 +7,7 @@ from wfomc.algo.incremental3.counting_kernel import (
     ConfigSpace,
     _build_elimination_orders,
 )
-from wfomc.algo.incremental3.counting_state import CountingState
+from wfomc.algo.incremental3.counting_state import CountingState, RowCounterSpec
 from wfomc.algo.incremental3.input import _initial_state
 from wfomc.cell_graph import Cell
 from wfomc.engine import compile_problem, solve
@@ -59,18 +59,15 @@ def test_elimination_order_is_fail_first_and_independent_of_state_enumeration():
 
 
 def test_positive_mod_cell_wraps_initial_remainder():
-    predicate = Predicate("Remainder", 1)
+    predicate = Predicate("Remainder", 2)
     state = CountingState(
-        ext_preds=(),
-        cnt_preds=(predicate,),
-        cnt_params=(2,),
-        cnt_remainder=(0,),
-        exist_mod=True,
-        mod_pred_index=(0,),
-        exist_le=False,
-        le_index=(),
-        binary_evidence=(),
-        c_type_shape=(2,),
+        (
+            RowCounterSpec(
+                predicate=predicate,
+                true_transitions=(1, 0),
+                accepting_states=frozenset({0}),
+            ),
+        )
     )
 
     assert _initial_state(Cell((True,), (predicate,)), state) == (1,)
@@ -85,14 +82,11 @@ def test_incremental3_materialization_carries_counting_state():
     state = artifacts.algo_input.counting_state
     masks = artifacts.algo_input.unary_cardinality_masks
 
-    assert state.exist_mod is True
-    assert state.cnt_params == (2,)
-    assert state.cnt_remainder == (1,)
-    assert len(state.cnt_preds) == 1
-    assert masks.mod_constraints == []
-    assert masks.eq_constraints == []
-    assert masks.le_constraints == []
-    assert masks.ge_constraints == []
+    assert len(state.row_counters) == 1
+    assert state.row_counters[0].predicate.name == "E"
+    assert state.row_counters[0].true_transitions == (1, 0)
+    assert state.row_counters[0].accepting_states == frozenset({1})
+    assert masks.constraints == []
 
 
 def test_global_count_predicate_is_materialized_without_formula_patch():
@@ -108,8 +102,11 @@ domain = 2
     masks = artifacts.algo_input.unary_cardinality_masks
 
     assert normal_form.qf_formula is None
-    assert [(predicate.name, count) for predicate, count in masks.eq_constraints] == [
-        ("U", 1)
+    assert [
+        (spec.predicate.name, spec.comparator, spec.count)
+        for spec in masks.constraints
+    ] == [
+        ("U", "=", 1)
     ]
     assert len(artifacts.algo_input.components[0].cells) == 2
     assert solve(problem, algo=AlgoName.INCREMENTAL3) == 2
@@ -172,7 +169,7 @@ def test_counting_and_skolem_existential_strategies_are_exact():
             assert result == expected, (sentence, strategy)
 
 
-def test_incremental3_rejects_unsupported_count_comparator():
+def test_incremental3_materializes_strict_count_comparator():
     from wfomc.algo.incremental3.counting_state import (
         build_counting_state_for_normal_form,
     )
@@ -181,11 +178,13 @@ def test_incremental3_rejects_unsupported_count_comparator():
 
     normal_form = normalize(parse_formula(r"\exists_{>2} X: U(X)"))
 
-    with pytest.raises(ValueError, match="global count comparator"):
-        build_counting_state_for_normal_form(normal_form)
+    _state, masks = build_counting_state_for_normal_form(normal_form)
+
+    assert masks.constraints[0].comparator == ">"
+    assert masks.constraints[0].count == 2
 
 
-def test_incremental3_rejects_embedded_count_definition():
+def test_incremental3_materializes_embedded_count_definition():
     from wfomc.algo.incremental3.counting_state import (
         build_counting_state_for_normal_form,
     )
@@ -196,5 +195,8 @@ def test_incremental3_rejects_embedded_count_definition():
         parse_formula(r"\forall X: (P(X) | (\exists_=2 Y: R(X,Y)))")
     )
 
-    with pytest.raises(UnsupportedFeatureError, match="embedded"):
-        build_counting_state_for_normal_form(normal_form)
+    state, _masks = build_counting_state_for_normal_form(normal_form)
+
+    assert len(state.row_counters) == 1
+    assert state.row_counters[0].marker_predicate is not None
+    assert state.row_counters[0].marker_predicate.arity == 1
