@@ -113,8 +113,18 @@ class ArithmeticContext:
     output_symbols: tuple[str, ...] = ()
     degree_limits: tuple[tuple[str, int], ...] = ()
     _direct_fmpq: bool = field(init=False, repr=False, compare=False)
-    _cached_zero: fmpq | None = field(init=False, repr=False, compare=False)
-    _cached_one: fmpq | None = field(init=False, repr=False, compare=False)
+    _cached_zero: ArithmeticValue = field(init=False, repr=False, compare=False)
+    _cached_one: ArithmeticValue = field(init=False, repr=False, compare=False)
+    _cached_mpoly_context: object | None = field(
+        init=False, repr=False, compare=False
+    )
+    _symbol_indices: dict[str, int] = field(init=False, repr=False, compare=False)
+    _univariate_degree_limit: int | None = field(
+        init=False, repr=False, compare=False
+    )
+    _indexed_degree_limits: tuple[tuple[int, int], ...] = field(
+        init=False, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         normalized = tuple(sorted(self.degree_limits))
@@ -131,24 +141,47 @@ class ArithmeticContext:
         if any(limit < 0 for _name, limit in normalized):
             raise ValueError("ArithmeticContext degree limits must be non-negative")
         object.__setattr__(self, "degree_limits", normalized)
+        symbol_indices = {
+            name: index for index, name in enumerate(self.symbolic_variables)
+        }
+        object.__setattr__(self, "_symbol_indices", symbol_indices)
+        object.__setattr__(
+            self,
+            "_indexed_degree_limits",
+            tuple((symbol_indices[name], limit) for name, limit in normalized),
+        )
+        object.__setattr__(
+            self,
+            "_univariate_degree_limit",
+            (
+                dict(normalized).get(self.symbolic_variables[0])
+                if len(self.symbolic_variables) == 1
+                else None
+            ),
+        )
+
+        names = self.symbolic_variables or ("_w",)
+        mpoly_context = None
+        if self.backend is ArithmeticBackend.FMPQ_MPOLY:
+            mpoly_context = fmpq_mpoly_ctx.get(list(names), "lex")
+        elif self.backend is ArithmeticBackend.FMPZ_MPOLY:
+            mpoly_context = fmpz_mpoly_ctx.get(list(names), "lex")
+        object.__setattr__(self, "_cached_mpoly_context", mpoly_context)
+
         direct_fmpq = self.backend is ArithmeticBackend.FMPQ and not normalized
         object.__setattr__(self, "_direct_fmpq", direct_fmpq)
-        object.__setattr__(self, "_cached_zero", fmpq(0) if direct_fmpq else None)
-        object.__setattr__(self, "_cached_one", fmpq(1) if direct_fmpq else None)
+        object.__setattr__(self, "_cached_zero", self._from_fraction(0, 1))
+        object.__setattr__(self, "_cached_one", self._from_fraction(1, 1))
 
     # -- public numeric factory API --------------------------------------
 
     def zero(self):
         """Additive identity for this backend."""
-        if self._cached_zero is not None:
-            return self._cached_zero
-        return self.from_int(0)
+        return self._cached_zero
 
     def one(self):
         """Multiplicative identity for this backend."""
-        if self._cached_one is not None:
-            return self._cached_one
-        return self.from_int(1)
+        return self._cached_one
 
     def neg_one(self):
         """Negative one for this backend."""
@@ -222,7 +255,7 @@ class ArithmeticContext:
 
         if name not in self.symbolic_variables:
             raise ValueError(f"Unknown arithmetic symbol: {name!r}")
-        index = self.symbolic_variables.index(name)
+        index = self._symbol_indices[name]
         if self.backend is ArithmeticBackend.FMPQ_MPOLY:
             return self.truncate(self._mpoly_ctx(fmpq_mpoly_ctx).gen(index))
         if self.backend is ArithmeticBackend.FMPZ_MPOLY:
@@ -303,16 +336,18 @@ class ArithmeticContext:
         return self.truncate(base**exponent)
 
     def add(self, left, right):
-        """Add two backend values while preserving the truncation invariant."""
+        """Add two values that already satisfy the truncation invariant."""
 
         if self._direct_fmpq:
             return left + right
 
         if self.is_zero(left):
-            return self.truncate(right)
+            return right
         if self.is_zero(right):
-            return self.truncate(left)
-        return self.truncate(left + right)
+            return left
+        # Addition cannot increase any monomial degree, so bounded operands
+        # remain bounded without another degree scan.
+        return left + right
 
     def add_product(self, accumulator, left, right):
         """Return ``accumulator + left * right`` in the active backend.
@@ -325,28 +360,22 @@ class ArithmeticContext:
 
         if self._direct_fmpq:
             return accumulator + left * right
-        return self.add(accumulator, self.multiply(left, right))
+        # Multiplication may exceed a degree limit, while adding the bounded
+        # accumulator cannot.  Fuse both operations and truncate only once.
+        return self.truncate(accumulator + left * right)
 
     def truncate(self, value):
         """Discard monomials above proven-safe internal degree limits."""
 
         if not self.degree_limits:
             return value
-        limits = dict(self.degree_limits)
         if isinstance(value, fmpq_poly):
-            if len(self.symbolic_variables) != 1:
-                return value
-            limit = limits.get(self.symbolic_variables[0])
+            limit = self._univariate_degree_limit
             if limit is None or value.degree() <= limit:
                 return value
             return value.truncate(limit + 1)
         if isinstance(value, fmpq_mpoly):
-            names = tuple(value.context().names())
-            indexed_limits = tuple(
-                (names.index(name), limit)
-                for name, limit in self.degree_limits
-                if name in names
-            )
+            indexed_limits = self._indexed_degree_limits
             if not indexed_limits:
                 return value
             max_degrees = value.degrees()
@@ -441,6 +470,15 @@ class ArithmeticContext:
         )
 
     def _mpoly_ctx(self, ctx_factory):
+        if self._cached_mpoly_context is not None:
+            if (
+                self.backend is ArithmeticBackend.FMPQ_MPOLY
+                and ctx_factory is fmpq_mpoly_ctx
+            ) or (
+                self.backend is ArithmeticBackend.FMPZ_MPOLY
+                and ctx_factory is fmpz_mpoly_ctx
+            ):
+                return self._cached_mpoly_context
         names = self.symbolic_variables or ("_w",)
         return ctx_factory.get(list(names), "lex")
 

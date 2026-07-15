@@ -149,6 +149,19 @@ def test_mpoly_identity_operations_reuse_existing_values():
     assert ctx.power(zero, 100) is zero
 
 
+def test_mpoly_context_caches_identities_and_truncation_metadata():
+    ctx = ArithmeticContext(
+        ArithmeticBackend.FMPQ_MPOLY,
+        ("marker", "user"),
+        degree_limits=(("marker", 2),),
+    )
+
+    assert ctx.zero() is ctx.zero()
+    assert ctx.one() is ctx.one()
+    assert ctx._cached_mpoly_context is ctx._mpoly_ctx(fmpq_mpoly_ctx)
+    assert ctx._indexed_degree_limits == ((0, 2),)
+
+
 def test_mpoly_nontrivial_operations_keep_exact_semantics():
     ctx = _ctx(ArithmeticBackend.FMPQ_MPOLY, ("x", "y"))
     x = ctx.symbol("x")
@@ -173,6 +186,29 @@ def test_fmpq_poly_operations_truncate_to_declared_degree_limit():
 
     # Non-scalar backends must retain the regular multiply/add truncation path.
     assert ctx.add_product(ctx.one(), marker**2, marker) == ctx.one()
+
+
+def test_bounded_add_and_add_product_avoid_redundant_truncation(monkeypatch):
+    ctx = ArithmeticContext(
+        ArithmeticBackend.FMPQ_POLY,
+        ("marker",),
+        degree_limits=(("marker", 2),),
+    )
+    marker = ctx.symbol("marker")
+    calls = []
+    original = ArithmeticContext.truncate
+
+    def tracking_truncate(self, value):
+        calls.append(value)
+        return original(self, value)
+
+    monkeypatch.setattr(ArithmeticContext, "truncate", tracking_truncate)
+
+    assert ctx.add(ctx.one(), marker**2) == ctx.one() + marker**2
+    assert calls == []
+
+    assert ctx.add_product(ctx.one(), marker**2, marker) == ctx.one()
+    assert len(calls) == 1
 
 
 def test_fmpq_poly_context_coerces_and_truncates_univariate_mpoly():
