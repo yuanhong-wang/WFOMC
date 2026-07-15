@@ -55,6 +55,7 @@ class WeightOptions:
 
     precision: Literal["exact", "round"] = "exact"
     rounded_backend: Literal["float", "arb"] = "arb"
+    exact_symbolic_backend: Literal["fmpq_mpoly", "fmpq_poly"] = "fmpq_mpoly"
 
     def __post_init__(self) -> None:
         if self.precision not in {"exact", "round"}:
@@ -64,6 +65,11 @@ class WeightOptions:
         if self.rounded_backend not in {"float", "arb"}:
             raise ValueError(
                 "WeightOptions.rounded_backend must be either 'float' or 'arb'"
+            )
+        if self.exact_symbolic_backend not in {"fmpq_mpoly", "fmpq_poly"}:
+            raise ValueError(
+                "WeightOptions.exact_symbolic_backend must be either "
+                "'fmpq_mpoly' or 'fmpq_poly'"
             )
 
 
@@ -198,6 +204,21 @@ def _to_fmpq_mpoly(value: object, context: _ArithmeticContext) -> fmpq_mpoly:
     target_ctx = fmpq_mpoly_ctx.get(context.symbolic_variables, "lex")
     if isinstance(value, fmpq_mpoly):
         return value.project_to_context(target_ctx)
+    if isinstance(value, fmpq_poly):
+        if len(context.symbolic_variables) != 1:
+            if value.degree() <= 0:
+                return target_ctx.constant(value[0])
+            raise ValueError(
+                "Cannot infer which symbolic variable a non-constant "
+                "fmpq_poly should use in a multivariate context"
+            )
+        return target_ctx.from_dict(
+            {
+                (degree,): coefficient
+                for degree, coefficient in enumerate(value.coeffs())
+                if coefficient
+            }
+        )
     return target_ctx.constant(_to_fmpq_scalar(value))
 
 

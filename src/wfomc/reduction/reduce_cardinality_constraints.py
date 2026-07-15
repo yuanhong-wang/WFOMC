@@ -59,11 +59,11 @@ def reduce_cardinality_constraints(
         )
     )
     arithmetic = ArithmeticContext(
-        backend=(
-            ArithmeticBackend.FMPQ_POLY
-            if len(solver_symbols) == 1
-            else ArithmeticBackend.FMPQ_MPOLY
-        ),
+        # Reductions materialize exact symbolic weights before the algorithm's
+        # user-selected arithmetic plan is known.  Use the symbolic default
+        # here; a later explicit fmpq_poly plan can project a single-variable
+        # value through the regular weight compiler.
+        backend=ArithmeticBackend.FMPQ_MPOLY,
         symbolic_variables=solver_symbols,
         output_symbols=user_symbols,
         degree_limits=marker_degree_limits,

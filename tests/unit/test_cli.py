@@ -81,6 +81,19 @@ def test_cli_accepts_incremental3_existential_strategy():
     assert args.existential_strategy == "skolem"
 
 
+def test_cli_accepts_exact_symbolic_backend_override():
+    args = build_parser().parse_args(
+        [
+            "--input",
+            "models/cardinality_constraints_example.wfomcs",
+            "--exact-symbolic-backend",
+            "fmpq_poly",
+        ]
+    )
+
+    assert args.exact_symbolic_backend == "fmpq_poly"
+
+
 def test_cli_supports_repeatable_verbose_flag():
     parser = build_parser()
 

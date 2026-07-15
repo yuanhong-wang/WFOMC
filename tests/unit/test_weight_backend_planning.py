@@ -179,7 +179,28 @@ def test_cardinality_reduction_injects_internal_weight_symbols():
     assert branch.internal_weight_degree_limits
     assert arithmetic.degree_limits == branch.internal_weight_degree_limits
     assert arithmetic.output_symbols == ()
-    assert arithmetic.backend is ArithmeticBackend.FMPQ_POLY
+    assert arithmetic.backend is ArithmeticBackend.FMPQ_MPOLY
+
+
+def test_cardinality_can_explicitly_use_univariate_fmpq_poly():
+    problem = parse_input("models/cardinality_constraints_example.wfomcs")
+    options = AlgoOptions(
+        weight_options=WeightOptions(
+            exact_symbolic_backend="fmpq_poly",
+        )
+    )
+
+    artifacts = compile_problem(
+        problem,
+        algo=AlgoName.STANDARD,
+        options=options,
+    )
+
+    assert artifacts.algo_input.arithmetic.backend is ArithmeticBackend.FMPQ_POLY
+    assert solve(problem, algo=AlgoName.STANDARD, options=options) == solve(
+        problem,
+        algo=AlgoName.STANDARD,
+    )
 
 
 def test_symbolic_weights_survive_evidence_cardinality_decoder_chain():

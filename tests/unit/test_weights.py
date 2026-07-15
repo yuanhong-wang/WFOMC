@@ -25,6 +25,7 @@ def test_weight_options_defaults_to_exact():
     opts = WeightOptions()
     assert opts.precision == "exact"
     assert opts.rounded_backend == "arb"
+    assert opts.exact_symbolic_backend == "fmpq_mpoly"
 
 
 def test_weight_options_is_frozen():
@@ -43,14 +44,21 @@ def test_weight_options_rejects_invalid_rounded_backend():
         WeightOptions(rounded_backend="bad")  # type: ignore[arg-type]
 
 
+def test_weight_options_rejects_invalid_exact_symbolic_backend():
+    with pytest.raises(ValueError, match="exact_symbolic_backend"):
+        WeightOptions(exact_symbolic_backend="bad")  # type: ignore[arg-type]
+
+
 def test_backend_selection_routes_supported_weight_shapes():
     exact = WeightOptions()
+    exact_poly = WeightOptions(exact_symbolic_backend="fmpq_poly")
     rounded_arb = WeightOptions(precision="round", rounded_backend="arb")
     rounded_float = WeightOptions(precision="round", rounded_backend="float")
     cases = (
         (exact, (), ArithmeticBackend.FMPQ),
-        (exact, ("x",), ArithmeticBackend.FMPQ_POLY),
+        (exact, ("x",), ArithmeticBackend.FMPQ_MPOLY),
         (exact, ("x", "y"), ArithmeticBackend.FMPQ_MPOLY),
+        (exact_poly, ("x",), ArithmeticBackend.FMPQ_POLY),
         (rounded_arb, (), ArithmeticBackend.ARB),
         (rounded_arb, ("x",), ArithmeticBackend.ARB_POLY),
         (rounded_float, (), ArithmeticBackend.FLOAT),
@@ -58,6 +66,14 @@ def test_backend_selection_routes_supported_weight_shapes():
 
     for options, symbols, expected in cases:
         assert choose_arithmetic_backend(options, symbolic_variables=symbols) is expected
+
+
+def test_exact_fmpq_poly_rejects_multiple_symbolic_variables():
+    with pytest.raises(ArithmeticBackendError, match="exactly one"):
+        choose_arithmetic_backend(
+            WeightOptions(exact_symbolic_backend="fmpq_poly"),
+            symbolic_variables=("x", "y"),
+        )
 
 
 def test_round_arb_multiple_symbolic_variables_unsupported():
@@ -233,6 +249,29 @@ def test_compile_weight_mapping_fmpq_mpoly_matches_plan_backend():
     assert isinstance(negative, fmpq_mpoly)
     assert positive.context().names() == ("x0", "x1")
     assert negative.context().names() == ("x0", "x1")
+
+
+def test_compile_weight_mapping_converts_univariate_poly_to_mpoly():
+    arithmetic = ArithmeticContext(ArithmeticBackend.FMPQ_MPOLY, ("x",))
+    source = fmpq_poly([1, 0, 3])
+
+    compiled = compile_weight_mapping({("P", 1): (source, 1)}, arithmetic)
+    positive, negative = compiled[("P", 1)]
+
+    assert isinstance(positive, fmpq_mpoly)
+    assert positive.context().names() == ("x",)
+    assert positive.to_dict() == {(0,): fmpq(1), (2,): fmpq(3)}
+    assert negative == positive.context().constant(1)
+
+
+def test_compile_weight_mapping_rejects_ambiguous_poly_to_mpoly_conversion():
+    arithmetic = ArithmeticContext(ArithmeticBackend.FMPQ_MPOLY, ("x", "y"))
+
+    with pytest.raises(ValueError, match="which symbolic variable"):
+        compile_weight_mapping(
+            {("P", 1): (fmpq_poly([1, 1]), 1)},
+            arithmetic,
+        )
 
 
 def test_compile_weight_mapping_empty_weights_returns_empty():

@@ -17,6 +17,7 @@ from wfomc.algo import (
 from wfomc.api import solve
 from wfomc.errors import WFOMCError
 from wfomc.result import WFOMCResult
+from wfomc.weights import WeightOptions
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,15 @@ def build_parser() -> argparse.ArgumentParser:
             "other algorithms use skolem."
         ),
     )
+    parser.add_argument(
+        "--exact-symbolic-backend",
+        choices=("fmpq_mpoly", "fmpq_poly"),
+        default="fmpq_mpoly",
+        help=(
+            "Exact symbolic arithmetic backend. fmpq_mpoly is the default; "
+            "fmpq_poly requires exactly one symbolic variable."
+        ),
+    )
     return parser
 
 
@@ -60,6 +70,7 @@ def run(
     algo: AlgoName | str,
     *,
     existential_strategy: ExistentialStrategy | str | None = None,
+    exact_symbolic_backend: str = "fmpq_mpoly",
 ) -> CliResult:
     from wfomc.parser import parse_problem_file
 
@@ -75,7 +86,12 @@ def run(
     result = solve(
         parsed_problem,
         algo=selected_algo,
-        options=AlgoOptions(existential_strategy=selected_existential_strategy),
+        options=AlgoOptions(
+            existential_strategy=selected_existential_strategy,
+            weight_options=WeightOptions(
+                exact_symbolic_backend=exact_symbolic_backend,
+            ),
+        ),
     )
     return CliResult(result=result)
 
@@ -92,6 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             args.input,
             args.algo,
             existential_strategy=args.existential_strategy,
+            exact_symbolic_backend=args.exact_symbolic_backend,
         )
     except (WFOMCError, OSError, ValueError) as exc:
         parser.exit(2, f"wfomc: error: {type(exc).__name__}: {exc}\n")

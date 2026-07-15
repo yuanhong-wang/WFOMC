@@ -78,7 +78,12 @@ def choose_arithmetic_backend(
     if options.precision == "exact":
         if symbol_count == 0:
             return ArithmeticBackend.FMPQ
-        if symbol_count == 1:
+        if options.exact_symbolic_backend == "fmpq_poly":
+            if symbol_count != 1:
+                raise ArithmeticBackendError(
+                    "Exact 'fmpq_poly' arithmetic supports exactly one "
+                    "symbolic variable"
+                )
             return ArithmeticBackend.FMPQ_POLY
         return ArithmeticBackend.FMPQ_MPOLY
     if options.rounded_backend == "float":
