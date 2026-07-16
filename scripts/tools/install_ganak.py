@@ -9,7 +9,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-from wfomc.ganak import GANAK_COMMIT, GANAK_REPO_URL
+from wfomc.ganak import (
+    GANAK_ARJUN_COMMIT,
+    GANAK_ARJUN_REPO_URL,
+    GANAK_COMMIT,
+    GANAK_REPO_URL,
+)
 
 
 def _run(
@@ -107,7 +112,11 @@ def _shared_library_globs() -> tuple[str, ...]:
 
 
 def _copy_shared_libraries(build: Path, install_dir: Path) -> list[Path]:
-    lib_dirs = [build / "lib", *(build / "_deps").glob("*-build/lib")]
+    lib_dirs = [
+        build / "lib",
+        *build.glob("*-build/lib"),
+        *(build / "_deps").glob("*-build/lib"),
+    ]
     copied: list[Path] = []
 
     for lib_dir in lib_dirs:
@@ -142,6 +151,8 @@ def install_ganak(
     *,
     repo_url: str = GANAK_REPO_URL,
     commit: str = GANAK_COMMIT,
+    arjun_repo_url: str = GANAK_ARJUN_REPO_URL,
+    arjun_commit: str = GANAK_ARJUN_COMMIT,
     install_dir: Path | None = None,
     jobs: int | None = None,
     force: bool = False,
@@ -162,21 +173,34 @@ def install_ganak(
     with tempfile.TemporaryDirectory(prefix="wfomc_ganak_build_") as tmp:
         root = Path(tmp)
         src = root / "ganak"
+        arjun_src = root / "arjun"
         build = src / "build"
 
         _run(["git", "clone", "--recurse-submodules", repo_url, str(src)])
         _run(["git", "checkout", commit], cwd=src)
         _run(["git", "submodule", "update", "--init", "--recursive"], cwd=src)
+        # Ganak's CMake file fetches Arjun from its moving master branch when
+        # no sibling checkout exists. Use the revision recorded by this Ganak
+        # commit's flake.lock so the source build remains reproducible.
+        _run(["git", "clone", "--recurse-submodules", arjun_repo_url, str(arjun_src)])
+        _run(["git", "checkout", arjun_commit], cwd=arjun_src)
+        _run(
+            ["git", "submodule", "update", "--init", "--recursive"],
+            cwd=arjun_src,
+        )
         dependency_args, build_env = _dependency_hints()
-        _run([
-            "cmake",
-            "-S",
-            str(src),
-            "-B",
-            str(build),
-            "-DBUILD_SHARED_LIBS=ON",
-            *dependency_args,
-        ], env=build_env)
+        _run(
+            [
+                "cmake",
+                "-S",
+                str(src),
+                "-B",
+                str(build),
+                "-DBUILD_SHARED_LIBS=ON",
+                *dependency_args,
+            ],
+            env=build_env,
+        )
 
         build_cmd = ["cmake", "--build", str(build), "--target", "ganak-bin"]
         if jobs is not None:
@@ -199,7 +223,7 @@ def install_ganak(
         for library in shared_libraries:
             _add_darwin_rpath(library)
 
-    print(f"installed ganak {commit} to {target}")
+    print(f"installed ganak {commit} with arjun {arjun_commit} to {target}")
     return target
 
 
@@ -216,6 +240,16 @@ def parse_args() -> argparse.Namespace:
         "--commit",
         default=GANAK_COMMIT,
         help=f"Ganak commit to build. Default: {GANAK_COMMIT}",
+    )
+    parser.add_argument(
+        "--arjun-repo",
+        default=GANAK_ARJUN_REPO_URL,
+        help=f"Arjun git repository URL. Default: {GANAK_ARJUN_REPO_URL}",
+    )
+    parser.add_argument(
+        "--arjun-commit",
+        default=GANAK_ARJUN_COMMIT,
+        help=f"Arjun commit to build. Default: {GANAK_ARJUN_COMMIT}",
     )
     parser.add_argument(
         "--install-dir",
@@ -243,6 +277,8 @@ def main() -> None:
     install_ganak(
         repo_url=args.repo,
         commit=args.commit,
+        arjun_repo_url=args.arjun_repo,
+        arjun_commit=args.arjun_commit,
         install_dir=args.install_dir,
         jobs=args.jobs,
         force=args.force,

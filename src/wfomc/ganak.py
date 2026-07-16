@@ -31,6 +31,8 @@ except (AttributeError, ValueError):
 
 GANAK_REPO_URL: str = "https://github.com/meelgroup/ganak.git"
 GANAK_COMMIT: str = "82a1d1fb6f0d6fb4a46b825f84b29567728ae483"
+GANAK_ARJUN_REPO_URL: str = "https://github.com/meelgroup/arjun.git"
+GANAK_ARJUN_COMMIT: str = "1553e6b3ebdd76ba3b66d3fece4cf8de4e2743ce"
 GANAK_ENV_VAR: str = "GANAK"
 _FRAC_PREFIX: str = "c s exact arb frac "
 _POLY_PREFIX: str = "c s exact poly "
@@ -204,6 +206,8 @@ def ganak_count(
 
 
 __all__ = [
+    "GANAK_ARJUN_COMMIT",
+    "GANAK_ARJUN_REPO_URL",
     "GANAK_COMMIT",
     "GANAK_ENV_VAR",
     "GANAK_REPO_URL",

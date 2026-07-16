@@ -241,6 +241,12 @@ ganak is invoked in two modes: exact rational weighted counting (`--mode 1`) whe
 uv run wfomc-install-ganak
 ```
 
+The installer checks out Ganak
+`82a1d1fb6f0d6fb4a46b825f84b29567728ae483` together with its compatible
+Arjun revision `1553e6b3ebdd76ba3b66d3fece4cf8de4e2743ce`. Both revisions are
+fixed because Ganak's source build otherwise fetches Arjun from its moving
+`master` branch.
+
 For the two propositional modes, the runtime lookup order is CLI `--ganak-path`
 / `RuntimeOptions.propositional_ganak_path`, the `GANAK` environment variable,
 then `ganak` on `PATH`. Lifted algorithms discover Ganak through `GANAK` or
