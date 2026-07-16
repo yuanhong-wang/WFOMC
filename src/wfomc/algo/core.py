@@ -95,6 +95,7 @@ class AlgoName(Enum):
     INCREMENTAL3 = "incremental3"
     RECURSIVE = "recursive"
     PROPOSITIONAL = "propositional"
+    PROPOSITIONAL_REDUCED = "propositional-reduced"
     TAIL_SIGNATURE = "tail-signature"
     BOUNDED_TREEWIDTH = "bounded-treewidth"
 
@@ -419,6 +420,7 @@ _SPEC_MODULES: dict[AlgoName, str] = {
     AlgoName.INCREMENTAL3: "wfomc.algo.incremental3.spec",
     AlgoName.RECURSIVE: "wfomc.algo.recursive.spec",
     AlgoName.PROPOSITIONAL: "wfomc.algo.propositional.spec",
+    AlgoName.PROPOSITIONAL_REDUCED: "wfomc.algo.propositional.reduced_spec",
     AlgoName.TAIL_SIGNATURE: "wfomc.algo.tail_signature.spec",
     AlgoName.BOUNDED_TREEWIDTH: "wfomc.algo.treewidth.spec",
 }

@@ -59,6 +59,9 @@ running system.
 - `plans/2026-07-15-direct-propositional-grounding.md`: implemented direct
   source-formula grounding for the Ganak-backed propositional correctness
   oracle.
+- `plans/2026-07-16-dual-propositional-modes.md`: preserves direct grounding as
+  `propositional` and restores reduction-first grounding as
+  `propositional-reduced`.
 
 ## Experiments
 
@@ -80,6 +83,8 @@ Problem
        -> CompiledProblem(QF formula + compiled weights + branch arithmetic)
   -> propositional: direct finite-domain grounding of the source Problem
        -> model-preserving ground CNF + source-compiled branch arithmetic
+  -> propositional-reduced: normalize + apply logical reductions
+       -> CompiledProblem(QF formula) -> quantifier-free ground CNF
   -> algorithm-owned AlgoInput sharing the branch arithmetic
   -> solve
   -> decode

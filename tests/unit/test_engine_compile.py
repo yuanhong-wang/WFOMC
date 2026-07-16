@@ -40,6 +40,10 @@ def test_algorithm_specs_declare_maturity_and_external_requirements():
     assert algo_spec(AlgoName.PROPOSITIONAL).external_requirements == (
         "Ganak executable",
     )
+    assert algo_spec(AlgoName.PROPOSITIONAL_REDUCED).maturity is AlgoMaturity.BETA
+    assert algo_spec(AlgoName.PROPOSITIONAL_REDUCED).external_requirements == (
+        "Ganak executable",
+    )
     assert algo_spec(AlgoName.TAIL_SIGNATURE).maturity is AlgoMaturity.EXPERIMENTAL
     assert algo_spec(AlgoName.TAIL_SIGNATURE).external_requirements
     assert algo_spec(AlgoName.BOUNDED_TREEWIDTH).maturity is AlgoMaturity.UNAVAILABLE
@@ -187,6 +191,31 @@ domain = 2
     assert artifacts.reduced_problem is not None
     assert artifacts.reduced_problem.expect_single().problem is problem
     assert isinstance(artifacts.algo_input, GroundCNFInput)
+    assert artifacts.algo_input.cnf
+
+
+def test_compile_reduced_propositional_normalizes_before_grounding():
+    from wfomc.fol import CountingQuantifier, walk
+    from wfomc.parser import parse_problem
+
+    problem = parse_problem(
+        r"""
+\forall X: (\exists_=1 Y: R(X,Y))
+domain = 2
+"""
+    )
+
+    artifacts = compile_problem(problem, algo=AlgoName.PROPOSITIONAL_REDUCED)
+
+    assert any(isinstance(node, CountingQuantifier) for node in walk(problem.sentence))
+    assert artifacts.reduced_problem is not None
+    reduced = artifacts.reduced_problem.expect_single().problem
+    assert isinstance(reduced, ReducedProblem)
+    assert not reduced.normal_form.has_counting
+    assert isinstance(artifacts.algo_input, GroundCNFInput)
+    assert artifacts.algo_input.algo is AlgoName.PROPOSITIONAL_REDUCED
+    assert artifacts.algo_options is not None
+    assert artifacts.algo_options.existential_strategy is ExistentialStrategy.SKOLEM
     assert artifacts.algo_input.cnf
 
 

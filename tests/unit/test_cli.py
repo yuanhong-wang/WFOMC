@@ -64,6 +64,7 @@ def test_cli_hides_algorithms_that_are_not_directly_runnable():
     assert "tail-signature" not in algo_action.choices
     assert "bounded-treewidth" not in algo_action.choices
     assert "propositional" in algo_action.choices
+    assert "propositional-reduced" in algo_action.choices
 
 
 def test_cli_accepts_incremental3_existential_strategy():

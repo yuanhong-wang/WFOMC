@@ -138,6 +138,54 @@ def test_propositional_matches_reference_circular(model_file: Path):
 
 
 @pytest.mark.parametrize(
+    ("source", "expected"),
+    (
+        (
+            r"""
+\forall X: (P(X) | ~P(X))
+domain = 2
+""",
+            4,
+        ),
+        (
+            r"""
+\forall X: (\exists Y: R(X,Y))
+domain = 2
+""",
+            9,
+        ),
+        (
+            r"""
+\forall X: (\exists_=1 Y: R(X,Y))
+domain = 2
+""",
+            4,
+        ),
+        (
+            r"""
+\forall X: (P(X) | ~P(X))
+domain = 3
+|P| = 1
+""",
+            3,
+        ),
+    ),
+    ids=("ordinary", "existential", "row-counting", "global-cardinality"),
+)
+def test_direct_and_reduced_propositional_agree(source: str, expected: int):
+    from wfomc import parse_problem
+
+    problem = parse_problem(source)
+
+    direct = solve(problem, algo=AlgoName.PROPOSITIONAL)
+    reduced = solve(problem, algo=AlgoName.PROPOSITIONAL_REDUCED)
+
+    assert direct == expected
+    assert reduced == expected
+    assert direct == reduced
+
+
+@pytest.mark.parametrize(
     ("comparator", "expected"),
     (("<=", 4), ("=", 3), (">=", 7)),
 )

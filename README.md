@@ -29,9 +29,12 @@ where
   - `incremental3`: the incremental WFOMC algorithm with factorized counting-quantifier
     and unary-evidence support (also handles modulo counting quantifiers)
   - `recursive`: the recursive WFOMC algorithm for linear order axiom in Meng et al. (2024)
-  - `propositional`: ground the (Skolemized) sentence over the domain and count with the
-    external [ganak](https://github.com/meelgroup/ganak) propositional model counter.
-    Intended as a ground-truth baseline. Requires a ganak binary; see *Propositional counter* below.
+  - `propositional`: directly ground the source sentence, without normalization or
+    logical reductions, and count it with the external
+    [ganak](https://github.com/meelgroup/ganak) propositional model counter.
+  - `propositional-reduced`: normalize and reduce the problem first, then ground the
+    resulting quantifier-free sentence and count it with Ganak. This preserves the
+    former propositional implementation for performance and regression comparisons.
 `tail-signature` is an experimental Python-API adapter requiring an external
 engine factory, so it is intentionally hidden from CLI choices.
 
@@ -130,7 +133,7 @@ See [predk](models/linear_order/predk/) for more examples.
 The circular predecessor `CIRCULAR_PRED` is also predefined with `CIRCULAR_PRED(X, Y)` means `Y` is the predecessor of `X` in a circular order.
 The output count of circular order is always divided by the domain size to avoid overcounting.
 
-> **Note: To use linear order constraint, you must use the `incremental`, `incremental3`, `recursive`, or `propositional` algorithm. To use $k$-th predecessor or circular predecessor, you must use the `incremental` or `propositional` algorithm.**
+> **Note: To use linear order constraint, you must use the `incremental`, `incremental3`, `recursive`, `propositional`, or `propositional-reduced` algorithm. To use $k$-th predecessor or circular predecessor, use an algorithm whose feature validation accepts that input.**
 
 
 ### Example input file
@@ -206,26 +209,23 @@ More examples are in [models](models/)
 
 ## Propositional counter
 
-The `propositional` algorithm grounds the universally quantified (Skolemized) sentence over every pair of domain elements and hands the resulting weighted CNF to [ganak](https://github.com/meelgroup/ganak). It is intended as a textbook-definition ground-truth baseline against which the lifted algorithms can be checked.
+Both propositional modes hand an explicit weighted CNF to [ganak](https://github.com/meelgroup/ganak), but they reach that CNF through different paths:
 
-It supports plain FO² with rational weights, cardinality constraints and counting quantifiers (`∃_{=k}`), unary evidence, and three order axioms: `LEQ` (linear order), `PRED` (= `PRED1`, the immediate linear predecessor), and `CIRCULAR_PRED` (the immediate circular predecessor). The `PREDk` family for `k > 1` raises an error.
+| Algorithm | Preparation path | Intended use |
+|---|---|---|
+| `propositional` | Source `Problem` → finite-domain expansion of ordinary and counting quantifiers → Tseitin CNF | Reduction-independent correctness baseline |
+| `propositional-reduced` | normalization → unary-evidence/counting/existential/cardinality reductions → quantifier-free grounding | Compatibility, performance, and reduction-regression comparison |
 
-The encoding of the order axioms is selected per call via the `--linear-order-encoding` (short `-l`) CLI flag, the `linear_order_encoding=` keyword argument on `wfomc()` / `propositional_wfomc()`, or the module-level constant `LINEAR_ORDER_ENCODING` in [src/wfomc/algo/PropositionalWFOMC.py](src/wfomc/algo/PropositionalWFOMC.py):
+The direct path supports arbitrary Boolean placement of ordinary and counting quantifiers, ground unary and binary evidence, and simple global constraints of the form `|P| <= k`, `|P| = k`, or `|P| >= k`. The reduced path inherits the reduction pipeline's narrower feature limits: for example, binary evidence and counting sections that cannot be lowered to UFO² plus cardinality constraints are rejected.
+
+The order encoding can be selected through `AlgoOptions(linear_order_encoding=...)` in the Python API:
 
 | Setting | Mechanism | Multiplier | When to use |
 |---|---|---|---|
-| `"pin"` (default) | Each ground `LEQ` / `PRED1` / `CIRCULAR_PRED` atom is pinned to its value under a canonical sorted order / cycle on the domain. | `× n!` via `decode_result`. | Default; the cheap textbook trick. |
-| `"axioms"` | The order axioms are emitted explicitly as FO³ definitions (with Tseitin auxiliaries). | None. | A pin-free, FO-axiomatic baseline (materially slower). |
+| `"pin"` (default) | Pin each order atom to a canonical sorted order/cycle. | `× n!` during result decoding | Cheap symmetry-based baseline |
+| `"axioms"` | Emit explicit FO³ order axioms. | None | Pin-free baseline; materially slower |
 
-**Unary evidence handling.** Direct unit-clause evidence (`UnaryEvidenceStrategy.AUTO`) is element-specific and therefore breaks pin-and-multiply's symmetry argument when an order axiom is present. The solver's `resolve_unary_evidence_strategy` automatically picks the right strategy for the propositional algorithm:
-
-| `linear_order_encoding` | Has order axiom? | Effective strategy | ganak mode |
-|---|---|---|---|
-| `"pin"` | yes | `ccs` (symmetric fingerprint counts) | `--mode 3` (polynomial) |
-| `"pin"` | no | `auto` (direct unit clauses) | `--mode 1` |
-| `"axioms"` | any | `auto` (direct unit clauses) | `--mode 1` |
-
-An explicit `-e ccs` always forces the cardinality-constraint encoding for every algorithm.
+Direct grounding uses ground evidence clauses. If named constants or ground evidence make an ordered problem asymmetric, it defaults to the explicit axioms encoding and rejects an explicitly requested unsound pin encoding. The reduced path preserves the former behavior: with order pinning, unary evidence is first converted to symmetric cardinality constraints.
 
 ganak is invoked in two modes: exact rational weighted counting (`--mode 1`) when no symbolic/polynomial weights are involved, and multivariate-polynomial weighted counting (`--mode 3`) when cardinality constraints or counting quantifiers introduce symbolic weights. Install the pinned binary into the active uv environment with:
 
@@ -233,7 +233,7 @@ ganak is invoked in two modes: exact rational weighted counting (`--mode 1`) whe
 uv run wfomc-install-ganak
 ```
 
-The runtime lookup order is the `--ganak-path` argument to `propositional_wfomc()`, the `GANAK` environment variable, then `ganak` on `PATH`. Lifted algorithms also reuse this Ganak installation after their bounded PySAT pair-factor fast path; if Ganak is unavailable or times out, they automatically use the installed PySDD backend instead.
+The runtime lookup order is `RuntimeOptions.propositional_ganak_path`, the `GANAK` environment variable, then `ganak` on `PATH`. Lifted algorithms also reuse this Ganak installation after their bounded PySAT pair-factor fast path; if Ganak is unavailable or times out, they automatically use the installed PySDD backend instead.
 
 ## References
 
