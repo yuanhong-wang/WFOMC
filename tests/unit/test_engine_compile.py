@@ -6,6 +6,7 @@ from wfomc.algo import (
     AlgoMaturity,
     AlgoName,
     AlgoOptions,
+    ExistentialStrategy,
     LinearOrderEncoding,
     algo_spec,
 )
@@ -163,6 +164,30 @@ def test_compile_problem_materializes_propositional_input_without_decoder():
 
     assert isinstance(artifacts.algo_input, GroundCNFInput)
     assert artifacts.algo_input.evidence_unit_clauses
+    assert artifacts.reduced_problem is not None
+    assert artifacts.reduced_problem.expect_single().problem is problem
+    assert artifacts.algo_options is not None
+    assert artifacts.algo_options.existential_strategy is ExistentialStrategy.GROUND
+
+
+def test_compile_propositional_grounds_source_counting_without_reduction():
+    from wfomc.fol import CountingQuantifier, walk
+    from wfomc.parser import parse_problem
+
+    problem = parse_problem(
+        r"""
+\forall X: (P(X) | (\exists_=1 Y: R(X,Y)))
+domain = 2
+"""
+    )
+
+    artifacts = compile_problem(problem, algo=AlgoName.PROPOSITIONAL)
+
+    assert any(isinstance(node, CountingQuantifier) for node in walk(problem.sentence))
+    assert artifacts.reduced_problem is not None
+    assert artifacts.reduced_problem.expect_single().problem is problem
+    assert isinstance(artifacts.algo_input, GroundCNFInput)
+    assert artifacts.algo_input.cnf
 
 
 def test_compile_problem_respects_propositional_order_axiom_option():
@@ -177,6 +202,34 @@ def test_compile_problem_respects_propositional_order_axiom_option():
     assert isinstance(artifacts.algo_input, GroundCNFInput)
     assert artifacts.algo_input.linear_order_encoding == LinearOrderEncoding.AXIOMS
     assert artifacts.algo_input.order_unit_clauses
+
+
+def test_propositional_order_axioms_define_source_pred_predicate():
+    from wfomc.parser import parse_problem
+
+    problem = parse_problem(
+        r"""
+\forall X: (\forall Y: (PRED(X,Y) | ~PRED(X,Y)))
+domain = 2
+"""
+    )
+    artifacts = compile_problem(
+        problem,
+        algo=AlgoName.PROPOSITIONAL,
+        options=AlgoOptions(linear_order_encoding=LinearOrderEncoding.AXIOMS),
+    )
+
+    assert isinstance(artifacts.algo_input, GroundCNFInput)
+    pred_ids = {
+        variable
+        for variable, predicate in artifacts.algo_input.id_to_predicate.items()
+        if predicate.name == "PRED1"
+    }
+    assert len(pred_ids) == 4
+    assert any(
+        any(abs(literal) in pred_ids for literal in clause)
+        for clause in artifacts.algo_input.order_unit_clauses
+    )
 
 
 def test_unsupported_features_are_rejected_before_solving():
@@ -207,6 +260,72 @@ def test_binary_evidence_is_rejected_instead_of_silently_ignored():
 
     with pytest.raises(UnsupportedFeatureError, match="binary evidence"):
         solve(problem, algo=AlgoName.STANDARD)
+
+    artifacts = compile_problem(problem, algo=AlgoName.PROPOSITIONAL)
+    assert isinstance(artifacts.algo_input, GroundCNFInput)
+    assert artifacts.algo_input.evidence_unit_clauses
+
+
+@pytest.mark.parametrize("comparator", ("<=", "=", ">="))
+def test_compile_propositional_materializes_simple_global_cardinality(comparator):
+    from wfomc.parser import parse_problem
+
+    problem = parse_problem(
+        rf"""
+\forall X: (P(X) | ~P(X))
+domain = 3
+|P| {comparator} 1
+"""
+    )
+
+    artifacts = compile_problem(problem, algo=AlgoName.PROPOSITIONAL)
+
+    assert isinstance(artifacts.algo_input, GroundCNFInput)
+    assert len(
+        [
+            atom
+            for atom in artifacts.algo_input.atom_to_id
+            if atom.predicate.name == "P"
+        ]
+    ) == 3
+
+
+def test_compile_propositional_rejects_general_linear_cardinality():
+    from wfomc.parser import parse_problem
+
+    problem = parse_problem(
+        r"""
+\forall X: ((P(X) | ~P(X)) & (Q(X) | ~Q(X)))
+domain = 2
+|P| - |Q| = 0
+"""
+    )
+
+    with pytest.raises(UnsupportedFeatureError, match=r"\|P\|"):
+        compile_problem(problem, algo=AlgoName.PROPOSITIONAL)
+
+
+def test_compile_propositional_rejects_evidence_outside_domain():
+    from dataclasses import replace
+
+    from wfomc.evidence import Evidence, GroundUnaryLiteral, UnaryEvidence
+    from wfomc.fol import FOLContext
+    from wfomc.parser import parse_problem
+
+    problem = parse_problem("\\forall X: P(X)\ndomain = 1")
+    fol = FOLContext()
+    predicate = fol.predicate("P", 1)
+    problem = replace(
+        problem,
+        evidence=Evidence(
+            unary=UnaryEvidence(
+                (GroundUnaryLiteral(predicate, fol.constant("outside")),)
+            )
+        ),
+    )
+
+    with pytest.raises(ValueError, match="problem domain"):
+        compile_problem(problem, algo=AlgoName.PROPOSITIONAL)
 
 
 def test_compile_problem_delegates_to_algorithm_prepare(monkeypatch):

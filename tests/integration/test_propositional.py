@@ -22,6 +22,7 @@ IN_SCOPE_DIRS = (
     ROOT / "models" / "linear_order",
     ROOT / "models" / "linear_order" / "unary_evidence",
     ROOT / "models" / "linear_order" / "predk",
+    ROOT / "models" / "counting_quantifiers",
 )
 CIRCULAR_MODELS = (
     ROOT / "models" / "MATH" / "8.wfomcs",
@@ -29,6 +30,12 @@ CIRCULAR_MODELS = (
 )
 SLOW_UNDER_AXIOMS = frozenset(
     ("models/linear_order/predk/predecessor.wfomcs",)
+)
+SLOW_DIRECT_GROUNDING = frozenset(
+    (
+        "models/linear_order/linear_order_perm.wfomcs",
+        "models/linear_order/predk/predecessor.wfomcs",
+    )
 )
 
 
@@ -61,6 +68,25 @@ def _uses_multi_k_pred(problem) -> bool:
     )
 
 
+def _uses_general_cardinality(problem) -> bool:
+    from collections import defaultdict
+
+    from wfomc.cardinality_constraints import Comparator
+
+    for constraint in problem.cardinality_constraints.constraints:
+        coefficients = defaultdict(int)
+        for term in constraint.terms:
+            coefficients[term.predicate] += term.coefficient
+        nonzero = [value for value in coefficients.values() if value]
+        if (
+            nonzero != [1]
+            or constraint.comparator
+            not in {Comparator.LE, Comparator.EQ, Comparator.GE}
+        ):
+            return True
+    return False
+
+
 def _reference_algo(problem) -> AlgoName:
     features = analyze_features(problem)
     if features.has_predk or features.has_circular_pred:
@@ -75,9 +101,13 @@ def test_propositional_matches_reference(model_file: Path):
     relative = str(model_file.relative_to(ROOT))
     if AXIOMS_MODE and relative in SLOW_UNDER_AXIOMS and not RUN_SLOW:
         pytest.skip(f"{relative} is slow under FO3 axiomatization")
+    if relative in SLOW_DIRECT_GROUNDING and not RUN_SLOW:
+        pytest.skip(f"{relative} is slow under direct grounding")
     problem = parse_input(str(model_file))
     if _uses_multi_k_pred(problem):
         pytest.skip("PREDk for k > 1 is outside propositional scope")
+    if _uses_general_cardinality(problem):
+        pytest.skip("general linear cardinality is outside direct propositional scope")
 
     reference_algo = _reference_algo(problem)
     reference = solve(problem, algo=reference_algo)
@@ -105,3 +135,91 @@ def test_propositional_matches_reference_circular(model_file: Path):
     propositional = solve(problem, algo=AlgoName.PROPOSITIONAL)
 
     assert propositional == reference
+
+
+@pytest.mark.parametrize(
+    ("comparator", "expected"),
+    (("<=", 4), ("=", 3), (">=", 7)),
+)
+def test_direct_propositional_counts_simple_global_cardinality(
+    comparator: str,
+    expected: int,
+):
+    from wfomc import parse_problem
+
+    problem = parse_problem(
+        rf"""
+\forall X: (P(X) | ~P(X))
+domain = 3
+|P| {comparator} 1
+"""
+    )
+
+    assert solve(problem, algo=AlgoName.PROPOSITIONAL) == expected
+
+
+def test_direct_propositional_materializes_constraint_only_binary_predicate():
+    from wfomc import (
+        CardinalityConstraints,
+        CardinalityTerm,
+        Comparator,
+        LinearCardinalityConstraint,
+        Problem,
+    )
+    from wfomc.fol import FOLContext
+
+    fol = FOLContext()
+    relation = fol.predicate("R", 2)
+    domain = frozenset(fol.constant(name) for name in ("a", "b"))
+    problem = Problem(
+        sentence=fol.true(),
+        domain=domain,
+        cardinality_constraints=CardinalityConstraints(
+            (
+                LinearCardinalityConstraint(
+                    (CardinalityTerm(relation),),
+                    Comparator.EQ,
+                    1,
+                ),
+            )
+        ),
+    )
+
+    assert solve(problem, algo=AlgoName.PROPOSITIONAL) == 4
+
+
+def test_direct_propositional_counts_binary_evidence_without_reduction():
+    from wfomc import Problem
+    from wfomc.evidence import BinaryEvidence, Evidence, GroundBinaryLiteral
+    from wfomc.fol import FOLContext
+
+    fol = FOLContext()
+    relation = fol.predicate("R", 2)
+    left, right = (fol.constant(name) for name in ("a", "b"))
+    problem = Problem(
+        sentence=fol.true(),
+        domain=frozenset((left, right)),
+        evidence=Evidence(
+            binary=BinaryEvidence(
+                (GroundBinaryLiteral(relation, left, right, True),)
+            )
+        ),
+    )
+
+    assert solve(problem, algo=AlgoName.PROPOSITIONAL) == 8
+
+
+def test_direct_propositional_counts_unmentioned_ground_relation_entries():
+    from wfomc import Problem
+    from wfomc.fol import FOLContext
+
+    fol = FOLContext()
+    predicate = fol.predicate("P", 1)
+    first, second = (fol.constant(name) for name in ("a", "b"))
+    problem = Problem(
+        sentence=predicate(first),
+        domain=frozenset((first, second)),
+    )
+
+    # P(a) is fixed true while the unmentioned P(b) remains free.
+    assert solve(problem, algo=AlgoName.PROPOSITIONAL) == 2

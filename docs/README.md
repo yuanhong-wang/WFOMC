@@ -56,6 +56,9 @@ running system.
   bounded pair enumeration and predicate-universe formula cleanup.
 - `plans/2026-07-13-ganak-primary-pair-factor-backend.md`: implemented shared
   Ganak boundary and bounded PySAT/Ganak/PySDD pair-factor routing.
+- `plans/2026-07-15-direct-propositional-grounding.md`: implemented direct
+  source-formula grounding for the Ganak-backed propositional correctness
+  oracle.
 
 ## Experiments
 
@@ -72,9 +75,11 @@ running system.
 ```text
 Problem
   -> source feature analysis + option resolution
-  -> ReducedProblem(C2NormalForm)
-  -> algorithm reduction chain
-  -> CompiledProblem(QF formula + compiled weights + branch arithmetic)
+  -> lifted algorithms: ReducedProblem(C2NormalForm)
+       -> algorithm reduction chain
+       -> CompiledProblem(QF formula + compiled weights + branch arithmetic)
+  -> propositional: direct finite-domain grounding of the source Problem
+       -> model-preserving ground CNF + source-compiled branch arithmetic
   -> algorithm-owned AlgoInput sharing the branch arithmetic
   -> solve
   -> decode

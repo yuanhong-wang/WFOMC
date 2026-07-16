@@ -46,3 +46,16 @@ def test_tseitin_auxiliaries_have_one_extension_per_satisfying_atom_assignment()
             ):
                 extensions += 1
         assert extensions == int(evaluate(formula, atom_assignment))
+
+
+def test_tseitin_reuses_repeated_non_atomic_subformulas():
+    ctx = FOLContext()
+    x = ctx.variable("X")
+    p = ctx.predicate("P", 1)
+    q = ctx.predicate("Q", 1)
+    shared = p(x) | q(x)
+
+    cnf = encode_tseitin(ctx.conjunction(shared, shared))
+
+    assert cnf.n_vars == 4
+    assert cnf.auxiliary_vars == frozenset({3, 4})

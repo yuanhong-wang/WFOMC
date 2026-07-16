@@ -28,7 +28,8 @@ def encode_tseitin(formula: Formula) -> TseitinCNF:
     atom_to_var = {atom: index for index, atom in enumerate(original_atoms, start=1)}
     next_var = [len(original_atoms) + 1]
     clauses: list[tuple[int, ...]] = []
-    root = _encode(formula, atom_to_var, next_var, clauses)
+    formula_to_var: dict[Formula, int] = {}
+    root = _encode(formula, atom_to_var, next_var, clauses, formula_to_var)
     clauses.append((root,))
     n_vars = next_var[0] - 1
     return TseitinCNF(
@@ -66,53 +67,93 @@ def _encode(
     atom_to_var: dict[Atom, int],
     next_var: list[int],
     clauses: list[tuple[int, ...]],
+    formula_to_var: dict[Formula, int],
 ) -> int:
     if isinstance(formula, Atom):
         return atom_to_var[formula]
+    cached = formula_to_var.get(formula)
+    if cached is not None:
+        return cached
     if isinstance(formula, BoolConst):
         variable = _new_var(next_var)
         clauses.append((variable,) if formula.value else (-variable,))
+        formula_to_var[formula] = variable
         return variable
     if isinstance(formula, Not):
-        child = _encode(formula.body, atom_to_var, next_var, clauses)
+        child = _encode(
+            formula.body,
+            atom_to_var,
+            next_var,
+            clauses,
+            formula_to_var,
+        )
         variable = _new_var(next_var)
         clauses.append((-variable, -child))
         clauses.append((variable, child))
+        formula_to_var[formula] = variable
         return variable
     if isinstance(formula, And):
         children = tuple(
-            _encode(argument, atom_to_var, next_var, clauses)
+            _encode(argument, atom_to_var, next_var, clauses, formula_to_var)
             for argument in formula.args
         )
         variable = _new_var(next_var)
         clauses.extend((-variable, child) for child in children)
         clauses.append((variable,) + tuple(-child for child in children))
+        formula_to_var[formula] = variable
         return variable
     if isinstance(formula, Or):
         children = tuple(
-            _encode(argument, atom_to_var, next_var, clauses)
+            _encode(argument, atom_to_var, next_var, clauses, formula_to_var)
             for argument in formula.args
         )
         variable = _new_var(next_var)
         clauses.extend((variable, -child) for child in children)
         clauses.append((-variable,) + children)
+        formula_to_var[formula] = variable
         return variable
     if isinstance(formula, Implies):
-        left = _encode(formula.left, atom_to_var, next_var, clauses)
-        right = _encode(formula.right, atom_to_var, next_var, clauses)
+        left = _encode(
+            formula.left,
+            atom_to_var,
+            next_var,
+            clauses,
+            formula_to_var,
+        )
+        right = _encode(
+            formula.right,
+            atom_to_var,
+            next_var,
+            clauses,
+            formula_to_var,
+        )
         variable = _new_var(next_var)
         clauses.append((-variable, -left, right))
         clauses.append((variable, left))
         clauses.append((variable, -right))
+        formula_to_var[formula] = variable
         return variable
     if isinstance(formula, Iff):
-        left = _encode(formula.left, atom_to_var, next_var, clauses)
-        right = _encode(formula.right, atom_to_var, next_var, clauses)
+        left = _encode(
+            formula.left,
+            atom_to_var,
+            next_var,
+            clauses,
+            formula_to_var,
+        )
+        right = _encode(
+            formula.right,
+            atom_to_var,
+            next_var,
+            clauses,
+            formula_to_var,
+        )
         variable = _new_var(next_var)
         clauses.append((-variable, -left, right))
         clauses.append((-variable, left, -right))
         clauses.append((variable, left, right))
         clauses.append((variable, -left, -right))
+        formula_to_var[formula] = variable
         return variable
     raise TypeError(f"Tseitin CNF does not support {type(formula).__name__}")
 

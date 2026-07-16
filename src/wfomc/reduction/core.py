@@ -34,9 +34,9 @@ def identity_decoder(result: object, **_: object) -> object:
 
 @dataclass(frozen=True)
 class ProblemWithDecoder:
-    """One reduced problem plus the decoder for its raw algorithm result."""
+    """One source/reduced branch plus the decoder for its raw result."""
 
-    problem: "ReducedProblem"
+    problem: "Problem | ReducedProblem"
     decoder: Decoder = identity_decoder
 
 
@@ -49,7 +49,7 @@ class ReducedProblems:
     @classmethod
     def single(
         cls,
-        problem: "ReducedProblem",
+        problem: "Problem | ReducedProblem",
         *,
         decoder: Decoder = identity_decoder,
     ) -> "ReducedProblems":

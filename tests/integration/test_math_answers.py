@@ -25,7 +25,7 @@ def test_math_published_answers(model_file: Path):
     else:
         features = analyze_features(problem)
         algorithm = (
-            AlgoName.PROPOSITIONAL
+            AlgoName.INCREMENTAL
             if features.has_predk or features.has_circular_pred
             else AlgoName.INCREMENTAL3
         )

@@ -56,6 +56,7 @@ class ExistentialStrategy(Enum):
 
     COUNTING = "counting"
     SKOLEM = "skolem"
+    GROUND = "ground"
 
     def __str__(self) -> str:
         return self.value
@@ -146,7 +147,7 @@ class AlgoInput:
 
 @dataclass(frozen=True)
 class PreparedBranch:
-    problem: "ReducedProblem"
+    problem: "Problem | ReducedProblem"
     algo_input: AlgoInput
     decoder: Callable[..., object]
 
@@ -163,6 +164,7 @@ def option_resolver(
     supports_linear_order: bool = False,
     supports_predk_or_circular: bool = False,
     supports_mod_counting: bool = False,
+    supports_binary_evidence: bool = False,
 ) -> Callable[["FeatureSet", AlgoOptions | None], AlgoOptions]:
     from wfomc.fol.grounding import resolve_linear_order_encoding
 
@@ -200,6 +202,7 @@ def option_resolver(
             supports_linear_order=supports_linear_order,
             supports_predk_or_circular=supports_predk_or_circular,
             supports_mod_counting=supports_mod_counting,
+            supports_binary_evidence=supports_binary_evidence,
         )
         return resolved
 
@@ -233,6 +236,33 @@ def _compile_reduced_weights(
     """Compile the reduced problem's raw weights into its arithmetic ring."""
     compiled = compile_weight_mapping(dict(problem.weights), arithmetic)
     return dict(sorted(compiled.items(), key=lambda item: str(item[0])))
+
+
+def compile_source_arithmetic(
+    problem: "Problem",
+    options: AlgoOptions,
+) -> tuple[ArithmeticContext, dict[object, tuple[object, object]]]:
+    """Compile source weights without normalizing or reducing the formula."""
+
+    output_symbols = collect_output_weight_variables(problem)
+    solver_symbols = collect_symbolic_weight_variables(problem)
+    backend = choose_arithmetic_backend(
+        options.weight_options,
+        symbolic_variables=solver_symbols,
+    )
+    arithmetic = ArithmeticContext(
+        backend=backend,
+        symbolic_variables=solver_symbols,
+        output_symbols=output_symbols,
+    )
+    weights = compile_weight_mapping(dict(problem.weights), arithmetic)
+    logger.info(
+        "Prepared source arithmetic: backend=%s solver_symbols=%d output_symbols=%d",
+        backend,
+        len(solver_symbols),
+        len(output_symbols),
+    )
+    return arithmetic, dict(sorted(weights.items(), key=lambda item: str(item[0])))
 
 
 def compile_reduced_problem(
@@ -289,21 +319,6 @@ def compile_reduced_problem(
     return compiled, analyze_features(compiled)
 
 
-def choose_propositional_unary_evidence(
-    features: "FeatureSet",
-    linear_order_encoding: "LinearOrderEncoding",
-) -> EvidenceStrategy:
-    if not features.has_unary_evidence:
-        return EvidenceStrategy.NONE
-    if features.has_linear_order:
-        from wfomc.fol.grounding import LinearOrderEncoding
-
-        if linear_order_encoding == LinearOrderEncoding.PIN:
-            return EvidenceStrategy.CCS
-        return EvidenceStrategy.GROUND_UNITS
-    return EvidenceStrategy.GROUND_UNITS
-
-
 def _resolve_unary_evidence_strategy(
     strategy: EvidenceStrategy | DefaultEvidenceStrategy,
     features: "FeatureSet",
@@ -334,6 +349,7 @@ def _validate_supported_features(
     supports_linear_order: bool,
     supports_predk_or_circular: bool,
     supports_mod_counting: bool,
+    supports_binary_evidence: bool,
 ) -> None:
     evidence_strategy = options.evidence_strategy
     if evidence_strategy is None:
@@ -348,6 +364,7 @@ def _validate_supported_features(
         supports_linear_order=supports_linear_order,
         supports_predk_or_circular=supports_predk_or_circular,
         supports_mod_counting=supports_mod_counting,
+        supports_binary_evidence=supports_binary_evidence,
     )
     if rejection_reason is not None:
         raise UnsupportedFeatureError(rejection_reason)
@@ -364,11 +381,12 @@ def _rejection_reason(
     supports_linear_order: bool,
     supports_predk_or_circular: bool,
     supports_mod_counting: bool,
+    supports_binary_evidence: bool,
 ) -> str | None:
     if existential_strategy not in supported_existential_strategies:
         selected = existential_strategy.value if existential_strategy else "none"
         return f"{algo.value} does not support {selected} existential strategy"
-    if features.has_binary_evidence:
+    if features.has_binary_evidence and not supports_binary_evidence:
         return (
             f"{algo.value} does not support ground binary evidence; "
             "binary evidence must not be silently ignored"
@@ -433,7 +451,7 @@ __all__ = [
     "PreparedBranch",
     "algo_spec",
     "option_resolver",
-    "choose_propositional_unary_evidence",
+    "compile_source_arithmetic",
     "reduce_unary_evidence_for_options",
     "compile_reduced_problem",
 ]

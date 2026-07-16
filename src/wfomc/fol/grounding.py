@@ -3,11 +3,29 @@
 from __future__ import annotations
 
 from enum import Enum
-from itertools import product
+from itertools import combinations, product
 from typing import Callable, Optional, Union
 
 from wfomc.fol.cnf import encode_tseitin
-from wfomc.fol.syntax import Atom, Constant, Formula, Predicate, Variable
+from wfomc.fol.context import context_for
+from wfomc.fol.syntax import (
+    And,
+    Atom,
+    BoolConst,
+    Constant,
+    CountingQuantifier,
+    Eq,
+    Formula,
+    Iff,
+    Implies,
+    ModCount,
+    Not,
+    Or,
+    Predicate,
+    Quantifier,
+    QuantifierKind,
+    Variable,
+)
 from wfomc.fol.analysis import free_vars, is_quantifier_free, predicates
 from wfomc.fol.rewrite import simplify_boolean, substitute
 
@@ -45,6 +63,220 @@ def resolve_linear_order_encoding(
 
 X = Variable("X")
 Y = Variable("Y")
+
+
+# ---------------------------------------------------------------------------
+# Direct source-formula grounding
+# ---------------------------------------------------------------------------
+def ground_source_formula(
+    formula: Formula,
+    domain: tuple[Constant, ...] | list[Constant],
+) -> Formula:
+    """Expand one source formula according to finite-domain FOL semantics.
+
+    Unlike :func:`ground_qf_formula`, this entry point accepts ordinary and
+    counting quantifiers in arbitrary Boolean positions. It produces one
+    closed quantifier-free formula without Scott normalization, Skolemization,
+    marker predicates, or result decoders.
+    """
+
+    grounded = _ground_source_node(formula, tuple(domain), {})
+    unresolved = free_vars(grounded)
+    if unresolved:
+        names = ", ".join(sorted(str(variable) for variable in unresolved))
+        raise ValueError(
+            f"source sentence has unbound variables after grounding: {names}"
+        )
+    return simplify_boolean(grounded)
+
+
+def _ground_source_node(
+    formula: Formula,
+    domain: tuple[Constant, ...],
+    environment: dict[object, object],
+) -> Formula:
+    ctx = context_for(formula)
+    if isinstance(formula, BoolConst):
+        return formula
+    if isinstance(formula, Atom):
+        return ctx.atom(
+            formula.predicate,
+            *(environment.get(term, term) for term in formula.terms),
+        )
+    if isinstance(formula, Eq):
+        left = environment.get(formula.left, formula.left)
+        right = environment.get(formula.right, formula.right)
+        if not isinstance(left, Variable) and not isinstance(right, Variable):
+            return ctx.true() if left == right else ctx.false()
+        return ctx.eq(left, right)
+    if isinstance(formula, Not):
+        return ctx.neg(_ground_source_node(formula.body, domain, environment))
+    if isinstance(formula, And):
+        return ctx.conjunction(
+            *(
+                _ground_source_node(argument, domain, environment)
+                for argument in formula.args
+            )
+        )
+    if isinstance(formula, Or):
+        return ctx.disjunction(
+            *(
+                _ground_source_node(argument, domain, environment)
+                for argument in formula.args
+            )
+        )
+    if isinstance(formula, Implies):
+        return ctx.implies(
+            _ground_source_node(formula.left, domain, environment),
+            _ground_source_node(formula.right, domain, environment),
+        )
+    if isinstance(formula, Iff):
+        return ctx.iff(
+            _ground_source_node(formula.left, domain, environment),
+            _ground_source_node(formula.right, domain, environment),
+        )
+    if isinstance(formula, Quantifier):
+        instances = []
+        for values in product(domain, repeat=len(formula.variables)):
+            nested = dict(environment)
+            nested.update(zip(formula.variables, values))
+            instances.append(_ground_source_node(formula.body, domain, nested))
+        if formula.kind is QuantifierKind.FORALL:
+            return ctx.conjunction(*instances)
+        return ctx.disjunction(*instances)
+    if isinstance(formula, CountingQuantifier):
+        instances = []
+        for value in domain:
+            nested = dict(environment)
+            nested[formula.variable] = value
+            instances.append(_ground_source_node(formula.body, domain, nested))
+        return _counting_formula(
+            tuple(instances),
+            formula.comparator,
+            formula.count,
+        )
+    raise TypeError(f"direct grounding does not support {type(formula).__name__}")
+
+
+def _counting_formula(
+    formulas: tuple[Formula, ...],
+    comparator: str,
+    count: object,
+) -> Formula:
+    ctx = context_for(*formulas)
+    if comparator == "=":
+        return _exactly_k_formula(formulas, int(count), ctx)
+    if comparator == "!=":
+        bound = int(count)
+        return ctx.disjunction(
+            _at_most_k_formula(formulas, bound - 1, ctx),
+            _at_least_k_formula(formulas, bound + 1, ctx),
+        )
+    if comparator == "<":
+        return _at_most_k_formula(formulas, int(count) - 1, ctx)
+    if comparator == "<=":
+        return _at_most_k_formula(formulas, int(count), ctx)
+    if comparator == ">":
+        return _at_least_k_formula(formulas, int(count) + 1, ctx)
+    if comparator == ">=":
+        return _at_least_k_formula(formulas, int(count), ctx)
+    if comparator == "mod":
+        if isinstance(count, ModCount):
+            remainder, modulus = count.remainder, count.modulus
+        else:
+            remainder, modulus = count
+        remainder = int(remainder) % int(modulus)
+        modulus = int(modulus)
+        return ctx.disjunction(
+            *(
+                _exactly_k_formula(formulas, accepted, ctx)
+                for accepted in range(len(formulas) + 1)
+                if accepted % modulus == remainder
+            )
+        )
+    raise ValueError(f"Unsupported counting comparator: {comparator!r}")
+
+
+def _at_most_k_formula(formulas: tuple[Formula, ...], k: int, ctx) -> Formula:
+    if k < 0:
+        return ctx.false()
+    if k >= len(formulas):
+        return ctx.true()
+    return ctx.conjunction(
+        *(
+            ctx.disjunction(*(ctx.neg(formula) for formula in subset))
+            for subset in combinations(formulas, k + 1)
+        )
+    )
+
+
+def _at_least_k_formula(formulas: tuple[Formula, ...], k: int, ctx) -> Formula:
+    if k <= 0:
+        return ctx.true()
+    if k > len(formulas):
+        return ctx.false()
+    return ctx.conjunction(
+        *(
+            ctx.disjunction(*subset)
+            for subset in combinations(formulas, len(formulas) - k + 1)
+        )
+    )
+
+
+def _exactly_k_formula(formulas: tuple[Formula, ...], k: int, ctx) -> Formula:
+    if k < 0 or k > len(formulas):
+        return ctx.false()
+    return ctx.conjunction(
+        _at_most_k_formula(formulas, k, ctx),
+        _at_least_k_formula(formulas, k, ctx),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Auxiliary-free cardinality CNF over existing ground literals
+# ---------------------------------------------------------------------------
+def at_most_k_clauses(
+    literals: tuple[int, ...] | list[int],
+    k: int,
+) -> list[frozenset[int]]:
+    """Return a model-preserving CNF for ``sum(literals) <= k``."""
+
+    literals = tuple(literals)
+    if k < 0:
+        return [frozenset()]
+    if k >= len(literals):
+        return []
+    return [
+        frozenset(-literal for literal in subset)
+        for subset in combinations(literals, k + 1)
+    ]
+
+
+def at_least_k_clauses(
+    literals: tuple[int, ...] | list[int],
+    k: int,
+) -> list[frozenset[int]]:
+    """Return a model-preserving CNF for ``sum(literals) >= k``."""
+
+    literals = tuple(literals)
+    if k <= 0:
+        return []
+    if k > len(literals):
+        return [frozenset()]
+    subset_size = len(literals) - k + 1
+    return [frozenset(subset) for subset in combinations(literals, subset_size)]
+
+
+def exactly_k_clauses(
+    literals: tuple[int, ...] | list[int],
+    k: int,
+) -> list[frozenset[int]]:
+    """Return a model-preserving CNF for ``sum(literals) == k``."""
+
+    literals = tuple(literals)
+    if k < 0 or k > len(literals):
+        return [frozenset()]
+    return at_most_k_clauses(literals, k) + at_least_k_clauses(literals, k)
 
 
 def ground_on_tuple(
@@ -333,11 +565,15 @@ def linear_order_clauses(
         return []
 
     leq = context.leq_pred
-    pred1 = Predicate("PRED1", 2)
     circ = context.circular_predecessor_pred
-    need_pred1 = pred1 in id_to_predicate.values() or circ is not None
+    predecessor_preds = dict(context.predecessor_preds or {})
+    pred1 = predecessor_preds.get(1)
+    if pred1 == circ:
+        pred1 = None
+    if pred1 is None and circ is not None:
+        pred1 = Predicate("PRED1", 2)
 
-    for pred in [leq] + ([pred1] if need_pred1 else []):
+    for pred in [leq] + ([pred1] if pred1 is not None else []):
         for a in domain:
             for b in domain:
                 atom = _positive_atom(pred(a, b))
@@ -347,11 +583,12 @@ def linear_order_clauses(
                     id_to_predicate[vid] = pred
 
     order_clauses = list(ground_leq_axioms(domain, leq, atom_to_id))
-    if need_pred1:
+    if pred1 is not None:
         order_clauses.extend(
             ground_pred1_definition(domain, pred1, leq, atom_to_id, fresh)
         )
     if circ is not None:
+        assert pred1 is not None
         order_clauses.extend(
             ground_circular_pred_definition(domain, circ, pred1, leq, atom_to_id, fresh)
         )
@@ -360,10 +597,14 @@ def linear_order_clauses(
 
 __all__ = [
     "LinearOrderEncoding",
+    "at_least_k_clauses",
+    "at_most_k_clauses",
+    "exactly_k_clauses",
     "ground_circular_pred_definition",
     "ground_leq_axioms",
     "ground_pred1_definition",
     "ground_qf_formula",
+    "ground_source_formula",
     "linear_order_clauses",
     "pin_linear_order_atoms",
     "resolve_linear_order_encoding",

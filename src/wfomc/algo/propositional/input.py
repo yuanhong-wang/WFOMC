@@ -1,20 +1,32 @@
-"""Input contract owned by the propositional algorithm."""
+"""Direct source-grounding input contract owned by the propositional algorithm."""
 
 from __future__ import annotations
 
+import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from itertools import product
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
-from wfomc.algo.core import AlgoInput, AlgoOptions, EvidenceStrategy
+from wfomc.algo.core import (
+    AlgoInput,
+    AlgoName,
+    AlgoOptions,
+    compile_source_arithmetic,
+)
 from wfomc.arithmetic import ArithmeticValue
-from wfomc.problem import CompiledProblem
+from wfomc.cardinality_constraints import Comparator
 from wfomc.engine.features import FeatureSet
+from wfomc.errors import UnsupportedFeatureError
+from wfomc.problem import Problem
 
 if TYPE_CHECKING:
     from wfomc.fol.grounding import LinearOrderEncoding
     from wfomc.fol.syntax import Atom, Constant, Predicate
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -24,6 +36,7 @@ class GroundCNFInput(AlgoInput):
         default_factory=dict
     )
     evidence_unit_clauses: tuple[frozenset[int], ...] = ()
+    cardinality_clauses: tuple[frozenset[int], ...] = ()
     domain_size: int = 0
     domain: tuple[Constant, ...] = ()
     atom_to_id: dict[Atom, int] = field(default_factory=dict)
@@ -44,62 +57,74 @@ class GroundCNFInput(AlgoInput):
 
 
 def build_input(
-    reduced: CompiledProblem,
+    problem: Problem,
     *,
     options: AlgoOptions,
     features: FeatureSet,
 ) -> GroundCNFInput:
+    """Ground one public source problem directly into model-preserving CNF."""
+
     from flint import fmpq_mpoly, fmpq_poly
+    from wfomc.fol.analysis import predicates
+    from wfomc.fol.cnf import encode_tseitin
     from wfomc.fol.grounding import (
-        ground_qf_formula,
+        at_least_k_clauses,
+        at_most_k_clauses,
+        exactly_k_clauses,
+        ground_source_formula,
         linear_order_clauses,
         resolve_linear_order_encoding,
     )
 
-    if reduced.sentence is None:
-        raise RuntimeError("reduced problem has no quantifier-free formula")
+    arithmetic, compiled_weights = compile_source_arithmetic(problem, options)
     encoding = resolve_linear_order_encoding(options.linear_order_encoding)
-    domain = tuple(sorted(reduced.domain, key=lambda const: const.name))
-    atom_to_id, id_to_predicate, clauses, unsat = ground_qf_formula(
-        reduced.sentence, list(domain)
-    )
-    if unsat:
-        clauses = [frozenset()]
-    evidence_unit_clauses: list[frozenset[int]] = []
-    next_id = len(atom_to_id)
+    domain = tuple(sorted(problem.domain, key=str))
+    grounded = ground_source_formula(problem.sentence, domain)
+    tseitin = encode_tseitin(grounded)
+
+    atom_to_id = dict(tseitin.atom_to_var)
+    id_to_predicate = {
+        variable: atom.predicate for atom, variable in atom_to_id.items()
+    }
+    formula_clauses = [frozenset(clause) for clause in tseitin.clauses]
+    next_id = tseitin.n_vars
 
     def fresh() -> int:
         nonlocal next_id
         next_id += 1
         return next_id
 
-    evidence = tuple(
-        item.to_ground_literal() for item in reduced.evidence.unary.literals
+    def ensure_atom(atom: Atom) -> int:
+        positive = atom.make_positive()
+        variable = atom_to_id.get(positive)
+        if variable is None:
+            variable = fresh()
+            atom_to_id[positive] = variable
+            id_to_predicate[variable] = positive.predicate
+        return variable
+
+    predicate_universe = set(predicates(problem.sentence)) | set(problem.weights)
+    for evidence_item in (
+        *problem.evidence.unary.literals,
+        *problem.evidence.binary.literals,
+    ):
+        predicate_universe.add(evidence_item.predicate)
+    for constraint in problem.cardinality_constraints.constraints:
+        predicate_universe.update(term.predicate for term in constraint.terms)
+    _ground_predicate_universe(predicate_universe, domain, ensure_atom)
+
+    evidence_unit_clauses = _ground_evidence(problem, domain, ensure_atom)
+    cardinality_clauses = _ground_cardinality_constraints(
+        problem,
+        domain,
+        ensure_atom,
+        at_most_k_clauses,
+        exactly_k_clauses,
+        at_least_k_clauses,
     )
-    if evidence and options.evidence_strategy == EvidenceStrategy.GROUND_UNITS:
-        evidence_preds = {_literal_predicate(item) for item in evidence}
-        for predicate in sorted(
-            evidence_preds, key=lambda item: (item.name, item.arity)
-        ):
-            for args in product(domain, repeat=predicate.arity):
-                atom = predicate(*args)
-                if atom not in atom_to_id:
-                    vid = fresh()
-                    atom_to_id[atom] = vid
-                    id_to_predicate[vid] = predicate
-        for item in sorted(
-            evidence,
-            key=lambda value: (
-                _literal_predicate(value).name,
-                str(_literal_terms(value)),
-                value.positive,
-            ),
-        ):
-            vid = atom_to_id[item.atom]
-            evidence_unit_clauses.append(frozenset((vid if item.positive else -vid,)))
 
     order_view = SimpleNamespace(
-        formula=reduced.sentence,
+        formula=problem.sentence,
         leq_pred=features.leq_predicate,
         predecessor_preds=dict(features.predecessor_predicates),
         circular_predecessor_pred=features.circular_predecessor_predicate,
@@ -112,30 +137,46 @@ def build_input(
         fresh,
         encoding,
     )
-    one = reduced.arithmetic.one()
-    weight_map = dict(reduced.weights)
+
+    one = arithmetic.one()
     literal_weights = {
-        vid: weight_map.get(predicate, (one, one))
-        for vid, predicate in id_to_predicate.items()
+        variable: compiled_weights.get(predicate, (one, one))
+        for variable, predicate in id_to_predicate.items()
     }
     symbolic = any(
         isinstance(weight, (fmpq_poly, fmpq_mpoly))
         for pair in literal_weights.values()
         for weight in pair
     )
-    cnf = tuple(clauses) + tuple(evidence_unit_clauses) + tuple(order_clauses)
+    cnf = (
+        tuple(formula_clauses)
+        + tuple(cardinality_clauses)
+        + tuple(evidence_unit_clauses)
+        + tuple(order_clauses)
+    )
+    logger.info(
+        "Direct propositional grounding: domain=%d atoms=%d formula_clauses=%d "
+        "cardinality_clauses=%d evidence_clauses=%d order_clauses=%d",
+        len(domain),
+        len(atom_to_id),
+        len(formula_clauses),
+        len(cardinality_clauses),
+        len(evidence_unit_clauses),
+        len(order_clauses),
+    )
     return GroundCNFInput(
-        algo=None,
+        algo=AlgoName.PROPOSITIONAL,
         options=options,
-        arithmetic=reduced.arithmetic,
+        arithmetic=arithmetic,
         cnf=cnf,
         literal_weights=literal_weights,
         evidence_unit_clauses=tuple(evidence_unit_clauses),
+        cardinality_clauses=tuple(cardinality_clauses),
         domain_size=len(domain),
         domain=domain,
-        atom_to_id=dict(atom_to_id),
-        id_to_predicate=dict(id_to_predicate),
-        clauses=tuple(clauses),
+        atom_to_id=atom_to_id,
+        id_to_predicate=id_to_predicate,
+        clauses=tuple(formula_clauses),
         order_unit_clauses=tuple(order_clauses),
         linear_order_encoding=encoding,
         symbolic=symbolic,
@@ -143,12 +184,106 @@ def build_input(
     )
 
 
-def _literal_predicate(literal: object) -> object:
-    return literal.atom.predicate
+def _ground_evidence(
+    problem: Problem,
+    domain: tuple[Constant, ...],
+    ensure_atom,
+) -> list[frozenset[int]]:
+    literals = [
+        *(item.to_ground_literal() for item in problem.evidence.unary.literals),
+        *(item.to_ground_literal() for item in problem.evidence.binary.literals),
+    ]
+    domain_set = set(domain)
+    for literal in literals:
+        outside = [term for term in literal.atom.terms if term not in domain_set]
+        if outside:
+            raise ValueError(
+                "Evidence constants must belong to the problem domain: "
+                + ", ".join(map(str, outside))
+            )
+    predicates = {literal.atom.predicate for literal in literals}
+    for predicate in sorted(predicates, key=lambda item: (item.name, item.arity)):
+        for arguments in product(domain, repeat=predicate.arity):
+            ensure_atom(predicate(*arguments))
+    clauses = []
+    for literal in sorted(
+        literals,
+        key=lambda item: (
+            str(item.atom.predicate),
+            tuple(str(term) for term in item.atom.terms),
+            item.positive,
+        ),
+    ):
+        variable = ensure_atom(literal.atom)
+        clauses.append(frozenset((variable if literal.positive else -variable,)))
+    return clauses
 
 
-def _literal_terms(literal: object) -> tuple[object, ...]:
-    return tuple(literal.atom.terms)
+def _ground_predicate_universe(
+    predicates: set[object],
+    domain: tuple[Constant, ...],
+    ensure_atom,
+) -> None:
+    """Allocate every relation entry belonging to the source vocabulary."""
+
+    for predicate in sorted(
+        predicates,
+        key=lambda item: (str(item), getattr(item, "arity", -1)),
+    ):
+        arity = getattr(predicate, "arity", None)
+        if not isinstance(arity, int):
+            continue
+        for arguments in product(domain, repeat=arity):
+            ensure_atom(predicate(*arguments))
+
+
+def _ground_cardinality_constraints(
+    problem: Problem,
+    domain: tuple[Constant, ...],
+    ensure_atom,
+    at_most,
+    exactly,
+    at_least,
+) -> list[frozenset[int]]:
+    clauses: list[frozenset[int]] = []
+    builders = {
+        Comparator.LE: at_most,
+        Comparator.EQ: exactly,
+        Comparator.GE: at_least,
+    }
+    for constraint in problem.cardinality_constraints.constraints:
+        coefficients: defaultdict[object, int] = defaultdict(int)
+        for term in constraint.terms:
+            coefficients[term.predicate] += term.coefficient
+        coefficients = defaultdict(
+            int,
+            {
+                predicate: coefficient
+                for predicate, coefficient in coefficients.items()
+                if coefficient
+            },
+        )
+        if (
+            len(coefficients) != 1
+            or next(iter(coefficients.values()), None) != 1
+            or constraint.comparator not in builders
+        ):
+            raise UnsupportedFeatureError(
+                "direct propositional grounding currently supports only "
+                "|P| <= k, |P| = k, and |P| >= k global cardinality constraints"
+            )
+        predicate = next(iter(coefficients))
+        arity = getattr(predicate, "arity", None)
+        if not isinstance(arity, int):
+            raise UnsupportedFeatureError(
+                "direct propositional cardinality grounding requires a typed predicate"
+            )
+        literals = tuple(
+            ensure_atom(predicate(*arguments))
+            for arguments in product(domain, repeat=arity)
+        )
+        clauses.extend(builders[constraint.comparator](literals, constraint.rhs))
+    return clauses
 
 
 __all__ = ["GroundCNFInput", "build_input"]
