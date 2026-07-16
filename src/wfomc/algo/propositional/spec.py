@@ -10,7 +10,6 @@ from wfomc.algo.core import (
     AlgoOptions,
     AlgoSpec,
     EvidenceStrategy,
-    ExistentialStrategy,
     PreparedBranch,
     option_resolver,
 )
@@ -28,8 +27,6 @@ _BASE_RESOLVE_OPTIONS = option_resolver(
     algo=AlgoName.PROPOSITIONAL,
     default_unary_evidence=EvidenceStrategy.GROUND_UNITS,
     supported_unary_evidence=(EvidenceStrategy.GROUND_UNITS,),
-    default_existential_strategy=ExistentialStrategy.GROUND,
-    supported_existential_strategies=(ExistentialStrategy.GROUND,),
     supports_linear_order=True,
     supports_predk_or_circular=True,
     supports_mod_counting=True,

@@ -6,7 +6,6 @@ from wfomc.algo import (
     AlgoMaturity,
     AlgoName,
     AlgoOptions,
-    ExistentialStrategy,
     LinearOrderEncoding,
     algo_spec,
 )
@@ -171,7 +170,7 @@ def test_compile_problem_materializes_propositional_input_without_decoder():
     assert artifacts.reduced_problem is not None
     assert artifacts.reduced_problem.expect_single().problem is problem
     assert artifacts.algo_options is not None
-    assert artifacts.algo_options.existential_strategy is ExistentialStrategy.GROUND
+    assert artifacts.algo_options.existential_strategy is None
 
 
 def test_compile_propositional_grounds_source_counting_without_reduction():
@@ -215,7 +214,7 @@ domain = 2
     assert isinstance(artifacts.algo_input, GroundCNFInput)
     assert artifacts.algo_input.algo is AlgoName.PROPOSITIONAL_REDUCED
     assert artifacts.algo_options is not None
-    assert artifacts.algo_options.existential_strategy is ExistentialStrategy.SKOLEM
+    assert artifacts.algo_options.existential_strategy is None
     assert artifacts.algo_input.cnf
 
 

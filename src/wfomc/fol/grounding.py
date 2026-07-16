@@ -36,7 +36,9 @@ from wfomc.fol.rewrite import simplify_boolean, substitute
 class LinearOrderEncoding(Enum):
     """Choice of how to encode order predicates in the propositional counter."""
 
+    # Fix one canonical order and restore all labeled orders with an n! factor.
     PIN = "pin"
+    # Emit explicit finite-domain order axioms and count every order directly.
     AXIOMS = "axioms"
 
     def __str__(self) -> str:

@@ -17,7 +17,11 @@ if TYPE_CHECKING:
 
 
 class CellConfigCoefficientBasis(Enum):
+    """Normalization basis for cell/evidence configuration coefficients."""
+
+    # Store the complete assignment coefficient for the configuration.
     ABSOLUTE = "absolute"
+    # Store only the factor remaining after the cell multinomial is removed.
     RELATIVE_TO_CELL_MULTINOMIAL = "relative-to-cell-multinomial"
 
 

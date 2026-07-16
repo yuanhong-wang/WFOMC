@@ -54,7 +54,8 @@
 3. Compile source weights into a branch arithmetic context without internal reduction markers.
 4. Ground the source sentence once, allocate all predicate/evidence/cardinality atoms, and append direct clauses.
 5. Replace the propositional reduction chain with one source branch and `identity_decoder`.
-6. Add a `ground` existential strategy and binary-evidence capability declaration for the direct algorithm.
+6. Keep direct quantifier grounding as algorithm-internal behavior, without
+   exposing it as an existential strategy; declare binary-evidence support.
 7. Run engine compile and option-resolution tests.
 
 ### Task 4: Support scoped global cardinality constraints

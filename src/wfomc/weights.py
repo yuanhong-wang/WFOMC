@@ -53,8 +53,11 @@ CompiledWeightMapping: TypeAlias = dict[
 class WeightOptions:
     """User-facing weight-precision choices."""
 
+    # Use exact rational arithmetic or rounded numerical arithmetic.
     precision: Literal["exact", "round"] = "exact"
+    # Scalar/polynomial backend used when precision is rounded.
     rounded_backend: Literal["float", "arb"] = "arb"
+    # Polynomial backend used for exact symbolic weights and marker variables.
     exact_symbolic_backend: Literal["fmpq_mpoly", "fmpq_poly"] = "fmpq_mpoly"
 
     def __post_init__(self) -> None:

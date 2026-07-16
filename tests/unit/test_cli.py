@@ -25,6 +25,28 @@ def test_wfomc_help_smoke():
     assert "bounded-treewidth" not in completed.stdout
 
 
+def test_cli_help_groups_options_by_algorithm_scope():
+    help_text = build_parser().format_help()
+
+    common = help_text.split("Common options:", 1)[1].split(
+        "Incremental3-only options:", 1
+    )[0]
+    incremental3 = help_text.split("Incremental3-only options:", 1)[1].split(
+        "Propositional-only options:", 1
+    )[0]
+    propositional = help_text.split("Propositional-only options:", 1)[1]
+
+    assert "--input" in common
+    assert "--algo" in common
+    assert "--evidence-strategy" in common
+    assert "--exact-symbolic-backend" in common
+    assert "--existential-strategy" not in common
+    assert "--linear-order-encoding" not in common
+    assert "--existential-strategy" in incremental3
+    assert "--linear-order-encoding" in propositional
+    assert "--ganak-path" in propositional
+
+
 def test_wfomc_requires_input_for_execution():
     completed = subprocess.run(
         ["uv", "run", "wfomc"],
@@ -80,6 +102,78 @@ def test_cli_accepts_incremental3_existential_strategy():
     )
 
     assert args.existential_strategy == "skolem"
+
+
+def test_cli_exposes_only_incremental3_existential_strategies():
+    parser = build_parser()
+    strategy_action = next(
+        action for action in parser._actions if action.dest == "existential_strategy"
+    )
+
+    assert strategy_action.choices == ("counting", "skolem")
+    assert "only valid for incremental3" in strategy_action.help
+
+
+def test_cli_accepts_propositional_options():
+    args = build_parser().parse_args(
+        [
+            "--input",
+            "models/linear_order/head-middle-tail.wfomcs",
+            "--algo",
+            "propositional",
+            "--evidence-strategy",
+            "ground-units",
+            "--linear-order-encoding",
+            "axioms",
+            "--ganak-path",
+            "/opt/ganak",
+        ]
+    )
+
+    assert args.evidence_strategy == "ground-units"
+    assert args.linear_order_encoding == "axioms"
+    assert args.ganak_path == "/opt/ganak"
+
+
+def test_cli_run_maps_propositional_options_to_engine_contracts(monkeypatch):
+    import wfomc.parser as parser_module
+    from wfomc.algo import EvidenceStrategy, LinearOrderEncoding
+    from wfomc.result import WFOMCResult
+
+    captured = {}
+    problem = object()
+    monkeypatch.setattr(parser_module, "parse_problem_file", lambda _path: problem)
+
+    def capture_solve(actual_problem, **kwargs):
+        captured["problem"] = actual_problem
+        captured.update(kwargs)
+        return WFOMCResult(1)
+
+    monkeypatch.setattr(cli, "solve", capture_solve)
+
+    result = cli.run(
+        "unused.wfomcs",
+        "propositional",
+        evidence_strategy="ground-units",
+        linear_order_encoding="axioms",
+        ganak_path="/opt/ganak",
+    )
+
+    assert result.result == 1
+    assert captured["problem"] is problem
+    assert captured["options"].evidence_strategy is EvidenceStrategy.GROUND_UNITS
+    assert (
+        captured["options"].linear_order_encoding is LinearOrderEncoding.AXIOMS
+    )
+    assert captured["runtime"].propositional_ganak_path == "/opt/ganak"
+
+
+@pytest.mark.parametrize("option", ("linear_order_encoding", "ganak_path"))
+def test_cli_rejects_propositional_only_options_for_other_algorithms(option: str):
+    kwargs = {option: "axioms" if option == "linear_order_encoding" else "/opt/ganak"}
+
+    with pytest.raises(ValueError, match="only valid for propositional"):
+        cli.run("unused.wfomcs", "fastv2", **kwargs)
 
 
 def test_cli_accepts_exact_symbolic_backend_override():

@@ -11,10 +11,13 @@ from wfomc.algo import (
     AlgoMaturity,
     AlgoName,
     AlgoOptions,
+    EvidenceStrategy,
     ExistentialStrategy,
+    LinearOrderEncoding,
     algo_spec,
 )
 from wfomc.api import solve
+from wfomc.engine.runtime import RuntimeOptions
 from wfomc.errors import WFOMCError
 from wfomc.result import WFOMCResult
 from wfomc.weights import WeightOptions
@@ -22,13 +25,31 @@ from wfomc.weights import WeightOptions
 
 @dataclass(frozen=True)
 class CliResult:
+    """Structured result returned by the programmatic CLI facade."""
+
+    # Exact public result produced by the selected algorithm.
     result: WFOMCResult
+
+
+_CLI_EVIDENCE_STRATEGIES = (
+    EvidenceStrategy.CCS,
+    EvidenceStrategy.LIFTED_PROFILES,
+    EvidenceStrategy.GROUND_UNITS,
+)
+_PROPOSITIONAL_ALGOS = (
+    AlgoName.PROPOSITIONAL,
+    AlgoName.PROPOSITIONAL_REDUCED,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Exact WFOMC solver.")
-    parser.add_argument("--input", "-i", help="Input model path.")
-    parser.add_argument(
+    common = parser.add_argument_group("Common options")
+    incremental3 = parser.add_argument_group("Incremental3-only options")
+    propositional = parser.add_argument_group("Propositional-only options")
+
+    common.add_argument("--input", "-i", help="Input model path.")
+    common.add_argument(
         "--algo",
         default=AlgoName.STANDARD.value,
         choices=tuple(
@@ -38,28 +59,53 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         help="WFOMC algorithm name.",
     )
-    parser.add_argument(
+    common.add_argument(
         "-v",
         "--verbose",
         action="count",
         default=0,
         help="Increase diagnostic logging verbosity; repeat for DEBUG output.",
     )
-    parser.add_argument(
-        "--existential-strategy",
-        choices=tuple(strategy.value for strategy in ExistentialStrategy),
+    common.add_argument(
+        "-e",
+        "--evidence-strategy",
+        choices=tuple(strategy.value for strategy in _CLI_EVIDENCE_STRATEGIES),
         help=(
-            "Existential reduction strategy. incremental3 defaults to counting; "
-            "other algorithms use skolem."
+            "Unary-evidence preparation strategy. Supported choices depend "
+            "on the selected algorithm; omit it to use the algorithm default."
         ),
     )
-    parser.add_argument(
+    common.add_argument(
         "--exact-symbolic-backend",
         choices=("fmpq_mpoly", "fmpq_poly"),
         default="fmpq_mpoly",
         help=(
             "Exact symbolic arithmetic backend. fmpq_mpoly is the default; "
             "fmpq_poly requires exactly one symbolic variable."
+        ),
+    )
+    incremental3.add_argument(
+        "--existential-strategy",
+        choices=tuple(strategy.value for strategy in ExistentialStrategy),
+        help=(
+            "Incremental3 existential reduction strategy; only valid for "
+            "incremental3, which defaults to counting."
+        ),
+    )
+    propositional.add_argument(
+        "-l",
+        "--linear-order-encoding",
+        choices=tuple(encoding.value for encoding in LinearOrderEncoding),
+        help=(
+            "Propositional order encoding. Only valid for propositional and "
+            "propositional-reduced; defaults to pin when symmetry permits."
+        ),
+    )
+    propositional.add_argument(
+        "--ganak-path",
+        help=(
+            "Explicit Ganak executable path. Only valid for propositional "
+            "and propositional-reduced."
         ),
     )
     return parser
@@ -69,13 +115,37 @@ def run(
     input_path: str | Path,
     algo: AlgoName | str,
     *,
+    evidence_strategy: EvidenceStrategy | str | None = None,
     existential_strategy: ExistentialStrategy | str | None = None,
+    linear_order_encoding: LinearOrderEncoding | str | None = None,
+    ganak_path: str | None = None,
     exact_symbolic_backend: str = "fmpq_mpoly",
 ) -> CliResult:
+    selected_algo = algo if isinstance(algo, AlgoName) else AlgoName(algo)
+    if (
+        linear_order_encoding is not None or ganak_path is not None
+    ) and selected_algo not in _PROPOSITIONAL_ALGOS:
+        invalid_options = []
+        if linear_order_encoding is not None:
+            invalid_options.append("--linear-order-encoding")
+        if ganak_path is not None:
+            invalid_options.append("--ganak-path")
+        verb = "is" if len(invalid_options) == 1 else "are"
+        raise ValueError(
+            f"{' and '.join(invalid_options)} {verb} only valid for "
+            "propositional algorithms"
+        )
+
     from wfomc.parser import parse_problem_file
 
-    selected_algo = algo if isinstance(algo, AlgoName) else AlgoName(algo)
     parsed_problem = parse_problem_file(input_path)
+    selected_evidence_strategy = (
+        evidence_strategy
+        if isinstance(evidence_strategy, EvidenceStrategy)
+        else EvidenceStrategy(evidence_strategy)
+        if evidence_strategy is not None
+        else None
+    )
     selected_existential_strategy = (
         existential_strategy
         if isinstance(existential_strategy, ExistentialStrategy)
@@ -83,15 +153,25 @@ def run(
         if existential_strategy is not None
         else None
     )
+    selected_linear_order_encoding = (
+        linear_order_encoding
+        if isinstance(linear_order_encoding, LinearOrderEncoding)
+        else LinearOrderEncoding(linear_order_encoding)
+        if linear_order_encoding is not None
+        else None
+    )
     result = solve(
         parsed_problem,
         algo=selected_algo,
         options=AlgoOptions(
+            evidence_strategy=selected_evidence_strategy,
             existential_strategy=selected_existential_strategy,
+            linear_order_encoding=selected_linear_order_encoding,
             weight_options=WeightOptions(
                 exact_symbolic_backend=exact_symbolic_backend,
             ),
         ),
+        runtime=RuntimeOptions(propositional_ganak_path=ganak_path),
     )
     return CliResult(result=result)
 
@@ -107,7 +187,10 @@ def main(argv: list[str] | None = None) -> int:
         cli_result = run(
             args.input,
             args.algo,
+            evidence_strategy=args.evidence_strategy,
             existential_strategy=args.existential_strategy,
+            linear_order_encoding=args.linear_order_encoding,
+            ganak_path=args.ganak_path,
             exact_symbolic_backend=args.exact_symbolic_backend,
         )
     except (WFOMCError, OSError, ValueError) as exc:

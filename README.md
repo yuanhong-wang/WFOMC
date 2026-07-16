@@ -38,15 +38,20 @@ where
 `tail-signature` is an experimental Python-API adapter requiring an external
 engine factory, so it is intentionally hidden from CLI choices.
 
-The CLI defaults to `standard`. Advanced evidence, order-encoding, arithmetic,
-and external-engine options are currently available through the Python API.
-Use `-v` for phase summaries and timings, or `-vv` for bounded DEBUG details.
-The Python library emits standard `wfomc.*` logging records without configuring
-the application's handlers.
+The CLI defaults to `standard`. Use `-e/--evidence-strategy` to override the
+selected algorithm's unary-evidence preparation, and
+`--exact-symbolic-backend` to choose the exact polynomial backend. Use `-v` for
+phase summaries and timings, or `-vv` for bounded DEBUG details. The Python
+library emits standard `wfomc.*` logging records without configuring the
+application's handlers.
+
+`--existential-strategy {counting,skolem}` is an `incremental3`-only option.
+Other lifted algorithms always apply their fixed weighted-Skolem reduction,
+while `propositional` directly expands source quantifiers over the finite domain.
 
 Unary evidence is represented once as a `UnaryEvidencePartition` and compiled
-into a `CellEvidenceAllocation` for each cell graph. With `auto`, the current
-implementation mapping is:
+into a `CellEvidenceAllocation` for each cell graph. When the CLI/API override
+is omitted, the current algorithm defaults are:
 
 | Algorithm | Unary evidence strategy |
 | --- | --- |
@@ -218,7 +223,10 @@ Both propositional modes hand an explicit weighted CNF to [ganak](https://github
 
 The direct path supports arbitrary Boolean placement of ordinary and counting quantifiers, ground unary and binary evidence, and simple global constraints of the form `|P| <= k`, `|P| = k`, or `|P| >= k`. The reduced path inherits the reduction pipeline's narrower feature limits: for example, binary evidence and counting sections that cannot be lowered to UFO² plus cardinality constraints are rejected.
 
-The order encoding can be selected through `AlgoOptions(linear_order_encoding=...)` in the Python API:
+The order encoding can be selected with
+`--linear-order-encoding {pin,axioms}` (`-l`) in the CLI or
+`AlgoOptions(linear_order_encoding=...)` in the Python API. The option is valid
+only for `propositional` and `propositional-reduced`:
 
 | Setting | Mechanism | Multiplier | When to use |
 |---|---|---|---|
@@ -233,7 +241,11 @@ ganak is invoked in two modes: exact rational weighted counting (`--mode 1`) whe
 uv run wfomc-install-ganak
 ```
 
-The runtime lookup order is `RuntimeOptions.propositional_ganak_path`, the `GANAK` environment variable, then `ganak` on `PATH`. Lifted algorithms also reuse this Ganak installation after their bounded PySAT pair-factor fast path; if Ganak is unavailable or times out, they automatically use the installed PySDD backend instead.
+For the two propositional modes, the runtime lookup order is CLI `--ganak-path`
+/ `RuntimeOptions.propositional_ganak_path`, the `GANAK` environment variable,
+then `ganak` on `PATH`. Lifted algorithms discover Ganak through `GANAK` or
+`PATH` for their pair-factor backend; if Ganak is unavailable or times out,
+they automatically use the installed PySDD backend instead.
 
 ## References
 

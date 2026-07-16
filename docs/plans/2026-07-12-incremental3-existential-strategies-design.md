@@ -14,8 +14,10 @@ one of two exact reductions:
   algorithms. Every existential section receives a fresh predicate with
   weights `(1, -1)`.
 
-Other algorithms support only `skolem` and reject an explicit `counting`
-request. This prevents a shared option from being silently ignored.
+The option is configurable only for `incremental3`. Other lifted algorithms
+apply their fixed weighted-Skolem reduction internally and reject both explicit
+strategy values; direct propositional grounding does not consult this option.
+This prevents an incremental3-specific knob from leaking into other algorithms.
 
 ## Data flow
 

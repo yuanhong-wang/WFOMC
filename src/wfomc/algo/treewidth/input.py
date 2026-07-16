@@ -9,7 +9,11 @@ from wfomc.algo.core import AlgoInput
 
 
 class FactorGraphKind(Enum):
+    """Variable granularity used by a factor-graph representation."""
+
+    # Variables represent lifted cells or cell-level signatures.
     LIFTED_CELL = "lifted-cell"
+    # Variables represent individual ground atoms or assignments.
     GROUND = "ground"
 
     def __str__(self) -> str:

@@ -40,11 +40,17 @@ if TYPE_CHECKING:
 class EvidenceStrategy(Enum):
     """Algorithm strategy for consuming unary evidence."""
 
+    # No evidence encoding is needed because the source problem has no evidence.
     NONE = "none"
+    # Lower evidence profiles to cardinality constraints before compilation.
     CCS = "ccs"
+    # Preserve profile capacities for lifted configuration-coefficient counting.
     LIFTED_PROFILES = "lifted-profiles"
+    # Emit one propositional unit clause for each ground evidence literal.
     GROUND_UNITS = "ground-units"
+    # Reserve evidence capacities for a profile-aware dynamic program.
     PROFILE_CAPACITY_DP = "profile-capacity-dp"
+    # Materialize evidence as factors in a tree-decomposition backend.
     TREE_DECOMPOSITION_FACTORS = "tree-decomposition-factors"
 
     def __str__(self) -> str:
@@ -52,11 +58,12 @@ class EvidenceStrategy(Enum):
 
 
 class ExistentialStrategy(Enum):
-    """Reduction used for existentially quantified normal-form sections."""
+    """Incremental3 strategy for existential normal-form sections."""
 
+    # Convert existential sections to native count-at-least-one constraints.
     COUNTING = "counting"
+    # Eliminate existential sections with exact weighted Skolemization.
     SKOLEM = "skolem"
-    GROUND = "ground"
 
     def __str__(self) -> str:
         return self.value
@@ -88,15 +95,25 @@ class SolveFn(Protocol):
 class AlgoName(Enum):
     """Stable public names for WFOMC algorithms."""
 
+    # Baseline lifted FO2 WFOMC algorithm.
     STANDARD = "standard"
+    # Cell-graph fast WFOMC algorithm.
     FAST = "fast"
+    # Optimized fast algorithm with modified cell symmetry.
     FASTV2 = "fastv2"
+    # Incremental lifted algorithm for ordered structures.
     INCREMENTAL = "incremental"
+    # Incremental algorithm with native counting-quantifier state.
     INCREMENTAL3 = "incremental3"
+    # Recursive lifted algorithm for ordered structures.
     RECURSIVE = "recursive"
+    # Reduction-independent source grounding followed by Ganak counting.
     PROPOSITIONAL = "propositional"
+    # Logical reduction followed by quantifier-free grounding and Ganak.
     PROPOSITIONAL_REDUCED = "propositional-reduced"
+    # Adapter for an external tail-signature engine.
     TAIL_SIGNATURE = "tail-signature"
+    # Extension point for a future bounded-treewidth solver.
     BOUNDED_TREEWIDTH = "bounded-treewidth"
 
     def __str__(self) -> str:
@@ -106,9 +123,13 @@ class AlgoName(Enum):
 class AlgoMaturity(Enum):
     """User-facing readiness of a registered algorithm."""
 
+    # Supported for normal production use and exposed by the CLI.
     STABLE = "stable"
+    # Runnable and CLI-visible, but still subject to documented limitations.
     BETA = "beta"
+    # Available through the Python API for evaluation, but hidden from the CLI.
     EXPERIMENTAL = "experimental"
+    # Registered only as an extension point and not currently runnable.
     UNAVAILABLE = "unavailable"
 
 
@@ -116,9 +137,13 @@ class AlgoMaturity(Enum):
 class AlgoOptions:
     """User-selectable strategy knobs for algorithm preparation and solving."""
 
+    # Unary-evidence preparation strategy, or None for the algorithm default.
     evidence_strategy: EvidenceStrategy | None = None
+    # Incremental3-only existential reduction; None selects its counting default.
     existential_strategy: ExistentialStrategy | None = None
+    # Propositional order encoding; None lets the resolver choose a sound default.
     linear_order_encoding: LinearOrderEncoding | None = None
+    # Numeric precision and symbolic-arithmetic backend selection.
     weight_options: WeightOptions = field(default_factory=WeightOptions)
 
 
@@ -126,18 +151,29 @@ class AlgoOptions:
 class AlgoSpec:
     """Small engine-facing contract for one algorithm."""
 
+    # Public registry key used by the Python API and CLI.
     name: AlgoName
+    # Resolve defaults and reject unsupported source features or option values.
     resolve_options: Callable[["FeatureSet", AlgoOptions | None], AlgoOptions]
+    # Lower one source problem into one or more independently solvable branches.
     prepare: Callable[["Problem", AlgoOptions], tuple["PreparedBranch", ...]]
+    # Evaluate one algorithm-owned input and return its undecoded branch result.
     solve: SolveFn
+    # Readiness level controlling whether the algorithm appears in the CLI.
     maturity: AlgoMaturity = AlgoMaturity.STABLE
+    # Human-readable external programs or factories required at runtime.
     external_requirements: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class AlgoInput:
+    """Base fields shared by every materialized algorithm input."""
+
+    # Algorithm that owns this input; None is reserved for generic adapters.
     algo: AlgoName | None
+    # Fully resolved options used to prepare this input.
     options: AlgoOptions
+    # Branch-local numeric domain used for weights, solving, and decoding.
     arithmetic: ArithmeticContext
 
     def include_order_factorial(self) -> bool:
@@ -148,8 +184,13 @@ class AlgoInput:
 
 @dataclass(frozen=True)
 class PreparedBranch:
+    """One reduced/source problem paired with solver input and result decoder."""
+
+    # Problem stage whose reductions are reversed by decoder.
     problem: "Problem | ReducedProblem"
+    # Concrete input consumed by the selected algorithm's solve function.
     algo_input: AlgoInput
+    # Compose reduction corrections and map the raw branch result toward output.
     decoder: Callable[..., object]
 
 
@@ -158,9 +199,9 @@ def option_resolver(
     algo: AlgoName,
     default_unary_evidence: EvidenceStrategy | DefaultEvidenceStrategy,
     supported_unary_evidence: tuple[EvidenceStrategy, ...] = (),
-    default_existential_strategy: ExistentialStrategy = ExistentialStrategy.SKOLEM,
-    supported_existential_strategies: tuple[ExistentialStrategy, ...] = (
-        ExistentialStrategy.SKOLEM,
+    default_existential_strategy: ExistentialStrategy | None = None,
+    supported_existential_strategies: tuple[ExistentialStrategy | None, ...] = (
+        None,
     ),
     supports_linear_order: bool = False,
     supports_predk_or_circular: bool = False,
@@ -189,7 +230,9 @@ def option_resolver(
         resolved = AlgoOptions(
             evidence_strategy=resolved_evidence_strategy,
             existential_strategy=(
-                options.existential_strategy or default_existential_strategy
+                options.existential_strategy
+                if options.existential_strategy is not None
+                else default_existential_strategy
             ),
             linear_order_encoding=resolved_linear_order_encoding,
             weight_options=options.weight_options,
@@ -346,7 +389,7 @@ def _validate_supported_features(
     features: FeatureSet,
     options: AlgoOptions,
     supported_unary_evidence: SupportedEvidence,
-    supported_existential_strategies: tuple[ExistentialStrategy, ...],
+    supported_existential_strategies: tuple[ExistentialStrategy | None, ...],
     supports_linear_order: bool,
     supports_predk_or_circular: bool,
     supports_mod_counting: bool,
@@ -378,7 +421,7 @@ def _rejection_reason(
     evidence_strategy: EvidenceStrategy,
     supported_unary_evidence: SupportedEvidence,
     existential_strategy: ExistentialStrategy | None,
-    supported_existential_strategies: tuple[ExistentialStrategy, ...],
+    supported_existential_strategies: tuple[ExistentialStrategy | None, ...],
     supports_linear_order: bool,
     supports_predk_or_circular: bool,
     supports_mod_counting: bool,
@@ -386,7 +429,10 @@ def _rejection_reason(
 ) -> str | None:
     if existential_strategy not in supported_existential_strategies:
         selected = existential_strategy.value if existential_strategy else "none"
-        return f"{algo.value} does not support {selected} existential strategy"
+        return (
+            f"existential strategy is only configurable for incremental3; "
+            f"got {selected!r} for {algo.value}"
+        )
     if features.has_binary_evidence and not supports_binary_evidence:
         return (
             f"{algo.value} does not support ground binary evidence; "

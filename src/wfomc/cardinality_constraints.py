@@ -8,12 +8,21 @@ from enum import Enum
 
 
 class Comparator(Enum):
+    """Comparison operator for counting quantifiers and cardinality constraints."""
+
+    # Equality.
     EQ = "="
+    # Inequality.
     NE = "!="
+    # Strict upper bound.
     LT = "<"
+    # Inclusive upper bound.
     LE = "<="
+    # Strict lower bound.
     GT = ">"
+    # Inclusive lower bound.
     GE = ">="
+    # Congruence modulo a positive modulus.
     MOD = "mod"
 
     def __str__(self) -> str:

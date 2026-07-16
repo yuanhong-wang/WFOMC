@@ -133,7 +133,26 @@ domain = 2
     )
 
 
-def test_other_algorithms_reject_counting_existential_strategy():
+@pytest.mark.parametrize(
+    "algo",
+    (
+        AlgoName.STANDARD,
+        AlgoName.FAST,
+        AlgoName.FASTV2,
+        AlgoName.INCREMENTAL,
+        AlgoName.RECURSIVE,
+        AlgoName.PROPOSITIONAL,
+        AlgoName.PROPOSITIONAL_REDUCED,
+    ),
+)
+@pytest.mark.parametrize(
+    "strategy",
+    (ExistentialStrategy.COUNTING, ExistentialStrategy.SKOLEM),
+)
+def test_existential_strategy_is_rejected_outside_incremental3(
+    algo: AlgoName,
+    strategy: ExistentialStrategy,
+):
     problem = parse_problem(
         r"""
 \forall X: (\exists Y: (R(X,Y)))
@@ -141,13 +160,14 @@ domain = 2
 """
     )
 
-    with pytest.raises(UnsupportedFeatureError, match="existential strategy"):
-        solve(
+    with pytest.raises(
+        UnsupportedFeatureError,
+        match="only configurable for incremental3",
+    ):
+        compile_problem(
             problem,
-            algo=AlgoName.FASTV2,
-            options=AlgoOptions(
-                existential_strategy=ExistentialStrategy.COUNTING,
-            ),
+            algo=algo,
+            options=AlgoOptions(existential_strategy=strategy),
         )
 
 

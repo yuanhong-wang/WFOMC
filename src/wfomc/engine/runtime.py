@@ -12,15 +12,25 @@ ValueConverter = Callable[[object], object]
 
 @dataclass(frozen=True)
 class RuntimeOptions:
+    """External runtime dependencies supplied for one engine context."""
+
+    # Factory used to construct the optional external tail-signature engine.
     tail_signature_engine_factory: EngineFactory | None = None
+    # Converter from external tail-signature values to local arithmetic values.
     tail_signature_value_converter: ValueConverter | None = None
+    # Explicit Ganak executable; None uses GANAK or PATH discovery.
     propositional_ganak_path: str | None = None
 
 
 @dataclass(frozen=True)
 class RuntimeCacheStats:
+    """Immutable per-bucket cache counters and current sizes."""
+
+    # Number of successful cache lookups by bucket name.
     hits: Mapping[str, int]
+    # Number of values built after a missing cache lookup by bucket name.
     misses: Mapping[str, int]
+    # Current number of entries stored in each cache bucket.
     sizes: Mapping[str, int]
 
 
@@ -35,8 +45,11 @@ class RuntimeCache:
     # Cache buckets intentionally use dict[object, object] because keys and
     # values span heterogeneous types (dataclasses, enums, FLINT values,
     # formulas, domain constants) at runtime boundaries.
+    # Source feature-analysis results keyed independently of domain size.
     features: dict[object, object] = field(default_factory=dict)
+    # Prepared algorithm inputs keyed by problem, algorithm, and resolved options.
     algo_inputs: dict[object, object] = field(default_factory=dict)
+    # Fully decoded WFOMC results keyed by problem, algorithm, and options.
     results: dict[object, object] = field(default_factory=dict)
     _hits: dict[str, int] = field(default_factory=dict)
     _misses: dict[str, int] = field(default_factory=dict)
@@ -97,7 +110,9 @@ class RuntimeCache:
 class RuntimeContext:
     """Runtime state passed through engine, input builders, and algorithms."""
 
+    # External dependencies and executable overrides for this runtime.
     options: RuntimeOptions = field(default_factory=RuntimeOptions)
+    # Instance-scoped cache reused by calls sharing this context.
     cache: RuntimeCache = field(default_factory=RuntimeCache)
 
     @classmethod

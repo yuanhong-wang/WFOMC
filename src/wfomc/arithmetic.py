@@ -53,14 +53,23 @@ ArithmeticValue: TypeAlias = (
 class ArithmeticBackend(Enum):
     """Numeric domain used by one prepared branch."""
 
+    # Exact integer scalars.
     FMPZ = "fmpz"
+    # Exact rational scalars.
     FMPQ = "fmpq"
+    # Native double-precision floating-point scalars.
     FLOAT = "float"
+    # Arbitrary-precision real-ball scalars.
     ARB = "arb"
+    # Exact univariate polynomials with integer coefficients.
     FMPZ_POLY = "fmpz_poly"
+    # Exact univariate polynomials with rational coefficients.
     FMPQ_POLY = "fmpq_poly"
+    # Univariate polynomials with arbitrary-precision ball coefficients.
     ARB_POLY = "arb_poly"
+    # Exact multivariate polynomials with integer coefficients.
     FMPZ_MPOLY = "fmpz_mpoly"
+    # Exact multivariate polynomials with rational coefficients.
     FMPQ_MPOLY = "fmpq_mpoly"
 
     def __str__(self) -> str:
