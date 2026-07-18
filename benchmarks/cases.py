@@ -3,8 +3,8 @@
 This module migrates only the problem families and domain-size grids from the
 historical benchmark scripts.  It deliberately contains no runner, baseline
 implementation, timing policy, or result-file handling.  Every case builds the
-current typed :class:`wfomc.Problem`, so benchmark runners can remain small and
-choose their own algorithms and measurement protocol.
+current typed :class:`wfomc.ProblemInstance`, so benchmark runners can remain
+small and choose their own algorithms and measurement protocol.
 
 Public interface:
 
@@ -31,8 +31,10 @@ from wfomc import (
     CardinalityConstraints,
     CardinalityTerm,
     Comparator,
+    Domain,
     LinearCardinalityConstraint,
     Problem,
+    ProblemInstance,
     parse_formula,
 )
 from wfomc.fol import Formula, context_for, predicates
@@ -41,7 +43,7 @@ from wfomc.fol import Formula, context_for, predicates
 Weight = tuple[int, int]
 FormulaDefinition = tuple[str, Mapping[str, Weight]]
 FormulaFactory = Callable[[], FormulaDefinition]
-ProblemBuilder = Callable[[int], Problem]
+ProblemBuilder = Callable[[int], ProblemInstance]
 ConstraintSpec = tuple[str, Comparator, int]
 UnaryBounds = tuple[tuple[Comparator, int], ...]
 
@@ -67,8 +69,8 @@ class BenchmarkCase:
     comparison_group: str | None = None
     _builder: ProblemBuilder = field(repr=False, compare=False)
 
-    def build_problem(self) -> Problem:
-        """Build a fresh typed problem for this case."""
+    def build_problem(self) -> ProblemInstance:
+        """Build a fresh typed problem/domain instance for this case."""
 
         return self._builder(self.domain_size)
 
@@ -293,7 +295,7 @@ def _typed_problem(
     domain_size: int,
     weights_by_name: Mapping[str, Weight] | None = None,
     constraint_specs: tuple[ConstraintSpec, ...] = (),
-) -> Problem:
+) -> ProblemInstance:
     if not isinstance(sentence, Formula):
         raise TypeError("benchmark formula parser did not return a Formula")
 
@@ -324,11 +326,13 @@ def _typed_problem(
             for name, comparator, rhs in constraint_specs
         )
     )
-    return Problem(
-        sentence=sentence,
-        domain=domain,
-        weights=weights,
-        cardinality_constraints=constraints,
+    return ProblemInstance(
+        Problem(
+            sentence=sentence,
+            weights=weights,
+            cardinality_constraints=constraints,
+        ),
+        Domain(domain),
     )
 
 
@@ -336,7 +340,7 @@ def _matrix_problem(
     domain_size: int,
     definition: FormulaFactory,
     constraint_factory: Callable[[int], tuple[ConstraintSpec, ...]] | None = None,
-) -> Problem:
+) -> ProblemInstance:
     matrix, weights = definition()
     matrix = _parser_variables(matrix)
     sentence = parse_formula(rf"\forall X: (\forall Y: ({matrix}))")
@@ -344,7 +348,7 @@ def _matrix_problem(
     return _typed_problem(sentence, domain_size, weights, constraint_specs)
 
 
-def _c2_three_regular_problem(domain_size: int) -> Problem:
+def _c2_three_regular_problem(domain_size: int) -> ProblemInstance:
     sentence = parse_formula(
         r"(\forall X: (~E(X,X))) & "
         r"(\forall X: (\forall Y: (E(X,Y) -> E(Y,X)))) & "
@@ -353,7 +357,7 @@ def _c2_three_regular_problem(domain_size: int) -> Problem:
     return _typed_problem(sentence, domain_size)
 
 
-def _c2_three_coloured_regular_problem(domain_size: int) -> Problem:
+def _c2_three_coloured_regular_problem(domain_size: int) -> ProblemInstance:
     colours = ["C1", "C2", "C3"]
     clauses = [
         "~E(x,x)",
@@ -372,7 +376,7 @@ def _c2_three_coloured_regular_problem(domain_size: int) -> Problem:
     )
 
 
-def _c2_directed_three_in_three_out_problem(domain_size: int) -> Problem:
+def _c2_directed_three_in_three_out_problem(domain_size: int) -> ProblemInstance:
     sentence = parse_formula(
         r"(\forall X: (~R(X,X))) & "
         r"(\forall X: (\exists_=3 Y: R(X,Y))) & "
@@ -381,7 +385,7 @@ def _c2_directed_three_in_three_out_problem(domain_size: int) -> Problem:
     return _typed_problem(sentence, domain_size)
 
 
-def _three_regular_four_coloured_problem(domain_size: int) -> Problem:
+def _three_regular_four_coloured_problem(domain_size: int) -> ProblemInstance:
     return _matrix_problem(
         domain_size,
         _three_regular_four_coloured_definition,
@@ -389,7 +393,7 @@ def _three_regular_four_coloured_problem(domain_size: int) -> Problem:
     )
 
 
-def _directed_three_regular_problem(domain_size: int) -> Problem:
+def _directed_three_regular_problem(domain_size: int) -> ProblemInstance:
     return _matrix_problem(
         domain_size,
         _directed_three_regular_definition,
@@ -433,7 +437,7 @@ def _unary_problem(
     variant: str,
     exact: Callable[[int], UnaryBounds],
     interval: Callable[[int], UnaryBounds],
-) -> Problem:
+) -> ProblemInstance:
     if variant == "unconstrained":
         constraint_factory = None
     elif variant == "exact":

@@ -6,11 +6,12 @@
 
 > 实施更新：本评审推动的第一轮简化已经落地。Binary evidence 与未贯通的
 > rounded arithmetic 现在 fail-fast；稳定 CLI 已修复；算法主链已收敛为
-> `prepare -> solve -> decode`；共享 cell-graph adapter 已删除，非 fast 算法
-> 消费 `CellGraphData` 或自己的派生表。Problem、ReducedProblem 和
-> CompiledProblem 的阶段边界也已落地，旧 NormalFormReductionView 已删除。
-> Evidence 也已收敛为 raw model、profile-capacity reduction artifact 和
-> cell allocation 三个阶段。详见 ADR-0007、ADR-0008、ADR-0013。
+> `compile -> input template -> instantiate -> solve -> decode`；共享
+> cell-graph adapter 已删除，算法消费 `CellGraphData` 或自己的派生表。
+> Problem、Domain、ReducedProblem、CompiledProblem 和 ProblemExecution 的
+> 阶段边界也已落地，旧 NormalFormReductionView 已删除。Evidence 也已收敛为
+> raw model、profile-capacity reduction artifact 和 cell allocation 三个阶段。
+> 详见 ADR-0013 和 ADR-0026。
 
 ## 1. 结论摘要
 
@@ -56,7 +57,7 @@ flowchart LR
     S --> X["decoder composition"]
     X --> O["WFOMCResult"]
     E <--> K["RuntimeContext + in-memory cache"]
-    S -. optional .-> G["Ganak / tail-signature external engine"]
+    S -. optional .-> G["Ganak external engine"]
 ```
 
 主流程由 `src/wfomc/engine/orchestration.py` 实现：
@@ -94,9 +95,11 @@ normal-form normalization 与 cell-graph 构造。
 
 `AlgoSpec` 把名称、option resolver、reduction 链、materializer 和 solver 组合在一起。新增算法通常只需新增 spec 和实现模块，不必修改编排主流程。动态 import 还避免了启动时导入全部算法实现。
 
-### 5.2 Reduction 支持分支与 decoder 组合
+### 5.2 Reduction 支持可复用分支与数据化 decoder
 
-`ReducedProblems` 与 `ProblemWithDecoder` 允许一次约简产生多个子问题，engine 统一求解、解码和求和。decoder 的组合顺序集中在 engine，避免每个算法重复处理计数修正因子。
+`reduce_problem` 产生一个或多个 domain-free `ReducedProblem`。每个分支用
+`DecoderSpec` 记录修正步骤，engine 在具体 domain 上实例化 decoder 后统一求解、
+解码和求和，算法不需要重复处理计数修正因子。
 
 ### 5.3 Runtime cache 是实例级而非全局状态
 
@@ -170,7 +173,7 @@ fastv2、incremental、incremental3、recursive 已通过 float/arb scalar 以�
 典型例子：
 
 - `Problem.weights` 声明为 `Mapping`，但 `compile_reduced_problem_weights` 返回的 `Problem.weights` 实际是排序后的 tuple。
-- `ProblemWithDecoder.problem`、`Decoder`、大量 materializer 参数和 `AlgoInput` 字段仍是 `object`。
+- 部分 input-template builder 参数和外部 solver payload 仍使用 `object`。
 - `RuntimeContext.from_runtime` 接受任意对象，并通过 `__getattr__` 动态透传。
 - 多个输入 dataclass 同时保存 `components` 和从首个 component 复制出来的 `cells`、`weights` 等镜像字段。
 
@@ -179,8 +182,8 @@ fastv2、incremental、incremental3、recursive 已通过 float/arb scalar 以�
 建议：明确引入 `RawProblem -> ReducedProblem -> MaterializedProblem/AlgoInput` 三种不同类型，不再用同一个 `Problem` 承载 raw mapping 和 compiled tuple。删除首 component 镜像字段，或把它们改成只读 property。
 
 **2026-07-10 实施更新：部分解决。** 当前已用 `Problem -> ReducedProblem ->
-CompiledProblem -> AlgoInput` 区分阶段，`ProblemWithDecoder.problem`、reduction
-结果、spec prepare、input builder 和 cache helper 都改为具体契约；
+CompiledProblem -> AlgoInput` 区分阶段，reduction 结果、spec compilation、
+input builder 和 cache helper 都改为具体契约；
 `RuntimeContext` 也只接受 `RuntimeOptions`，不再透传任意对象。剩余 `object`
 主要表示公式节点、谓词、FLINT ring element、cache key 和外部 engine payload，
 不是问题阶段边界。数值类型进一步统一仍属于 P1-1 的后续工作。
@@ -216,9 +219,8 @@ evidence contract。
 
 **2026-07-11 算法包更新：已解决。** 所有自有实现统一为
 `input.build_input`、`solve.solve`、`spec.SPEC`；package `__init__.py` 不再维护
-lazy forwarding。tail-signature materialization 已归 `input.py`，treewidth 数据
-契约也已从 `solve.py` 移回 `input.py`。fastv2 明确作为配置变体复用 fast，避免
-为形式一致新增空 wrapper。
+lazy forwarding。treewidth 数据契约也已从 `solve.py` 移回 `input.py`。
+fastv2 明确作为配置变体复用 fast，避免为形式一致新增空 wrapper。
 
 ### P1-4：复杂度集中在少数“上帝模块”
 
@@ -260,10 +262,9 @@ grounding 对照。standard 的空域 zero-configuration 路径也已补齐。
 
 ### P1-5：可运行能力、实验扩展点和 CLI 选项没有分级
 
-`AlgoName` 和 CLI choices 暴露 9 个算法，但：
+registry 和 CLI 曾同时暴露尚不可运行的扩展点：
 
 - bounded-treewidth 的 reduction 无条件抛“not yet implemented”。
-- tail-signature 默认需要额外 engine factory，并对 evidence/cardinality 有额外限制。
 - README 只描述其中一部分算法，且默认算法描述与 CLI 默认值不一致。
 
 影响：注册成功被误解为“用户可用”。用户只能通过运行失败来发现成熟度和前置条件。
@@ -272,13 +273,12 @@ grounding 对照。standard 的空域 zero-configuration 路径也已补齐。
 
 **2026-07-10 实施更新：本项要求已解决。** `AlgoSpec` 已增加
 `AlgoMaturity` 和 `external_requirements`；CLI choices 由 registry 生成，只显示
-stable/beta。tail-signature 标为 experimental 并从 CLI 隐藏，bounded-treewidth
-标为 unavailable，Python API 仍保留这些扩展点。更完整的 feature capability
-matrix 仍由 P0-2 跟踪。
+stable/beta。bounded-treewidth 标为 unavailable，Python API 仍保留这个扩展点。
+更完整的 feature capability matrix 仍由 P0-2 跟踪。
 
 ### P1-6：文档、benchmark 与代码迁移不同步
 
-当前 `docs/README.md` 链接的五份“Current Architecture”文档都已在工作区删除。`benchmarks/run_framework_benchmarks.py` 仍 import 已删除的 `wfomc.framework.benchmark`；`benchmarks/README.md` 也指向该模块。`run_tail_signature.py` 在比较分支引用未定义的 `Algo`。
+当前 `docs/README.md` 链接的五份“Current Architecture”文档都已在工作区删除。`benchmarks/run_framework_benchmarks.py` 仍 import 已删除的 `wfomc.framework.benchmark`；`benchmarks/README.md` 也指向该模块。
 
 影响：缺少可信的性能回归机制，架构文档也无法作为新成员的事实来源。迁移计划很多，但“当前状态”文档反而失效。
 
@@ -331,7 +331,6 @@ matrix 仍由 P0-2 跟踪。
 | 用户运行默认 CLI | import 阶段崩溃 | CI 阻断发布 |
 | 选择未贯通的 arithmetic backend | 运行中类型错误 | option resolution 阶段 fail-fast |
 | Ganak 未安装/路径错误 | 命题算法失败 | 保持明确异常，并在 capability 中标出外部依赖 |
-| tail-signature engine 未配置 | solver 阶段失败 | 标为 experimental，CLI 预检查 |
 | bounded-treewidth 被选择 | reduction 阶段必然失败 | 不出现在默认可用算法列表 |
 | 长生命周期 context 处理很多问题 | cache 无界增长 | 容量/清理策略和指标 |
 | benchmark/文档漂移 | 无法验证性能与使用方式 | 文档/benchmark smoke test |
@@ -373,7 +372,7 @@ flowchart TD
 1. 对 binary evidence fail-fast，并增加正确性回归测试。
 2. 修复 `wfomc` console script，统一 `AlgoName`/`Algo`，更新 README 示例。
 3. 对尚未贯通的 arithmetic backend fail-fast。
-4. 从默认 CLI choices 隐藏必然失败的 bounded-treewidth，并标记 tail-signature 前置条件。
+4. 从默认 CLI choices 隐藏必然失败的 bounded-treewidth。
 
 ### 阶段 1：建立迁移护栏
 

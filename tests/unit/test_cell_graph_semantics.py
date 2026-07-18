@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from wfomc import AlgoName, Problem, solve
+from wfomc import AlgoName, Domain, Problem, ProblemInstance, solve
 from wfomc.arithmetic import ArithmeticBackend, ArithmeticContext
 from wfomc.cell_graph import build_cell_graphs
 from wfomc.fol import FOLContext, Formula
@@ -86,7 +86,7 @@ def test_nullary_branches_keep_original_non_nullary_predicate_universe():
 
 def test_standard_counts_the_empty_structure_for_true_sentence():
     ctx = FOLContext()
-    problem = Problem(sentence=ctx.true(), domain=frozenset())
+    problem = ProblemInstance(Problem(sentence=ctx.true()), Domain())
 
     assert _count(problem, AlgoName.STANDARD) == 1
     assert _count(problem, AlgoName.STANDARD) == _count(problem, AlgoName.PROPOSITIONAL)
@@ -96,7 +96,10 @@ def test_standard_rejects_closed_false_sentence_on_empty_domain():
     ctx = FOLContext()
 
     assert (
-        _count(Problem(sentence=ctx.false(), domain=frozenset()), AlgoName.STANDARD)
+        _count(
+            ProblemInstance(Problem(sentence=ctx.false()), Domain()),
+            AlgoName.STANDARD,
+        )
         == 0
     )
 
@@ -111,7 +114,11 @@ def test_standard_treats_unary_contradiction_as_vacuously_true_on_empty_domain()
     )
 
     assert (
-        _count(Problem(sentence=sentence, domain=frozenset()), AlgoName.STANDARD) == 1
+        _count(
+            ProblemInstance(Problem(sentence=sentence), Domain()),
+            AlgoName.STANDARD,
+        )
+        == 1
     )
 
 
@@ -160,13 +167,19 @@ def _problem(
     domain_size: int,
     *,
     weights: dict[object, tuple[object, object]] | None = None,
-) -> Problem:
-    return Problem(
-        sentence=sentence,
-        domain=frozenset(ctx.constant(f"d{index}") for index in range(domain_size)),
-        weights={} if weights is None else weights,
+) -> ProblemInstance:
+    return ProblemInstance(
+        Problem(
+            sentence=sentence,
+            weights={} if weights is None else weights,
+        ),
+        Domain(
+            frozenset(
+                ctx.constant(f"d{index}") for index in range(domain_size)
+            )
+        ),
     )
 
 
-def _count(problem: Problem, algorithm: AlgoName) -> int:
+def _count(problem: ProblemInstance, algorithm: AlgoName) -> int:
     return int(solve(problem, algo=algorithm))

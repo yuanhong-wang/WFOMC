@@ -12,23 +12,23 @@ from wfomc.parser.grammar.wfomcs import WFOMCS_GRAMMAR
 from wfomc.parser.transformers.fol import parse as parse_typed_formula
 from wfomc.parser.transformers.mln import MLNTransformer
 from wfomc.parser.transformers.wfomcs import ProblemTransformer
-from wfomc.problem import Problem
+from wfomc.problem import Domain, Problem, ProblemInstance
 
 
 def parse_formula(text: str) -> object:
     return parse_typed_formula(text)
 
 
-def parse_problem(text: str) -> Problem:
+def parse_problem(text: str) -> ProblemInstance:
     parser = Lark(WFOMCS_GRAMMAR, start="wfomcs")
     try:
         tree = parser.parse(text)
     except UnexpectedInput:
-        return Problem(sentence=parse_formula(text))
+        return ProblemInstance(Problem(sentence=parse_formula(text)), Domain())
     return ProblemTransformer().transform(tree)
 
 
-def parse_problem_file(path: str | Path) -> Problem:
+def parse_problem_file(path: str | Path) -> ProblemInstance:
     source_path = Path(path)
     if source_path.suffix == ".mln":
         return parse_mln_problem_file(source_path)
@@ -36,22 +36,28 @@ def parse_problem_file(path: str | Path) -> Problem:
     return _with_source_path(parsed, source_path)
 
 
-def parse_mln_problem(text: str) -> Problem:
+def parse_mln_problem(text: str) -> ProblemInstance:
     parser = Lark(MLN_GRAMMAR, start="mln")
     tree = parser.parse(text)
     return MLNTransformer().transform(tree)
 
 
-def parse_mln_problem_file(path: str | Path) -> Problem:
+def parse_mln_problem_file(path: str | Path) -> ProblemInstance:
     source_path = Path(path)
     parsed = parse_mln_problem(source_path.read_text())
     return _with_source_path(parsed, source_path)
 
 
-def _with_source_path(problem: Problem, path: Path) -> Problem:
+def _with_source_path(
+    instance: ProblemInstance,
+    path: Path,
+) -> ProblemInstance:
     return replace(
-        problem,
-        options={**problem.options, "source_path": str(path)},
+        instance,
+        problem=replace(
+            instance.problem,
+            options={**instance.problem.options, "source_path": str(path)},
+        ),
     )
 
 

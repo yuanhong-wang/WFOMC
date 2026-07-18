@@ -33,10 +33,6 @@ def variables(formula: object) -> frozenset[object]:
     return free_vars(formula)
 
 
-def height(formula: object) -> int:
-    return _cached(formula, "height", lambda: _height(formula))
-
-
 def _cached(formula: object, key: str, compute):
     if not isinstance(formula, Formula):
         return compute()
@@ -99,15 +95,6 @@ def _free_vars(formula: object, *, bound: frozenset[object]):
     return
 
 
-def _height(formula: object) -> int:
-    if not isinstance(formula, Formula):
-        return 1
-    children = formula_children(formula)
-    if not children:
-        return 1
-    return 1 + max(_height(child) for child in children)
-
-
 def _term_variables(term: object):
     if isinstance(term, Variable) or term.__class__.__name__ == "Var":
         yield term
@@ -145,4 +132,11 @@ def _collect_atoms(formula: object, acc: set[Atom]) -> None:
             _collect_atoms(child, acc)
 
 
-__all__ = ["atoms", "constants", "free_vars", "height", "is_quantifier_free", "predicates", "variables"]
+__all__ = [
+    "atoms",
+    "constants",
+    "free_vars",
+    "is_quantifier_free",
+    "predicates",
+    "variables",
+]

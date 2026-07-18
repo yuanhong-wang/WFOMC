@@ -19,9 +19,9 @@
 
 **Steps:**
 
-1. Add failing registry tests for stable, beta, experimental, and unavailable specs.
+1. Add failing registry tests for stable, beta, and unavailable specs.
 2. Add `AlgoMaturity` and `AlgoSpec.external_requirements`.
-3. Mark propositional beta with Ganak, tail-signature experimental with its runtime engine, and treewidth unavailable.
+3. Mark propositional beta with Ganak and treewidth unavailable.
 4. Run registry tests and Ruff.
 
 ### Task 2: Derive CLI choices from capabilities
@@ -33,7 +33,7 @@
 
 **Steps:**
 
-1. Add a failing test that tail-signature and treewidth are absent from CLI choices.
+1. Add a failing test that treewidth is absent from CLI choices.
 2. Filter CLI algorithms to stable/beta specs.
 3. Keep propositional visible and document its Ganak requirement.
 4. Run CLI tests and smoke help.

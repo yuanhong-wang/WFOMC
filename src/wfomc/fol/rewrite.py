@@ -111,11 +111,6 @@ def flatten_connectives(formula: object) -> object:
     return _map_children(formula, flatten_connectives)
 
 
-def ground_formula(formula: object, substitution: dict[object, object]) -> object:
-    """Thin wrapper: substitute terms (variables → constants) in *formula*."""
-    return substitute(formula, substitution)
-
-
 def simplify_boolean(formula: Formula) -> Formula:
     """Simplify quantifier-free Boolean structure without changing FOL meaning.
 
@@ -230,7 +225,6 @@ def _substitute_term(term: object, mapping: dict[object, object]) -> object:
 __all__ = [
     "eliminate_implications",
     "flatten_connectives",
-    "ground_formula",
     "push_negation",
     "simplify_boolean",
     "substitute",

@@ -10,7 +10,7 @@ from wfomc.algo.incremental3.counting_kernel import (
 from wfomc.algo.incremental3.counting_state import CountingState, RowCounterSpec
 from wfomc.algo.incremental3.input import _initial_state
 from wfomc.cell_graph import Cell
-from wfomc.engine import compile_problem, solve
+from wfomc.engine import compile_problem, instantiate_problem, solve
 from wfomc.fol import Predicate
 from wfomc.parser import parse_input, parse_problem
 from wfomc.errors import UnsupportedFeatureError
@@ -75,9 +75,13 @@ def test_positive_mod_cell_wraps_initial_remainder():
 
 
 def test_incremental3_materialization_carries_counting_state():
-    artifacts = compile_problem(
-        parse_input("models/modk/1mod2-regular-graph.wfomcs"),
-        algo=AlgoName.INCREMENTAL3,
+    problem = parse_input("models/modk/1mod2-regular-graph.wfomcs")
+    artifacts = instantiate_problem(
+        compile_problem(
+            problem.problem,
+            algo=AlgoName.INCREMENTAL3,
+        ),
+        problem.domain,
     )
     state = artifacts.algo_input.counting_state
     masks = artifacts.algo_input.unary_cardinality_masks
@@ -97,8 +101,9 @@ domain = 2
 """
     )
 
-    artifacts = compile_problem(problem, algo=AlgoName.INCREMENTAL3)
-    normal_form = artifacts.reduced_problem.expect_single().problem.normal_form
+    compiled = compile_problem(problem.problem, algo=AlgoName.INCREMENTAL3)
+    artifacts = instantiate_problem(compiled, problem.domain)
+    normal_form = artifacts.prepared_branches[0].problem.normal_form
     masks = artifacts.algo_input.unary_cardinality_masks
 
     assert normal_form.qf_formula is None
@@ -120,10 +125,11 @@ domain = 2
 """
     )
 
-    artifacts = compile_problem(problem, algo=AlgoName.INCREMENTAL3)
-    normal_form = artifacts.reduced_problem.problems[0].problem.normal_form
+    compiled = compile_problem(problem.problem, algo=AlgoName.INCREMENTAL3)
+    artifacts = instantiate_problem(compiled, problem.domain)
+    normal_form = artifacts.prepared_branches[0].problem.normal_form
 
-    assert artifacts.algo_options.existential_strategy is ExistentialStrategy.COUNTING
+    assert compiled.algo_options.existential_strategy is ExistentialStrategy.COUNTING
     assert normal_form.forall_exists == ()
     assert len(normal_form.forall_counts) == 1
     assert normal_form.forall_counts[0].comparator == ">="

@@ -1,6 +1,7 @@
 # Exact Lifted Counter for Two-Variable Logic and Extensions
 
-This tool is for counting the models (or combinatorical structures) from the two-variable fragment of first-order logic and extensions.
+This tool counts models and combinatorial structures in the two-variable
+fragment of first-order logic and its extensions.
 
 ### Installation
 
@@ -35,9 +36,6 @@ where
   - `propositional-reduced`: normalize and reduce the problem first, then ground the
     resulting quantifier-free sentence and count it with Ganak. This preserves the
     former propositional implementation for performance and regression comparisons.
-`tail-signature` is an experimental Python-API adapter requiring an external
-engine factory, so it is intentionally hidden from CLI choices.
-
 The CLI defaults to `standard`. Use `-e/--evidence-strategy` to override the
 selected algorithm's unary-evidence preparation, and
 `--exact-symbolic-backend` to choose the exact polynomial backend. Use `-v` for
@@ -49,7 +47,7 @@ application's handlers.
 Other lifted algorithms always apply their fixed weighted-Skolem reduction,
 while `propositional` directly expands source quantifiers over the finite domain.
 
-Unary evidence is represented once as a `UnaryEvidencePartition` and compiled
+Unary evidence is represented once as `UnaryEvidence` and compiled
 into a `CellEvidenceAllocation` for each cell graph. When the CLI/API override
 is omitted, the current algorithm defaults are:
 
@@ -62,8 +60,8 @@ is omitted, the current algorithm defaults are:
 | `incremental3` | evidence-profile configuration coefficients |
 | `recursive` | classic CCS fallback |
 
-The explicit `ccs` strategy is available for every algorithm as an independent,
-modular correctness reference.
+The explicit `ccs` strategy is available for the lifted algorithms that support
+unary evidence. Direct propositional grounding uses ground unit clauses.
 
 Unary evidence grouping assumes the sentence does not distinguish named domain
 constants. Such inputs fail fast rather than silently overcounting.
@@ -73,17 +71,28 @@ constants. Such inputs fail fast rather than silently overcounting.
 You can also call the solver directly from a Python script:
 
 ```python
-from wfomc import AlgoName, parse_problem, solve
+from wfomc import (
+    AlgoName,
+    Domain,
+    compile_problem,
+    parse_problem,
+    solve,
+)
 
-problem = parse_problem(r"""
+instance = parse_problem(r"""
 \forall X: (P(X))
 domain = {a, b, c}
 2 1 P
 """)
-result = solve(problem, algo=AlgoName.FASTV2)
+result = solve(instance, algo=AlgoName.FASTV2)
 
 print(result)
 print(result.constant_value())
+
+# Compilation is domain-free and can be reused across domain sizes.
+compiled = compile_problem(instance.problem, algo=AlgoName.FASTV2)
+for size in (5, 10, 20):
+    print(size, solve(compiled, Domain.of_size(size)))
 ```
 
 `wfomc(...)` returns a `WFOMCResult`, not a raw FLINT polynomial. Use:
@@ -98,14 +107,22 @@ print(result.constant_value())
 The underlying solver still uses FLINT internally for exact polynomial arithmetic,
 but callers should treat that as an implementation detail.
 
-Programmatic callers may also construct a typed `Problem` with the builders in
-`wfomc.fol`. Exact FLINT values are an internal representation; public callers
-should prefer integers, fractions, and parsed model weights.
+The parser returns an explicit `ProblemInstance` with separate `.problem` and
+`.domain` fields. Programmatic callers may construct a typed `Problem` with the
+builders in `wfomc.fol`, then pass a separate `Domain` to `solve`. Exact FLINT
+values are an internal representation; public callers should prefer integers,
+fractions, and parsed model weights.
+
+The top-level package also exports the configuration types `AlgoOptions`,
+`EvidenceStrategy`, `ExistentialStrategy`, `LinearOrderEncoding`,
+`WeightOptions`, `RuntimeOptions`, and `RuntimeContext`.
 
 ## Input format
 
 The input file with the suffix `.wfomcs` contains the following information **in order**:
-1. First-order sentence with at most two logic variables (must in capital letters, e.g., `X`, `Y`, `Z`, etc.), see [fol_grammar.py](sampling_fo2/parser/fol_grammar.py) for details, e.g.,
+1. First-order sentence with at most two logical variables (written with
+   capital letters such as `X` and `Y`), see
+   [wfomcs.py](src/wfomc/parser/grammar/wfomcs.py) for details, e.g.,
   * `\forall X: (\forall Y: (R(X, Y) <-> Z(X, Y)))`
   * `\forall X: (\exists Y: (R(X, Y)))`
   * `\exists X: (F(X) -> \forall Y: (R(X, Y)))`
@@ -113,7 +130,7 @@ The input file with the suffix `.wfomcs` contains the following information **in
 2. Domain: 
   * `domain=3` or
   * `domain={p1, p2, p3}`, where `p1`, `p2`, `p3` are the constants in the domain (must start with a lowercase letter).
-3. Weighting (optional): `positve_weight negative_weight predicate`
+3. Weighting (optional): `positive_weight negative_weight predicate`
 4. Cardinality constraint (optional): 
   * `|P| = k`
   * `|P| > k`
@@ -133,7 +150,8 @@ For the `head-tail` example in [Lifted Inference with Linear Order Axiom.](https
 \forall X: (\forall Y: (T(X) & LEQ(X, Y) -> T(Y))) &
 ```
 
-The $k$-th predecessors are predifined as `PREk`, e.g., `PRE2(X, Y)` means `Y` is the 2nd predecessor of `X` in the linear order.
+The $k$-th predecessor predicates are predefined as `PREDk`, e.g.,
+`PRED2(X, Y)` means `Y` is the second predecessor of `X` in the linear order.
 See [predk](models/linear_order/predk/) for more examples.
 The circular predecessor `CIRCULAR_PRED` is also predefined with `CIRCULAR_PRED(X, Y)` means `Y` is the predecessor of `X` in a circular order.
 The output count of circular order is always divided by the domain size to avoid overcounting.
@@ -186,7 +204,8 @@ person = 10
 2.7 1 aux
 ```
 
-> **Note: Now you can also directly input the MLN in the form defined in [mln_grammar.py](sampling_fo2/parser/mln_grammar.py)**
+> **Note: You can also directly input an MLN in the form defined in
+> [mln.py](src/wfomc/parser/grammar/mln.py).**
 ```
 ~friends(X,X).
 friends(X,Y) -> friends(Y,X).
@@ -225,8 +244,9 @@ The direct path supports arbitrary Boolean placement of ordinary and counting qu
 
 The order encoding can be selected with
 `--linear-order-encoding {pin,axioms}` (`-l`) in the CLI or
-`AlgoOptions(linear_order_encoding=...)` in the Python API. The option is valid
-only for `propositional` and `propositional-reduced`:
+`AlgoOptions(linear_order_encoding=LinearOrderEncoding.AXIOMS)` in the Python
+API. Both types are importable directly from `wfomc`. The option is valid only
+for `propositional` and `propositional-reduced`:
 
 | Setting | Mechanism | Multiplier | When to use |
 |---|---|---|---|

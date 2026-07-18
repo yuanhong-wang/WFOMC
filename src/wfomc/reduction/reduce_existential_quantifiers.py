@@ -21,7 +21,7 @@ from wfomc.fol.normal_form import CountSection, ForallCountSection
 
 if TYPE_CHECKING:
     from wfomc.algo.core import AlgoOptions
-    from wfomc.problem import ReducedProblem
+    from wfomc.reduction.reduced import ReducedProblem
 
 
 def reduce_existential_quantifiers(

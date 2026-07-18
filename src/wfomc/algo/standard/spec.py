@@ -8,40 +8,83 @@ from wfomc.algo.core import (
     AlgoSpec,
     EvidenceStrategy,
     PreparedBranch,
-    compile_reduced_problem,
     option_resolver,
-    reduce_unary_evidence_for_options,
 )
-from .input import build_input
+from wfomc.cell_graph.staging import select_input_variant
+from wfomc.engine.compilation import (
+    CompiledReducedProblem,
+    compile_reduced_problem,
+    instantiate_reduced_problem,
+)
+from .input import (
+    StandardInputTemplate,
+    build_input_template,
+    instantiate_input_template,
+)
 from .solve import solve
-from wfomc.problem import Problem
-from wfomc.reduction import (
-    reduce_cardinality_constraints,
-    reduce_counting_quantifiers,
-    reduce_existential_quantifiers,
-    apply_reductions,
-)
+from wfomc.problem import Domain, Problem
+from wfomc.reduction import reduce_problem
 
 
-REDUCTIONS = (
-    reduce_unary_evidence_for_options,
-    reduce_counting_quantifiers,
-    reduce_existential_quantifiers,
-    reduce_cardinality_constraints,
-)
+def compile_branches(
+    problem: Problem,
+    options: AlgoOptions,
+) -> tuple[object, ...]:
+    return tuple(
+        compile_reduced_problem(reduced, options)
+        for reduced in reduce_problem(problem, options)
+    )
 
 
-def prepare(problem: Problem, options: AlgoOptions) -> tuple[PreparedBranch, ...]:
-    reduced = apply_reductions(problem, REDUCTIONS, options)
-    prepared = []
-    for branch in reduced.problems:
-        compiled, _features = compile_reduced_problem(branch.problem, options)
-        algo_input = build_input(
-            compiled,
+def branch_applies(branch: object, domain: Domain) -> bool:
+    if not isinstance(branch, CompiledReducedProblem):
+        raise TypeError("Standard compiled branch has an invalid type")
+    return branch.reduced_problem.applies(domain)
+
+
+def input_template_variant(branch: object, domain: Domain) -> object:
+    if not isinstance(branch, CompiledReducedProblem):
+        raise TypeError("Standard compiled branch has an invalid type")
+    return select_input_variant(branch, domain)
+
+
+def build_standard_input_template(
+    branch: object,
+    input_variant: object,
+    options: AlgoOptions,
+) -> StandardInputTemplate:
+    if not isinstance(branch, CompiledReducedProblem):
+        raise TypeError("Standard compiled branch has an invalid type")
+    return build_input_template(
+        branch,
+        input_variant=input_variant,
+        options=options,
+    )
+
+
+def instantiate_branch(
+    branch: object,
+    input_template: object,
+    domain: Domain,
+    options: AlgoOptions,
+) -> PreparedBranch | None:
+    if not isinstance(branch, CompiledReducedProblem):
+        raise TypeError("Standard compiled branch has an invalid type")
+    if not isinstance(input_template, StandardInputTemplate):
+        raise TypeError("Standard input template has an invalid type")
+    instantiated = instantiate_reduced_problem(branch, domain)
+    if instantiated is None:
+        return None
+    concrete, decoder = instantiated
+    return PreparedBranch(
+        branch.reduced_problem,
+        instantiate_input_template(
+            input_template,
+            concrete,
             options=options,
-        )
-        prepared.append(PreparedBranch(branch.problem, algo_input, branch.decoder))
-    return tuple(prepared)
+        ),
+        decoder,
+    )
 
 
 SPEC = AlgoSpec(
@@ -54,8 +97,12 @@ SPEC = AlgoSpec(
             EvidenceStrategy.LIFTED_PROFILES,
         ),
     ),
-    prepare=prepare,
     solve=solve,
+    compile_branches=compile_branches,
+    branch_applies=branch_applies,
+    input_template_variant=input_template_variant,
+    build_input_template=build_standard_input_template,
+    instantiate_branch=instantiate_branch,
 )
 
 

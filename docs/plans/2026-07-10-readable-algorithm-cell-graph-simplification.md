@@ -4,7 +4,7 @@
 
 **Goal:** Make the WFOMC execution path readable from algorithm entry to solver while reducing `cell_graph` to shared 1-type/2-type data and fixing the correctness and public-contract failures identified in the architecture review.
 
-**Architecture:** Keep a modular monolith and a small algorithm registry. A shared cell-graph builder produces plain `CellGraphData`; algorithm packages explicitly derive fast clique state, ordered pair tables, counting transitions, ground CNF, or tail-signature tables. Do not add generic Raw/Reduced/Materialized object hierarchies, visitor layers, or new plugin frameworks.
+**Architecture:** Keep a modular monolith and a small algorithm registry. A shared cell-graph builder produces plain `CellGraphData`; algorithm packages explicitly derive fast clique state, ordered pair tables, counting transitions, or ground CNF. Do not add generic Raw/Reduced/Materialized object hierarchies, visitor layers, or new plugin frameworks.
 
 **Tech Stack:** Python 3.11, dataclasses, python-flint, Lark, pytest, Ruff.
 
@@ -16,7 +16,7 @@ Implemented in the current worktree:
 
 - correctness/public-contract guardrails;
 - `CellGraphData` and table-only algorithm migration;
-- algorithm-owned ordered, counting, CNF, recursive, tail, and fast input preparation;
+- algorithm-owned ordered, counting, CNF, recursive, and fast input preparation;
 - deletion of the shared algorithm adapter modules and mirrored input fields;
 - explicit `AlgoSpec.prepare` / `AlgoSpec.solve` orchestration;
 - FOL dependency-direction fix, stable CLI, README, ADR, benchmark cleanup, and CI checks.
@@ -105,23 +105,19 @@ class CellGraphData:
 - Modify: `src/wfomc/algo/standard/solve.py`
 - Modify: `src/wfomc/algo/recursive/spec.py`
 - Modify: `src/wfomc/algo/recursive/solve.py`
-- Modify: `src/wfomc/algo/tail_signature/spec.py`
-- Modify: `src/wfomc/algo/tail_signature/solve.py`
 - Modify: `src/wfomc/algo/cell_graph/types.py`
 - Modify: `src/wfomc/algo/cell_graph/cache.py`
 - Test: `tests/test_formula_models.py`
-- Test: `tests/unit/test_tail_signature_runtime.py`
 
 **Steps:**
 
 1. Replace live-graph extraction with direct `CellGraphData` reads in standard.
 2. Make recursive preparation create its input directly; remove its dependency on the generic `build_basic_cell_graph_input_from_reduced` wrapper.
-3. Make tail-signature preparation build `w_tables`/`r_matrix` directly from `CellGraphData`, avoiding the intermediate `BasicCellGraphInput`.
-4. Remove the first-component mirror fallback from migrated solvers; `components` is the only source of truth.
-5. Run focused algorithm parity tests, followed by:
+3. Remove the first-component mirror fallback from migrated solvers; `components` is the only source of truth.
+4. Run focused algorithm parity tests, followed by:
 
    ```bash
-   uv run pytest -q tests/test_formula_models.py tests/unit/test_tail_signature_runtime.py
+   uv run pytest -q tests/test_formula_models.py
    ```
 
 ### Task 4: Move ordered and counting derivations into their algorithms
@@ -240,7 +236,6 @@ class AlgoSpec:
 - Modify: `docs/README.md`
 - Create: `docs/adr/0007-plain-cell-graph-and-explicit-algorithm-preparation.md`
 - Modify or delete: `benchmarks/run_framework_benchmarks.py`
-- Modify: `benchmarks/run_tail_signature.py`
 - Modify: `benchmarks/README.md`
 - Modify: `.github/workflows/python-app.yml`
 

@@ -58,12 +58,4 @@ class Literal:
 
     def __hash__(self) -> int:
         return hash((self.atom, self.positive))
-
-
-def positive_atom(lit_or_atom: Atom | Literal) -> Atom:
-    if isinstance(lit_or_atom, Literal):
-        return lit_or_atom.atom
-    return lit_or_atom
-
-
-__all__ = ["Literal", "positive_atom"]
+__all__ = ["Literal"]

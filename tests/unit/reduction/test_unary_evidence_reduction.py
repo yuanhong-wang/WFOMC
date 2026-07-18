@@ -1,178 +1,160 @@
-"""Tests for unary-evidence reductions (profile-capacity and cardinality paths)."""
+"""Tests for staged unary-evidence reductions."""
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 import pytest
 
-from wfomc.arithmetic import ArithmeticBackend, ArithmeticContext
-
-from wfomc.cardinality_constraints import Comparator
-from wfomc.evidence import (
-    Evidence,
-    GroundUnaryLiteral,
-    UnaryEvidence,
+from wfomc.algo import AlgoOptions, EvidenceStrategy
+from wfomc.cardinality_constraints import (
+    CardinalityConstraints,
+    CardinalityTerm,
+    Comparator,
+    LinearCardinalityConstraint,
 )
-from wfomc.evidence.profile import ProfileCapacityConstraint
-from wfomc.fol import true as _true
-from wfomc.problem import Problem, ReducedProblem
+from wfomc.evidence import Evidence, GroundUnaryLiteral, UnaryEvidence
+from wfomc.fol import true
+from wfomc.problem import Problem
 from wfomc.reduction import (
-    begin_reduction,
-    build_unary_ccs_encoding,
-    reduce_unary_evidence_to_cardinality_constraints,
-    reduce_unary_evidence_to_profile_capacity,
+    CardinalityDecoderSpec,
+    DivideDecoderSpec,
+    ReducedProfileConstraint,
+    reduce_problem,
 )
 
 
-def _arithmetic() -> ArithmeticContext:
-    return ArithmeticContext(ArithmeticBackend.FMPQ)
-
-
-def _problem_with_evidence() -> ReducedProblem:
-    return begin_reduction(
-        Problem(
-            sentence=_true(),
-            domain=frozenset({"a", "b", "c"}),
-            evidence=Evidence(
-                unary=UnaryEvidence(
-                    (
-                        GroundUnaryLiteral("P", "a", True),
-                        GroundUnaryLiteral("Q", "a", False),
-                        GroundUnaryLiteral("P", "b", True),
-                    )
-                ),
+def _problem_with_evidence(
+    *,
+    cardinality_constraints: CardinalityConstraints | None = None,
+) -> Problem:
+    return Problem(
+        sentence=true(),
+        evidence=Evidence(
+            unary=UnaryEvidence(
+                (
+                    GroundUnaryLiteral("P", "a", True),
+                    GroundUnaryLiteral("Q", "a", False),
+                    GroundUnaryLiteral("P", "b", True),
+                )
             ),
-        )
+        ),
+        cardinality_constraints=(
+            cardinality_constraints
+            if cardinality_constraints is not None
+            else CardinalityConstraints()
+        ),
     )
 
 
-def _empty_evidence_problem() -> ReducedProblem:
-    return begin_reduction(Problem(sentence=_true(), domain=frozenset({"a", "b"})))
+def test_empty_evidence_does_not_create_a_profile_constraint():
+    reduced = reduce_problem(
+        Problem(sentence=true()),
+        AlgoOptions(evidence_strategy=EvidenceStrategy.LIFTED_PROFILES),
+    )[0]
 
-
-# --- profile-capacity path ---
-
-
-def test_profile_capacity_empty_evidence_returns_same_problem():
-    problem = _empty_evidence_problem()
-    assert reduce_unary_evidence_to_profile_capacity(problem) is problem
-
-
-def test_profile_capacity_nonempty_evidence_produces_one_constraint():
-    reduced = reduce_unary_evidence_to_profile_capacity(_problem_with_evidence())
-    constraint = reduced.profile_capacity_constraint
-    assert isinstance(constraint, ProfileCapacityConstraint)
-    # three distinct profiles: empty, {P}, {P, ~Q}
-    assert len(constraint.profiles) == 3
-
-
-def test_profile_capacity_clears_unary_evidence():
-    reduced = reduce_unary_evidence_to_profile_capacity(_problem_with_evidence())
+    assert reduced.profile_constraint is None
     assert reduced.evidence.unary.is_empty
 
 
-def test_profile_capacity_existing_constraint_with_evidence_raises():
+def test_lifted_profiles_are_domain_free_until_instantiation():
+    reduced = reduce_problem(
+        _problem_with_evidence(),
+        AlgoOptions(evidence_strategy=EvidenceStrategy.LIFTED_PROFILES),
+    )[0]
 
-    problem = replace(
-        begin_reduction(
-            Problem(
-                sentence=_true(),
-                domain=frozenset({"a", "b"}),
-                evidence=Evidence(
-                    unary=UnaryEvidence((GroundUnaryLiteral("P", "a", True),)),
-                ),
+    assert isinstance(reduced.profile_constraint, ReducedProfileConstraint)
+    assert reduced.profile_constraint.profile_sizes(3) == (1, 1, 1)
+    concrete = reduced.profile_constraint.instantiate(3)
+    assert len(concrete.profiles) == 3
+    assert concrete.assignment_count == 6
+
+
+def test_lifted_profile_reduction_clears_unary_evidence():
+    reduced = reduce_problem(
+        _problem_with_evidence(),
+        AlgoOptions(evidence_strategy=EvidenceStrategy.LIFTED_PROFILES),
+    )[0]
+
+    assert reduced.evidence.unary.is_empty
+
+
+def test_lifted_profiles_group_equal_evidence_deterministically():
+    problem = Problem(
+        sentence=true(),
+        evidence=Evidence(
+            unary=UnaryEvidence(
+                (
+                    GroundUnaryLiteral("P", "a", True),
+                    GroundUnaryLiteral("Q", "a", False),
+                    GroundUnaryLiteral("P", "b", True),
+                    GroundUnaryLiteral("Q", "b", False),
+                    GroundUnaryLiteral("Q", "c", True),
+                )
             )
         ),
-        profile_capacity_constraint=ProfileCapacityConstraint(
-            profiles=(), domain_size=0
+    )
+
+    profile = reduce_problem(
+        problem,
+        AlgoOptions(evidence_strategy=EvidenceStrategy.LIFTED_PROFILES),
+    )[0].profile_constraint
+
+    assert profile is not None
+    assert profile.profile_sizes(4) == (2, 1, 1)
+    assert tuple(
+        tuple(sorted(map(str, literals))) for literals, _size in profile.profiles
+    ) == (("P(X)", "~Q(X)"), ("Q(X)",), ())
+
+
+def test_lifted_profiles_reject_conflicting_evidence():
+    problem = Problem(
+        sentence=true(),
+        evidence=Evidence(
+            unary=UnaryEvidence(
+                (
+                    GroundUnaryLiteral("P", "a", True),
+                    GroundUnaryLiteral("P", "a", False),
+                )
+            )
         ),
     )
-    with pytest.raises(ValueError, match="profile_capacity_constraint"):
-        reduce_unary_evidence_to_profile_capacity(problem)
+
+    with pytest.raises(ValueError, match="consistent"):
+        reduce_problem(
+            problem,
+            AlgoOptions(evidence_strategy=EvidenceStrategy.LIFTED_PROFILES),
+        )
 
 
-def test_profile_capacity_existing_constraint_with_empty_evidence_is_noop():
-    problem = replace(
-        begin_reduction(Problem(sentence=_true(), domain=frozenset({"a"}))),
-        profile_capacity_constraint=ProfileCapacityConstraint(
-            profiles=(), domain_size=0
-        ),
-    )
-    # empty evidence short-circuits before the conflict check
-    assert reduce_unary_evidence_to_profile_capacity(problem) is problem
+def test_ccs_reduction_uses_data_only_decoder_steps():
+    reduced = reduce_problem(
+        _problem_with_evidence(),
+        AlgoOptions(evidence_strategy=EvidenceStrategy.CCS),
+    )[0]
 
-
-# --- cardinality-constraint path ---
-
-
-def test_cardinality_constraints_empty_evidence_returns_same_problem():
-    problem = _empty_evidence_problem()
-    assert reduce_unary_evidence_to_cardinality_constraints(problem) is problem
-
-
-def test_cardinality_constraints_clears_unary_evidence():
-    reduced = reduce_unary_evidence_to_cardinality_constraints(
-        _problem_with_evidence()
-    ).problem
     assert reduced.evidence.unary.is_empty
+    assert len(reduced.ccs_profile_markers) == 2
+    assert reduced.ccs_unmarked_size is not None
+    assert reduced.ccs_unmarked_size.evaluate(3) == 1
+    assert isinstance(reduced.decoder_spec.steps[0], DivideDecoderSpec)
+    assert isinstance(reduced.decoder_spec.steps[-1], CardinalityDecoderSpec)
 
 
-def test_cardinality_constraints_returns_decoder_and_patches_problem():
-    problem = _problem_with_evidence()
-    branch = reduce_unary_evidence_to_cardinality_constraints(problem)
-    reduced = branch.problem
-    assert branch.decoder(12, arithmetic=_arithmetic()) == 2
-    # one EQ cardinality constraint per evidence profile
-    assert len(reduced.cardinality_constraints.constraints) == 3
-    assert all(
-        c.comparator == Comparator.EQ
-        for c in reduced.cardinality_constraints.constraints
-    )
-
-
-def test_cardinality_constraints_preserves_existing_plan_constraints():
-    from wfomc.cardinality_constraints import (
-        CardinalityConstraints,
-        LinearCardinalityConstraint,
-        CardinalityTerm,
-    )
-
+def test_ccs_reduction_preserves_source_cardinality_constraints():
     existing = CardinalityConstraints(
         (
             LinearCardinalityConstraint(
-                terms=(CardinalityTerm("R", 1),), comparator=Comparator.LE, rhs=2
+                terms=(CardinalityTerm("R", 1),),
+                comparator=Comparator.LE,
+                rhs=2,
             ),
         )
     )
-    problem = begin_reduction(
-        Problem(
-            sentence=_true(),
-            domain=frozenset({"a", "b"}),
-            evidence=Evidence(
-                unary=UnaryEvidence((GroundUnaryLiteral("P", "a", True),)),
-            ),
-            cardinality_constraints=existing,
-        )
-    )
-    reduced = reduce_unary_evidence_to_cardinality_constraints(problem).problem
-    # one pre-existing + one per evidence profile. P(a) over {a, b} yields two
-    # profiles ({P} for a, empty for b), so 1 + 2 == 3 constraints.
-    assert len(reduced.cardinality_constraints.constraints) == 3
 
+    reduced = reduce_problem(
+        _problem_with_evidence(cardinality_constraints=existing),
+        AlgoOptions(evidence_strategy=EvidenceStrategy.CCS),
+    )[0]
+    cardinality_step = reduced.decoder_spec.steps[-1]
 
-# --- build_unary_ccs_encoding helper ---
-
-
-def test_build_unary_ccs_encoding():
-    evidence = UnaryEvidence(
-        (
-            GroundUnaryLiteral("P", "a", True),
-            GroundUnaryLiteral("P", "b", True),
-            GroundUnaryLiteral("Q", "c", False),
-        )
-    )
-    encoding = build_unary_ccs_encoding(evidence, frozenset({"a", "b", "c"}))
-    assert encoding.formula_patch is not None
-    assert len(encoding.cardinality_constraints) == 2
-    assert encoding.correction_factor == 3
+    assert isinstance(cardinality_step, CardinalityDecoderSpec)
+    assert len(cardinality_step.constraints) == 3

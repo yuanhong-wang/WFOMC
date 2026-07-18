@@ -9,21 +9,9 @@ from enum import Enum
 from importlib import import_module
 from typing import TYPE_CHECKING, Protocol
 
-from wfomc.arithmetic import (
-    ArithmeticBackend,
-    ArithmeticContext,
-    choose_arithmetic_backend,
-)
-from wfomc.errors import (
-    ArithmeticBackendError,
-    UnsupportedFeatureError,
-)
-from wfomc.weights import (
-    WeightOptions,
-    collect_output_weight_variables,
-    collect_symbolic_weight_variables,
-    compile_weight_mapping,
-)
+from wfomc.arithmetic import ArithmeticContext
+from wfomc.errors import UnsupportedFeatureError
+from wfomc.weights import WeightOptions
 
 
 logger = logging.getLogger(__name__)
@@ -32,8 +20,8 @@ if TYPE_CHECKING:
     from wfomc.engine.features import FeatureSet
     from wfomc.engine.runtime import RuntimeContext
     from wfomc.fol.grounding import LinearOrderEncoding
-    from wfomc.problem import CompiledProblem, Problem, ReducedProblem
-    from wfomc.reduction import ProblemWithDecoder
+    from wfomc.problem import Domain, Problem
+    from wfomc.reduction.reduced import ReducedProblem
     from wfomc.result import WFOMCResult
 
 
@@ -111,8 +99,6 @@ class AlgoName(Enum):
     PROPOSITIONAL = "propositional"
     # Logical reduction followed by quantifier-free grounding and Ganak.
     PROPOSITIONAL_REDUCED = "propositional-reduced"
-    # Adapter for an external tail-signature engine.
-    TAIL_SIGNATURE = "tail-signature"
     # Extension point for a future bounded-treewidth solver.
     BOUNDED_TREEWIDTH = "bounded-treewidth"
 
@@ -155,10 +141,27 @@ class AlgoSpec:
     name: AlgoName
     # Resolve defaults and reject unsupported source features or option values.
     resolve_options: Callable[["FeatureSet", AlgoOptions | None], AlgoOptions]
-    # Lower one source problem into one or more independently solvable branches.
-    prepare: Callable[["Problem", AlgoOptions], tuple["PreparedBranch", ...]]
     # Evaluate one algorithm-owned input and return its undecoded branch result.
     solve: SolveFn
+    # Compile domain-free branches.
+    compile_branches: Callable[
+        ["Problem", AlgoOptions],
+        tuple[object, ...],
+    ]
+    # Build one reusable algorithm-owned input template.
+    build_input_template: Callable[
+        [object, object, AlgoOptions],
+        object,
+    ]
+    # Instantiate one branch and input template for a concrete domain.
+    instantiate_branch: Callable[
+        [object, object, "Domain", AlgoOptions],
+        "PreparedBranch | None",
+    ]
+    # Test whether a branch applies to one concrete domain.
+    branch_applies: Callable[[object, "Domain"], bool] | None = None
+    # Select an algorithm-owned structural variant for the input-template cache.
+    input_template_variant: Callable[[object, "Domain"], object] | None = None
     # Readiness level controlling whether the algorithm appears in the CLI.
     maturity: AlgoMaturity = AlgoMaturity.STABLE
     # Human-readable external programs or factories required at runtime.
@@ -200,9 +203,7 @@ def option_resolver(
     default_unary_evidence: EvidenceStrategy | DefaultEvidenceStrategy,
     supported_unary_evidence: tuple[EvidenceStrategy, ...] = (),
     default_existential_strategy: ExistentialStrategy | None = None,
-    supported_existential_strategies: tuple[ExistentialStrategy | None, ...] = (
-        None,
-    ),
+    supported_existential_strategies: tuple[ExistentialStrategy | None, ...] = (None,),
     supports_linear_order: bool = False,
     supports_predk_or_circular: bool = False,
     supports_mod_counting: bool = False,
@@ -253,116 +254,6 @@ def option_resolver(
     return resolve_options
 
 
-# ---------------------------------------------------------------------------
-# Shared logical/numeric preparation helpers
-# ---------------------------------------------------------------------------
-
-
-def reduce_unary_evidence_for_options(
-    problem: "ReducedProblem", *, options: AlgoOptions
-) -> "ReducedProblem | ProblemWithDecoder":
-    strategy = options.evidence_strategy or EvidenceStrategy.NONE
-    if strategy is EvidenceStrategy.LIFTED_PROFILES:
-        from wfomc.reduction import reduce_unary_evidence_to_profile_capacity
-
-        return reduce_unary_evidence_to_profile_capacity(problem)
-    if strategy is EvidenceStrategy.CCS:
-        from wfomc.reduction import reduce_unary_evidence_to_cardinality_constraints
-
-        return reduce_unary_evidence_to_cardinality_constraints(problem)
-    return problem
-
-
-def _compile_reduced_weights(
-    problem: "ReducedProblem",
-    arithmetic: ArithmeticContext,
-) -> dict[object, tuple[object, object]]:
-    """Compile the reduced problem's raw weights into its arithmetic ring."""
-    compiled = compile_weight_mapping(dict(problem.weights), arithmetic)
-    return dict(sorted(compiled.items(), key=lambda item: str(item[0])))
-
-
-def compile_source_arithmetic(
-    problem: "Problem",
-    options: AlgoOptions,
-) -> tuple[ArithmeticContext, dict[object, tuple[object, object]]]:
-    """Compile source weights without normalizing or reducing the formula."""
-
-    output_symbols = collect_output_weight_variables(problem)
-    solver_symbols = collect_symbolic_weight_variables(problem)
-    backend = choose_arithmetic_backend(
-        options.weight_options,
-        symbolic_variables=solver_symbols,
-    )
-    arithmetic = ArithmeticContext(
-        backend=backend,
-        symbolic_variables=solver_symbols,
-        output_symbols=output_symbols,
-    )
-    weights = compile_weight_mapping(dict(problem.weights), arithmetic)
-    logger.info(
-        "Prepared source arithmetic: backend=%s solver_symbols=%d output_symbols=%d",
-        backend,
-        len(solver_symbols),
-        len(output_symbols),
-    )
-    return arithmetic, dict(sorted(weights.items(), key=lambda item: str(item[0])))
-
-
-def compile_reduced_problem(
-    problem: "ReducedProblem",
-    options: AlgoOptions,
-) -> tuple["CompiledProblem", "FeatureSet"]:
-    """Compile one reduced branch into its quantifier-free numeric problem."""
-
-    from wfomc.problem import CompiledProblem
-
-    from wfomc.fol import true
-    sentence = problem.normal_form.qf_formula
-    if sentence is None:
-        sentence = true()
-    output_symbols = collect_output_weight_variables(problem)
-    solver_symbols = tuple(
-        sorted(
-            set(collect_symbolic_weight_variables(problem))
-            | set(problem.internal_weight_symbols)
-        )
-    )
-    if problem.internal_weight_symbols and options.weight_options.precision == "round":
-        raise ArithmeticBackendError(
-            "rounded arithmetic does not support cardinality marker variables; "
-            "python-flint has no arb_mpoly backend"
-        )
-    backend = choose_arithmetic_backend(
-        options.weight_options,
-        symbolic_variables=solver_symbols,
-    )
-    arithmetic = ArithmeticContext(
-        backend=backend,
-        symbolic_variables=solver_symbols,
-        output_symbols=output_symbols,
-        degree_limits=problem.internal_weight_degree_limits,
-    )
-    logger.info(
-        "Prepared arithmetic: backend=%s solver_symbols=%d output_symbols=%d",
-        backend,
-        len(solver_symbols),
-        len(output_symbols),
-    )
-    compiled = CompiledProblem(
-        sentence=sentence,
-        arithmetic=arithmetic,
-        domain=problem.domain,
-        weights=_compile_reduced_weights(problem, arithmetic),
-        evidence=problem.evidence,
-        profile_capacity_constraint=problem.profile_capacity_constraint,
-        circular_order_size=problem.circular_order_size,
-    )
-    from wfomc.engine.features import analyze_features
-
-    return compiled, analyze_features(compiled)
-
-
 def _resolve_unary_evidence_strategy(
     strategy: EvidenceStrategy | DefaultEvidenceStrategy,
     features: "FeatureSet",
@@ -373,14 +264,6 @@ def _resolve_unary_evidence_strategy(
     if isinstance(strategy, EvidenceStrategy):
         return strategy
     return strategy(features, linear_order_encoding)
-
-
-def _linear_order_encoding(
-    encoding: LinearOrderEncoding | str | None,
-) -> LinearOrderEncoding:
-    from wfomc.fol.grounding import resolve_linear_order_encoding
-
-    return resolve_linear_order_encoding(encoding)
 
 
 def _validate_supported_features(
@@ -467,7 +350,6 @@ _SPEC_MODULES: dict[AlgoName, str] = {
     AlgoName.RECURSIVE: "wfomc.algo.recursive.spec",
     AlgoName.PROPOSITIONAL: "wfomc.algo.propositional.spec",
     AlgoName.PROPOSITIONAL_REDUCED: "wfomc.algo.propositional.reduced_spec",
-    AlgoName.TAIL_SIGNATURE: "wfomc.algo.tail_signature.spec",
     AlgoName.BOUNDED_TREEWIDTH: "wfomc.algo.treewidth.spec",
 }
 _SPEC_CACHE: dict[AlgoName, AlgoSpec] = {}
@@ -499,7 +381,4 @@ __all__ = [
     "PreparedBranch",
     "algo_spec",
     "option_resolver",
-    "compile_source_arithmetic",
-    "reduce_unary_evidence_for_options",
-    "compile_reduced_problem",
 ]

@@ -197,11 +197,6 @@ class Formula:
 
         return predicates(self)
 
-    def consts(self) -> frozenset[object]:
-        from .analysis import constants
-
-        return constants(self)
-
     def free_vars(self) -> frozenset[object]:
         from .analysis import free_vars
 

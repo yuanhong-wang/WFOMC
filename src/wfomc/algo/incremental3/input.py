@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
 from wfomc.arithmetic import ArithmeticValue
 from wfomc.algo.core import AlgoInput, AlgoOptions
@@ -17,8 +18,17 @@ from wfomc.cell_graph import (
     profile_cell_formulas,
     required_profile_predicates,
 )
-from wfomc.problem import CompiledProblem
+from wfomc.cell_graph.staging import (
+    CellGraphInputVariant,
+    build_structural_branch,
+    rebind_component,
+)
+from wfomc.problem import CompiledBranchInstance
 from wfomc.engine.features import FeatureSet
+
+if TYPE_CHECKING:
+    from wfomc.engine.compilation import CompiledReducedProblem
+    from wfomc.fol import Formula
 
 
 @dataclass(frozen=True)
@@ -41,18 +51,38 @@ class CountingDPInput(AlgoInput):
     has_linear_order: bool = False
 
 
+@dataclass(frozen=True)
+class Incremental3InputVariant:
+    """Domain-selected evidence and native counting-state structure."""
+
+    evidence: CellGraphInputVariant
+    counting_state: CountingState
+
+
+@dataclass(frozen=True)
+class Incremental3InputTemplate:
+    """Reusable cell graphs for one native counting-state structure."""
+
+    components: tuple[CountingCellGraphComponent, ...]
+    counting_state: CountingState
+    unary_cardinality_masks: UnaryCardinalityMasks
+    has_linear_order: bool
+
+
 def build_input(
-    reduced: CompiledProblem,
+    reduced: CompiledBranchInstance,
     *,
     counting_state: CountingState,
     unary_cardinality_masks: UnaryCardinalityMasks,
     options: AlgoOptions,
     features: FeatureSet,
+    cell_formulas: tuple["Formula", ...] | None = None,
 ) -> CountingDPInput:
     leq = features.leq_predicate
-    required_unary_preds = required_profile_predicates(
-        reduced.profile_capacity_constraint
-    ) | unary_cardinality_masks.required_predicates()
+    required_unary_preds = (
+        required_profile_predicates(reduced.profile_capacity_constraint)
+        | unary_cardinality_masks.required_predicates()
+    )
     components = tuple(
         _counting_component(reduced, data, graph_weight, counting_state)
         for data, graph_weight in build_cell_graphs(
@@ -61,7 +91,11 @@ def build_input(
             reduced.arithmetic,
             leq_pred=leq,
             required_unary_preds=required_unary_preds,
-            cell_formulas=profile_cell_formulas(reduced.profile_capacity_constraint),
+            cell_formulas=(
+                cell_formulas
+                if cell_formulas is not None
+                else profile_cell_formulas(reduced.profile_capacity_constraint)
+            ),
             projected_binary_preds=counting_state.projected_predicates,
         )
     )
@@ -77,18 +111,95 @@ def build_input(
     )
 
 
+def build_input_template(
+    compiled: "CompiledReducedProblem",
+    *,
+    input_variant: Incremental3InputVariant,
+    options: AlgoOptions,
+) -> Incremental3InputTemplate:
+    """Build one reusable graph for a selected native counting automaton."""
+
+    from .counting_state import build_counting_state_for_normal_form
+
+    structural, cell_formulas = build_structural_branch(
+        compiled,
+        input_variant.evidence,
+    )
+    _general_state, unary_masks = build_counting_state_for_normal_form(
+        compiled.reduced_problem.normal_form,
+    )
+    built = build_input(
+        structural,
+        counting_state=input_variant.counting_state,
+        unary_cardinality_masks=unary_masks,
+        options=options,
+        features=compiled.feature_set,
+        cell_formulas=cell_formulas,
+    )
+    return Incremental3InputTemplate(
+        components=built.components,
+        counting_state=input_variant.counting_state,
+        unary_cardinality_masks=unary_masks,
+        has_linear_order=built.has_linear_order,
+    )
+
+
+def instantiate_input_template(
+    template: Incremental3InputTemplate,
+    concrete: CompiledBranchInstance,
+    *,
+    options: AlgoOptions,
+) -> CountingDPInput:
+    """Bind graph arithmetic and evidence capacities for one domain."""
+
+    components = []
+    for component in template.components:
+        rebound = rebind_component(component, concrete, include_evidence=True)
+        relation_weights = component.counting_binary_relation_weights
+        components.append(
+            replace(
+                rebound,
+                counting_binary_relation_weights=(
+                    None
+                    if relation_weights is None
+                    else tuple(
+                        tuple(
+                            tuple(
+                                (
+                                    forward_delta,
+                                    reverse_delta,
+                                    concrete.arithmetic.coerce(weight),
+                                )
+                                for forward_delta, reverse_delta, weight in entries
+                            )
+                            for entries in row
+                        )
+                        for row in relation_weights
+                    )
+                ),
+            )
+        )
+    return CountingDPInput(
+        algo=None,
+        options=options,
+        arithmetic=concrete.arithmetic,
+        components=tuple(components),
+        domain_size=len(concrete.domain),
+        counting_state=template.counting_state,
+        unary_cardinality_masks=template.unary_cardinality_masks,
+        has_linear_order=template.has_linear_order,
+    )
+
+
 def _counting_component(
-    reduced: CompiledProblem,
+    reduced: CompiledBranchInstance,
     data: CellGraphData,
     graph_weight: ArithmeticValue,
     state: CountingState,
 ) -> CountingCellGraphComponent:
     initial_states = tuple(_initial_state(cell, state) for cell in data.cells)
     accepting_states = tuple(
-        tuple(
-            counter.accepting_states_for_cell(cell)
-            for counter in state.row_counters
-        )
+        tuple(counter.accepting_states_for_cell(cell) for counter in state.row_counters)
         for cell in data.cells
     )
     projected_preds = state.projected_predicates
@@ -151,5 +262,9 @@ def _initial_state(cell: Cell, state: CountingState) -> tuple[int, ...] | None:
 __all__ = [
     "CountingCellGraphComponent",
     "CountingDPInput",
+    "Incremental3InputTemplate",
+    "Incremental3InputVariant",
     "build_input",
+    "build_input_template",
+    "instantiate_input_template",
 ]

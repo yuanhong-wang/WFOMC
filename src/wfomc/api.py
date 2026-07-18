@@ -9,23 +9,31 @@ from .algo import (
     AlgoOptions,
     EvidenceStrategy,
     ExistentialStrategy,
+    LinearOrderEncoding,
 )
-from .engine import CompileArtifacts
 from .engine import compile_problem as engine_compile_problem
+from .engine import instantiate_problem as engine_instantiate_problem
 from .engine import solve as engine_solve
 from .engine.runtime import RuntimeContext, RuntimeOptions
-from .problem import Problem
+from .problem import (
+    CompiledProblem,
+    Domain,
+    Problem,
+    ProblemExecution,
+    ProblemInstance,
+)
 from .result import WFOMCResult
+from .weights import WeightOptions
 
 
 def compile_problem(
-    problem: Problem,
+    problem: Problem | ProblemInstance,
     *,
     algo: AlgoName = AlgoName.STANDARD,
     options: AlgoOptions | None = None,
     runtime: RuntimeContext | RuntimeOptions | None = None,
-) -> CompileArtifacts:
-    """Compile a WFOMC problem into algorithm-owned input artifacts."""
+) -> CompiledProblem:
+    """Compile a reusable WFOMC problem without binding a domain."""
 
     return engine_compile_problem(
         problem,
@@ -35,8 +43,20 @@ def compile_problem(
     )
 
 
+def instantiate_problem(
+    compiled: CompiledProblem,
+    domain: Domain,
+    *,
+    runtime: RuntimeContext | RuntimeOptions | None = None,
+) -> ProblemExecution:
+    """Instantiate one compiled problem for a concrete domain."""
+
+    return engine_instantiate_problem(compiled, domain, runtime=runtime)
+
+
 def solve(
-    problem: Problem,
+    problem: Problem | ProblemInstance | CompiledProblem,
+    domain: Domain | None = None,
     *,
     algo: AlgoName = AlgoName.STANDARD,
     options: AlgoOptions | None = None,
@@ -46,6 +66,7 @@ def solve(
 
     return engine_solve(
         problem,
+        domain,
         algo=algo,
         options=options,
         runtime=runtime,
@@ -56,13 +77,19 @@ __all__ = [
     "AlgoName",
     "AlgoMaturity",
     "AlgoOptions",
-    "CompileArtifacts",
+    "CompiledProblem",
+    "Domain",
     "EvidenceStrategy",
     "ExistentialStrategy",
+    "LinearOrderEncoding",
     "Problem",
+    "ProblemExecution",
+    "ProblemInstance",
     "RuntimeContext",
     "RuntimeOptions",
     "WFOMCResult",
+    "WeightOptions",
     "compile_problem",
+    "instantiate_problem",
     "solve",
 ]

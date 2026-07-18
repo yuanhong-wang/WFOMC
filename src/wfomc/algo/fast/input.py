@@ -3,25 +3,29 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, TypeAlias
 
 from wfomc.algo.core import AlgoInput, AlgoOptions
 from .operations import (
     OptimizedOperations,
+    instantiate_optimized_operations,
     materialize_optimized_operations,
 )
 from wfomc.arithmetic import ArithmeticValue
 from wfomc.cell_graph import (
     Cell,
     CellGraphComponent,
-    profile_cell_formulas,
     required_profile_predicates,
 )
+from wfomc.cell_graph.staging import build_structural_branch
 from .graph import CellWithEvidenceProfile, build_optimized_cell_graphs
-from wfomc.problem import CompiledProblem
+from wfomc.problem import CompiledBranchInstance
 
 if TYPE_CHECKING:
+    from wfomc.engine.compilation import CompiledReducedProblem
+    from wfomc.fol import Formula
+
     from .graph import _EvidenceOptimizedAnalysis, _OptimizedAnalysis
 
 
@@ -47,12 +51,20 @@ class OptimizedCellGraphInput(AlgoInput):
     domain_size: int = 0
 
 
+@dataclass(frozen=True)
+class FastInputTemplate:
+    """Domain-free weighted cell graphs and static Fast clique layouts."""
+
+    components: tuple[OptimizedCellGraphComponent, ...]
+
+
 def build_input(
-    reduced: CompiledProblem,
+    reduced: CompiledBranchInstance,
     *,
     domain_size: int,
     modified_cell_symmetry: bool,
     options: AlgoOptions,
+    cell_formulas: tuple["Formula", ...] | None = None,
 ) -> OptimizedCellGraphInput:
     components = tuple(
         _fast_component(reduced, graph, graph_weight, modified_cell_symmetry)
@@ -66,7 +78,7 @@ def build_input(
                 reduced.profile_capacity_constraint
             ),
             profile_capacity_constraint=reduced.profile_capacity_constraint,
-            cell_formulas=profile_cell_formulas(reduced.profile_capacity_constraint),
+            cell_formulas=cell_formulas,
         )
     )
     return OptimizedCellGraphInput(
@@ -78,8 +90,77 @@ def build_input(
     )
 
 
+def build_input_template(
+    compiled: "CompiledReducedProblem",
+    *,
+    input_variant: object,
+    modified_cell_symmetry: bool,
+    options: AlgoOptions,
+) -> FastInputTemplate:
+    """Build the expensive Fast cell graphs once without binding n."""
+
+    structural, cell_formulas = build_structural_branch(
+        compiled,
+        input_variant,
+    )
+    built = build_input(
+        structural,
+        domain_size=0,
+        modified_cell_symmetry=modified_cell_symmetry,
+        options=options,
+        cell_formulas=cell_formulas,
+    )
+    return FastInputTemplate(built.components)
+
+
+def instantiate_input_template(
+    template: FastInputTemplate,
+    concrete: CompiledBranchInstance,
+    *,
+    options: AlgoOptions,
+) -> OptimizedCellGraphInput:
+    """Rebind numeric values and create fresh recursive caches for one n."""
+
+    profile = concrete.profile_capacity_constraint
+    profile_sizes = (
+        None if profile is None else tuple(item.size for item in profile.profiles)
+    )
+    components = []
+    for component in template.components:
+        operations = component.weight_operations
+        if operations is None:
+            raise RuntimeError("Fast input template has no operation tables")
+        components.append(
+            replace(
+                component,
+                cell_weights=tuple(
+                    concrete.arithmetic.coerce(value)
+                    for value in component.cell_weights
+                ),
+                pair_weights=tuple(
+                    tuple(concrete.arithmetic.coerce(value) for value in row)
+                    for row in component.pair_weights
+                ),
+                graph_weight=concrete.arithmetic.coerce(component.graph_weight),
+                weight_operations=instantiate_optimized_operations(
+                    operations,
+                    arithmetic=concrete.arithmetic,
+                    domain_size=len(concrete.domain),
+                ),
+                evidence_profile_sizes=profile_sizes,
+            )
+        )
+    return OptimizedCellGraphInput(
+        algo=None,
+        options=options,
+        arithmetic=concrete.arithmetic,
+        components=tuple(components),
+        domain_size=len(concrete.domain),
+    )
+
+
 def _fast_component(
-    reduced: CompiledProblem,
+    reduced: CompiledBranchInstance,
     graph: "_OptimizedAnalysis | _EvidenceOptimizedAnalysis",
     graph_weight: ArithmeticValue,
     modified_cell_symmetry: bool,
@@ -117,5 +198,8 @@ def _fast_component(
 __all__ = [
     "OptimizedCellGraphComponent",
     "OptimizedCellGraphInput",
+    "FastInputTemplate",
     "build_input",
+    "build_input_template",
+    "instantiate_input_template",
 ]

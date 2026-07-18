@@ -11,7 +11,7 @@ from wfomc.cardinality_constraints import (
     LinearCardinalityConstraint,
 )
 from wfomc.evidence import Evidence
-from wfomc.problem import Problem
+from wfomc.problem import Domain, Problem, ProblemInstance
 
 from .cardinality import CCTransformer
 from .fol import FormulaTransformer
@@ -103,7 +103,7 @@ class ProblemTransformer(FormulaTransformer, CCTransformer):
             rhs=_exact_int(param, "rhs"),
         )
 
-    def wfomcs(self, args) -> Problem:
+    def wfomcs(self, args) -> ProblemInstance:
         sentence = args[0]
         _domain_name, domain = args[1]
         weightings = args[2]
@@ -114,12 +114,16 @@ class ProblemTransformer(FormulaTransformer, CCTransformer):
             self._predicate_by_name(pred_name): weights
             for pred_name, weights in weightings.items()
         }
-        return Problem(
-            sentence=sentence,
-            domain=frozenset(domain),
-            weights=pred_weights,
-            cardinality_constraints=self._cardinality_constraints(cardinality_constraints),
-            evidence=Evidence(unary=unary_evidence),
+        return ProblemInstance(
+            problem=Problem(
+                sentence=sentence,
+                weights=pred_weights,
+                cardinality_constraints=self._cardinality_constraints(
+                    cardinality_constraints
+                ),
+                evidence=Evidence(unary=unary_evidence),
+            ),
+            domain=Domain(frozenset(domain)),
         )
 
 

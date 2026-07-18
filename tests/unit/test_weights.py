@@ -99,7 +99,7 @@ def test_collect_symbolic_weight_variables_empty_when_none():
     from wfomc.fol import true as _true
     from wfomc.problem import Problem
 
-    problem = Problem(sentence=_true(), domain=frozenset({"a"}))
+    problem = Problem(sentence=_true())
     assert collect_symbolic_weight_variables(problem) == ()
 
 
@@ -115,7 +115,6 @@ def test_cardinality_constraints_are_not_weight_symbols_before_reduction():
 
     problem = Problem(
         sentence=_true(),
-        domain=frozenset({"a"}),
         cardinality_constraints=CardinalityConstraints(
             (
                 LinearCardinalityConstraint(
@@ -149,7 +148,6 @@ def test_collect_symbolic_weight_variables_only_reads_actual_weights():
 
     problem = Problem(
         sentence=_true(),
-        domain=frozenset({"a"}),
         weights={("P", 1): (_Sym("w"), 1)},
         cardinality_constraints=CardinalityConstraints(
             (

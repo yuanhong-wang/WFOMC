@@ -6,7 +6,6 @@ from importlib import import_module
 
 
 _EXPORTS = {
-    "CompileArtifacts": ("wfomc.engine.orchestration", "CompileArtifacts"),
     "FeatureSet": ("wfomc.engine.features", "FeatureSet"),
     "RuntimeCache": ("wfomc.engine.runtime", "RuntimeCache"),
     "RuntimeCacheStats": ("wfomc.engine.runtime", "RuntimeCacheStats"),
@@ -16,8 +15,8 @@ _EXPORTS = {
     "analyze_problem": ("wfomc.engine.orchestration", "analyze_problem"),
     "analyze_features": ("wfomc.engine.features", "analyze_features"),
     "compile_problem": ("wfomc.engine.orchestration", "compile_problem"),
+    "instantiate_problem": ("wfomc.engine.orchestration", "instantiate_problem"),
     "solve": ("wfomc.engine.orchestration", "solve"),
-    "solve_uncached": ("wfomc.engine.orchestration", "solve_uncached"),
 }
 
 

@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, replace
-from fractions import Fraction
+from dataclasses import dataclass
 from functools import reduce
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING
@@ -25,52 +24,10 @@ from wfomc.fol import (
     true as _true,
 )
 from wfomc.fol.normal_form import C2NormalForm
-from wfomc.reduction.core import ProblemWithDecoder, divide_decoder
 
 if TYPE_CHECKING:
-    from wfomc.algo.core import AlgoOptions
     from wfomc.arithmetic import ArithmeticValue
-    from wfomc.fol.normal_form import C2NormalForm
     from wfomc.fol.normal_form.c2.norm_form import CountSection, ForallCountSection
-    from wfomc.problem import ReducedProblem
-
-
-def reduce_counting_quantifiers(
-    problem: "ReducedProblem",
-    *,
-    options: "AlgoOptions",
-) -> ProblemWithDecoder:
-    from wfomc.cardinality_constraints import combine_cardinality_constraints
-
-    normal_form = problem.normal_form
-    qf_formula = normal_form.qf_formula
-    if qf_formula is None:
-        qf_formula = _true()
-    counting = reduce_counting(
-        normal_form,
-        domain_size=len(problem.domain),
-        rational_cls=Fraction,
-        reserved_predicate_names=(str(predicate) for predicate in problem.weights),
-    )
-    weights = dict(problem.weights)
-    weights.update(counting.weight_map())
-    reduced_normal_form = replace(
-        normal_form,
-        qf_formula=conjunction(qf_formula, counting.formula_patch),
-        counts=(),
-        forall_counts=(),
-        count_definitions=(),
-    )
-    reduced_problem = replace(
-        problem,
-        normal_form=reduced_normal_form,
-        weights=weights,
-        cardinality_constraints=combine_cardinality_constraints(
-            problem.cardinality_constraints,
-            counting.cardinality_constraints,
-        ),
-    )
-    return ProblemWithDecoder(reduced_problem, divide_decoder(counting.repeat_factor))
 
 
 @dataclass(frozen=True)
@@ -341,6 +298,5 @@ __all__ = [
     "CountingReduction",
     "can_reduce_counting_to_ufo2",
     "reduce_counting",
-    "reduce_counting_quantifiers",
     "reduce_exact_row_count",
 ]

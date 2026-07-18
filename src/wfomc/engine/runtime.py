@@ -6,20 +6,18 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 
-EngineFactory = Callable[..., object]
-ValueConverter = Callable[[object], object]
-
-
 @dataclass(frozen=True)
 class RuntimeOptions:
     """External runtime dependencies supplied for one engine context."""
 
-    # Factory used to construct the optional external tail-signature engine.
-    tail_signature_engine_factory: EngineFactory | None = None
-    # Converter from external tail-signature values to local arithmetic values.
-    tail_signature_value_converter: ValueConverter | None = None
     # Explicit Ganak executable; None uses GANAK or PATH discovery.
     propositional_ganak_path: str | None = None
+    # Maximum concrete per-domain executions retained by one runtime.
+    execution_cache_size: int = 8
+
+    def __post_init__(self) -> None:
+        if self.execution_cache_size < 0:
+            raise ValueError("execution_cache_size must be non-negative")
 
 
 @dataclass(frozen=True)
@@ -47,8 +45,12 @@ class RuntimeCache:
     # formulas, domain constants) at runtime boundaries.
     # Source feature-analysis results keyed independently of domain size.
     features: dict[object, object] = field(default_factory=dict)
-    # Prepared algorithm inputs keyed by problem, algorithm, and resolved options.
-    algo_inputs: dict[object, object] = field(default_factory=dict)
+    # Reusable domain-free compilations keyed by problem, algorithm, and options.
+    compiled_problems: dict[object, object] = field(default_factory=dict)
+    # Reusable algorithm-owned input templates keyed by compiled branch.
+    algo_input_templates: dict[object, object] = field(default_factory=dict)
+    # Concrete per-domain executions. This bucket is bounded by RuntimeOptions.
+    executions: dict[object, object] = field(default_factory=dict)
     # Fully decoded WFOMC results keyed by problem, algorithm, and options.
     results: dict[object, object] = field(default_factory=dict)
     _hits: dict[str, int] = field(default_factory=dict)
@@ -69,23 +71,13 @@ class RuntimeCache:
         store[key] = value
         return value
 
-    def has(self, bucket: str, key: object) -> bool:
-        return key in self._bucket(bucket)
+    def trim(self, bucket: str, maximum_size: int) -> None:
+        """Discard oldest inserted entries until a bucket fits its bound."""
 
-    def get(self, bucket: str, key: object) -> object:
         store = self._bucket(bucket)
-        self._hits[bucket] = self._hits.get(bucket, 0) + 1
-        return store[key]
-
-    def store(self, bucket: str, key: object, value: object) -> object:
-        self._bucket(bucket)[key] = value
-        return value
-
-    def clear(self) -> None:
-        for bucket in _CACHE_BUCKETS:
-            self._bucket(bucket).clear()
-        self._hits.clear()
-        self._misses.clear()
+        while len(store) > maximum_size:
+            oldest = next(iter(store))
+            del store[oldest]
 
     def stats(self) -> RuntimeCacheStats:
         return RuntimeCacheStats(
@@ -97,7 +89,9 @@ class RuntimeCache:
     def _bucket(self, bucket: str) -> dict[object, object]:
         stores = {
             "features": self.features,
-            "algo_inputs": self.algo_inputs,
+            "compiled_problems": self.compiled_problems,
+            "algo_input_templates": self.algo_input_templates,
+            "executions": self.executions,
             "results": self.results,
         }
         try:
@@ -134,7 +128,9 @@ class RuntimeContext:
 
 _CACHE_BUCKETS = (
     "features",
-    "algo_inputs",
+    "compiled_problems",
+    "algo_input_templates",
+    "executions",
     "results",
 )
 
@@ -144,6 +140,4 @@ __all__ = [
     "RuntimeCacheStats",
     "RuntimeContext",
     "RuntimeOptions",
-    "EngineFactory",
-    "ValueConverter",
 ]

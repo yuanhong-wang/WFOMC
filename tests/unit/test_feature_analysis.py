@@ -145,7 +145,6 @@ def test_binary_evidence_is_reported_as_a_feature():
     predicate = Predicate("R", 2)
     problem = Problem(
         sentence=true(),
-        domain=frozenset((Constant("a"), Constant("b"))),
         evidence=Evidence(
             binary=BinaryEvidence(
                 (GroundBinaryLiteral(predicate, Constant("a"), Constant("b")),)

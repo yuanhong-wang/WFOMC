@@ -13,13 +13,13 @@ from wfomc.algo.core import (
     AlgoInput,
     AlgoName,
     AlgoOptions,
-    compile_source_arithmetic,
 )
 from wfomc.arithmetic import ArithmeticValue
 from wfomc.cardinality_constraints import Comparator
+from wfomc.engine.compilation import CompiledSourceProblem
 from wfomc.engine.features import FeatureSet
 from wfomc.errors import UnsupportedFeatureError
-from wfomc.problem import Problem
+from wfomc.problem import Domain, Problem
 
 if TYPE_CHECKING:
     from wfomc.fol.grounding import LinearOrderEncoding
@@ -56,13 +56,45 @@ class GroundCNFInput(AlgoInput):
         )
 
 
-def build_input(
-    problem: Problem,
+@dataclass(frozen=True)
+class PropositionalInputTemplate:
+    """Compiled source formula and weights reused across ground domains."""
+
+    compiled: CompiledSourceProblem
+
+
+def build_input_template(
+    compiled: CompiledSourceProblem,
+) -> PropositionalInputTemplate:
+    """Wrap one domain-free source compilation for staged grounding."""
+
+    return PropositionalInputTemplate(compiled)
+
+
+def instantiate_input_template(
+    template: PropositionalInputTemplate,
+    domain: Domain,
+    *,
+    options: AlgoOptions,
+) -> GroundCNFInput:
+    """Ground a compiled source problem for one concrete domain."""
+
+    return _ground_input(
+        template.compiled,
+        domain,
+        options=options,
+        features=template.compiled.feature_set,
+    )
+
+
+def _ground_input(
+    compiled: CompiledSourceProblem,
+    domain_instance: Domain,
     *,
     options: AlgoOptions,
     features: FeatureSet,
 ) -> GroundCNFInput:
-    """Ground one public source problem directly into model-preserving CNF."""
+    """Ground one compiled source problem into model-preserving CNF."""
 
     from flint import fmpq_mpoly, fmpq_poly
     from wfomc.fol.analysis import predicates
@@ -76,9 +108,11 @@ def build_input(
         resolve_linear_order_encoding,
     )
 
-    arithmetic, compiled_weights = compile_source_arithmetic(problem, options)
+    problem = compiled.problem
+    arithmetic = compiled.arithmetic
+    compiled_weights = compiled.weights
     encoding = resolve_linear_order_encoding(options.linear_order_encoding)
-    domain = tuple(sorted(problem.domain, key=str))
+    domain = tuple(sorted(domain_instance.elements, key=str))
     grounded = ground_source_formula(problem.sentence, domain)
     tseitin = encode_tseitin(grounded)
 
@@ -286,4 +320,9 @@ def _ground_cardinality_constraints(
     return clauses
 
 
-__all__ = ["GroundCNFInput", "build_input"]
+__all__ = [
+    "GroundCNFInput",
+    "PropositionalInputTemplate",
+    "build_input_template",
+    "instantiate_input_template",
+]

@@ -8,13 +8,17 @@ from wfomc.api import (
     AlgoName,
     AlgoMaturity,
     AlgoOptions,
-    CompileArtifacts,
+    CompiledProblem,
+    Domain,
     EvidenceStrategy,
     ExistentialStrategy,
+    LinearOrderEncoding,
     RuntimeContext,
     RuntimeOptions,
     WFOMCResult,
+    WeightOptions,
     compile_problem,
+    instantiate_problem,
     solve,
 )
 from wfomc.cardinality_constraints import (
@@ -36,7 +40,7 @@ from wfomc.parser import (
     parse_problem,
     parse_problem_file,
 )
-from wfomc.problem import Problem
+from wfomc.problem import Problem, ProblemExecution, ProblemInstance
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -47,18 +51,24 @@ __all__ = [
     "CardinalityConstraints",
     "CardinalityTerm",
     "Comparator",
-    "CompileArtifacts",
+    "CompiledProblem",
+    "Domain",
     "Evidence",
     "EvidenceStrategy",
     "ExistentialStrategy",
     "GroundUnaryLiteral",
     "LinearCardinalityConstraint",
+    "LinearOrderEncoding",
     "Problem",
+    "ProblemExecution",
+    "ProblemInstance",
     "RuntimeContext",
     "RuntimeOptions",
     "UnaryEvidence",
     "WFOMCResult",
+    "WeightOptions",
     "compile_problem",
+    "instantiate_problem",
     "parse_formula",
     "parse_input",
     "parse_mln_problem",

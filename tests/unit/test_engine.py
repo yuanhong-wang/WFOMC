@@ -1,32 +1,29 @@
-"""Public engine behavior and runtime-cache contracts."""
-
-from fractions import Fraction
+"""Public engine behavior and domain-separated runtime-cache contracts."""
 
 from wfomc.algo import AlgoName
 from wfomc.api import solve as api_solve
 from wfomc.engine import compile_problem, solve as engine_solve
 from wfomc.engine.runtime import RuntimeContext, RuntimeOptions
-from wfomc.fol import Constant, Predicate, Variable, atom, forall
 from wfomc.parser import parse_input
-from wfomc.problem import Problem
+from wfomc.problem import Domain
 from wfomc.result import WFOMCResult
 
 
 def test_engine_and_public_api_return_the_same_result():
-    problem = parse_input("models/unary_evidence/evidence-only.wfomcs")
+    instance = parse_input("models/unary_evidence/evidence-only.wfomcs")
 
-    result = engine_solve(problem, algo=AlgoName.STANDARD)
+    result = engine_solve(instance, algo=AlgoName.STANDARD)
 
     assert isinstance(result, WFOMCResult)
-    assert result == api_solve(problem, algo=AlgoName.STANDARD)
+    assert result == api_solve(instance, algo=AlgoName.STANDARD)
 
 
 def test_result_cache_is_scoped_to_one_runtime():
     runtime = RuntimeContext()
-    problem = parse_input("models/unary_evidence/evidence-only.wfomcs")
+    instance = parse_input("models/unary_evidence/evidence-only.wfomcs")
 
-    first = engine_solve(problem, algo=AlgoName.STANDARD, runtime=runtime)
-    second = engine_solve(problem, algo=AlgoName.STANDARD, runtime=runtime)
+    first = engine_solve(instance, algo=AlgoName.STANDARD, runtime=runtime)
+    second = engine_solve(instance, algo=AlgoName.STANDARD, runtime=runtime)
 
     stats = runtime.cache.stats()
     assert second == first
@@ -35,47 +32,41 @@ def test_result_cache_is_scoped_to_one_runtime():
 
 
 def test_runtime_options_are_accepted_by_engine_and_api():
-    problem = parse_input("models/unary_evidence/evidence-only.wfomcs")
+    instance = parse_input("models/unary_evidence/evidence-only.wfomcs")
 
     assert engine_solve(
-        problem,
+        instance,
         algo=AlgoName.STANDARD,
         runtime=RuntimeOptions(),
-    ) == api_solve(problem, algo=AlgoName.STANDARD, runtime=RuntimeOptions())
+    ) == api_solve(instance, algo=AlgoName.STANDARD, runtime=RuntimeOptions())
 
 
-def test_compile_cache_reuses_features_and_prepared_input():
+def test_one_compilation_serves_multiple_domain_sizes():
     runtime = RuntimeContext()
-    problem = parse_input("models/unary_evidence/evidence-only.wfomcs")
-
-    compile_problem(problem, algo=AlgoName.STANDARD, runtime=runtime)
-    compile_problem(problem, algo=AlgoName.STANDARD, runtime=runtime)
-
-    stats = runtime.cache.stats()
-    assert (stats.misses["features"], stats.hits["features"]) == (1, 1)
-    assert (stats.misses["algo_inputs"], stats.hits["algo_inputs"]) == (1, 1)
-
-
-def test_compile_cache_key_includes_domain():
-    runtime = RuntimeContext()
-    x = Variable("X")
-    predicate = Predicate("P", 1)
-    sentence = forall(x, atom("P", x))
-    weights = {predicate: (Fraction(2, 1), Fraction(3, 1))}
-    small = Problem(
-        sentence=sentence,
-        domain=frozenset({Constant("a"), Constant("b")}),
-        weights=weights,
-    )
-    large = Problem(
-        sentence=sentence,
-        domain=frozenset({Constant("a"), Constant("b"), Constant("c")}),
-        weights=weights,
+    instance = parse_input("models/2-colored-graph.wfomcs")
+    compiled = compile_problem(
+        instance.problem,
+        algo=AlgoName.FASTV2,
+        runtime=runtime,
     )
 
-    compile_problem(small, algo=AlgoName.STANDARD, runtime=runtime)
-    compile_problem(large, algo=AlgoName.STANDARD, runtime=runtime)
+    small = engine_solve(compiled, Domain.of_size(2), runtime=runtime)
+    large = engine_solve(compiled, Domain.of_size(3), runtime=runtime)
 
+    assert small != large
     stats = runtime.cache.stats()
-    assert stats.misses["features"] == 2
-    assert stats.misses["algo_inputs"] == 2
+    assert stats.misses["compiled_problems"] == 1
+    assert stats.misses["algo_input_templates"] == 1
+    assert stats.hits["algo_input_templates"] == 1
+    assert stats.misses["executions"] == 2
+
+
+def test_concrete_execution_cache_is_bounded():
+    runtime = RuntimeContext(options=RuntimeOptions(execution_cache_size=2))
+    instance = parse_input("models/2-colored-graph.wfomcs")
+    compiled = compile_problem(instance.problem, algo=AlgoName.FAST, runtime=runtime)
+
+    for size in (1, 2, 3):
+        engine_solve(compiled, Domain.of_size(size), runtime=runtime)
+
+    assert runtime.cache.stats().sizes["executions"] == 2

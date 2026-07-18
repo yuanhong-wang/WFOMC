@@ -14,7 +14,7 @@ from wfomc.algo.treewidth.input import (
 )
 from wfomc.algo import AlgoName
 from wfomc.errors import UnsupportedFeatureError
-from wfomc.engine import compile_problem
+from wfomc.engine import solve as engine_solve
 from wfomc.algo.treewidth.solve import solve
 from wfomc.parser import parse_input
 
@@ -107,4 +107,4 @@ def test_compile_problem_treewidth_reduction_raises_unsupported():
     problem = parse_input("models/2-colored-graph.wfomcs")
 
     with pytest.raises(UnsupportedFeatureError, match="bounded-treewidth"):
-        compile_problem(problem, algo=AlgoName.BOUNDED_TREEWIDTH)
+        engine_solve(problem, algo=AlgoName.BOUNDED_TREEWIDTH)

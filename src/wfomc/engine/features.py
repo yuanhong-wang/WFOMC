@@ -12,7 +12,7 @@ from wfomc.weights import collect_symbolic_weight_variables
 
 if TYPE_CHECKING:
     from wfomc.fol.normal_form import C2NormalForm
-    from wfomc.problem import Problem
+    from wfomc.problem import Problem, ProblemInstance
 
 
 @dataclass(frozen=True)
@@ -44,9 +44,13 @@ class FeatureSet:
 
 
 def analyze_features(
-    problem: "Problem",
+    problem: "Problem | ProblemInstance",
     normal_form: "C2NormalForm | None" = None,
 ) -> FeatureSet:
+    from wfomc.problem import ProblemInstance
+
+    if isinstance(problem, ProblemInstance):
+        problem = problem.problem
     sentence = problem.sentence
     text = str(sentence)
     formulas = tuple(_sentence_formulas(sentence))

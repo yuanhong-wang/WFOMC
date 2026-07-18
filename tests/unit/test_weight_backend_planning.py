@@ -5,13 +5,13 @@ from fractions import Fraction
 import pytest
 from flint import arb, arb_poly, fmpq_mpoly_ctx
 from wfomc.algo import AlgoName, AlgoOptions, EvidenceStrategy, algo_spec
-from wfomc.api import compile_problem, solve
+from wfomc.api import compile_problem, instantiate_problem, solve
 from wfomc.arithmetic import ArithmeticBackend
 from wfomc.engine.features import analyze_features
 from wfomc.errors import ArithmeticBackendError
 from wfomc.evidence import Evidence, GroundUnaryLiteral, UnaryEvidence
 from wfomc.parser import parse_input, parse_problem
-from wfomc.problem import Problem
+from wfomc.problem import Domain, Problem, ProblemInstance
 from wfomc.weights import (
     WeightOptions,
     collect_symbolic_weight_variables,
@@ -103,10 +103,12 @@ def test_single_symbol_arb_polynomial_runs_end_to_end():
     variable = fol.variable("X")
     predicate = fol.predicate("P", 1)
     symbol_context = fmpq_mpoly_ctx.get(("w",), "lex")
-    problem = Problem(
-        sentence=forall(variable, predicate(variable) | ~predicate(variable)),
-        domain=frozenset((fol.constant("a"), fol.constant("b"))),
-        weights={predicate: (symbol_context.gen(0), 1)},
+    problem = ProblemInstance(
+        Problem(
+            sentence=forall(variable, predicate(variable) | ~predicate(variable)),
+            weights={predicate: (symbol_context.gen(0), 1)},
+        ),
+        Domain(frozenset((fol.constant("a"), fol.constant("b")))),
     )
 
     result = solve(
@@ -167,17 +169,24 @@ def test_propositional_reports_exact_only_external_backend():
 
 def test_cardinality_reduction_injects_internal_weight_symbols():
     problem = parse_input("models/cardinality_constraints_example.wfomcs")
-    assert collect_symbolic_weight_variables(problem) == ()
+    assert collect_symbolic_weight_variables(problem.problem) == ()
 
-    artifacts = compile_problem(problem, algo=AlgoName.STANDARD)
-    branch = artifacts.reduced_problem.expect_single().problem
+    compiled = compile_problem(problem.problem, algo=AlgoName.STANDARD)
+    artifacts = instantiate_problem(compiled, problem.domain)
+    branch = artifacts.prepared_branches[0].problem
     arithmetic = artifacts.algo_input.arithmetic
 
-    assert branch.cardinality_constraints.is_empty
+    assert not branch.cardinality_constraints
     assert branch.internal_weight_symbols
     assert set(branch.internal_weight_symbols) <= set(arithmetic.symbolic_variables)
     assert branch.internal_weight_degree_limits
-    assert arithmetic.degree_limits == branch.internal_weight_degree_limits
+    assert arithmetic.degree_limits == tuple(
+        (
+            symbol,
+            expression.evaluate(problem.domain.size).numerator,
+        )
+        for symbol, expression in branch.internal_weight_degree_limits
+    )
     assert arithmetic.output_symbols == ()
     assert arithmetic.backend is ArithmeticBackend.FMPQ_MPOLY
 
@@ -190,11 +199,12 @@ def test_cardinality_can_explicitly_use_univariate_fmpq_poly():
         )
     )
 
-    artifacts = compile_problem(
-        problem,
+    compiled = compile_problem(
+        problem.problem,
         algo=AlgoName.STANDARD,
         options=options,
     )
+    artifacts = instantiate_problem(compiled, problem.domain)
 
     assert artifacts.algo_input.arithmetic.backend is ArithmeticBackend.FMPQ_POLY
     assert solve(problem, algo=AlgoName.STANDARD, options=options) == solve(
@@ -212,13 +222,15 @@ def test_symbolic_weights_survive_evidence_cardinality_decoder_chain():
     first = fol.constant("a")
     second = fol.constant("b")
     symbol_context = fmpq_mpoly_ctx.get(("w",), "lex")
-    problem = Problem(
-        sentence=forall(variable, predicate(variable) | ~predicate(variable)),
-        domain=frozenset((first, second)),
-        weights={predicate: (symbol_context.gen(0), 1)},
-        evidence=Evidence(
-            unary=UnaryEvidence((GroundUnaryLiteral(predicate, first, True),))
+    problem = ProblemInstance(
+        Problem(
+            sentence=forall(variable, predicate(variable) | ~predicate(variable)),
+            weights={predicate: (symbol_context.gen(0), 1)},
+            evidence=Evidence(
+                unary=UnaryEvidence((GroundUnaryLiteral(predicate, first, True),))
+            ),
         ),
+        Domain(frozenset((first, second))),
     )
 
     result = solve(

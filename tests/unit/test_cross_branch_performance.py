@@ -48,7 +48,10 @@ def test_serialized_catalog_case_round_trips_in_current_parser(key: str) -> None
     parsed = parse_problem(source)
 
     assert len(parsed.domain) == case.domain_size
-    assert parsed.declared_predicate_names() == case.build_problem().declared_predicate_names()
+    assert (
+        parsed.problem.declared_predicate_names()
+        == case.build_problem().problem.declared_predicate_names()
+    )
 
 
 def test_parse_worker_output_uses_sentinel_and_ignores_logs() -> None:

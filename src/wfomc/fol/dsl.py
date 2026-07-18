@@ -10,13 +10,12 @@ from .analysis import (
     atoms,
     constants,
     free_vars,
-    height,
     is_quantifier_free,
     predicates,
     variables,
 )
-from .context import FOLContext, context_for, current_context, default_context
-from .literals import Literal, positive_atom
+from .context import FOLContext, context_for, default_context
+from .literals import Literal
 from .syntax import (
     And,
     Atom,
@@ -38,7 +37,6 @@ from .pretty import format_formula
 from .rewrite import (
     eliminate_implications,
     flatten_connectives,
-    ground_formula,
     push_negation,
     simplify_boolean,
     substitute,
@@ -166,7 +164,6 @@ __all__ = [
     "constants",
     "context_for",
     "count",
-    "current_context",
     "default_context",
     "disjunction",
     "eliminate_implications",
@@ -178,8 +175,6 @@ __all__ = [
     "forall",
     "format_formula",
     "free_vars",
-    "ground_formula",
-    "height",
     "iff",
     "implies",
     "is_quantifier_free",
@@ -187,7 +182,6 @@ __all__ = [
     "model_literals",
     "models",
     "neg",
-    "positive_atom",
     "predicates",
     "push_negation",
     "simplify_boolean",

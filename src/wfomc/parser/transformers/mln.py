@@ -13,7 +13,7 @@ from wfomc.fol import (
     iff,
 )
 from wfomc.evidence import Evidence
-from wfomc.problem import Problem
+from wfomc.problem import Domain, Problem, ProblemInstance
 
 from .wfomcs import ProblemTransformer
 
@@ -48,7 +48,7 @@ class MLNTransformer(ProblemTransformer):
     def soft_rule(self, args):
         return args[0], args[1]
 
-    def mln(self, args) -> Problem:
+    def mln(self, args) -> ProblemInstance:
         rules = args[0]
         _domain_name, domain = args[1]
         cardinality_constraints = args[2]
@@ -67,12 +67,16 @@ class MLNTransformer(ProblemTransformer):
                 rule_formula = forall(free_var, rule_formula)
             formulas.append(rule_formula)
 
-        return Problem(
-            sentence=_conjoin_formulas(formulas),
-            domain=frozenset(domain),
-            weights=weights,
-            cardinality_constraints=self._cardinality_constraints(cardinality_constraints),
-            evidence=Evidence(unary=unary_evidence),
+        return ProblemInstance(
+            problem=Problem(
+                sentence=_conjoin_formulas(formulas),
+                weights=weights,
+                cardinality_constraints=self._cardinality_constraints(
+                    cardinality_constraints
+                ),
+                evidence=Evidence(unary=unary_evidence),
+            ),
+            domain=Domain(frozenset(domain)),
         )
 
     def _new_auxiliary_predicate(self, arity: int) -> Predicate:

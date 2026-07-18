@@ -2,22 +2,54 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from itertools import product
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 from wfomc.algo.core import AlgoName, AlgoOptions, EvidenceStrategy
 from wfomc.engine.features import FeatureSet
-from wfomc.problem import CompiledProblem
+from wfomc.problem import CompiledBranchInstance
 
 from .input import GroundCNFInput
 
 if TYPE_CHECKING:
+    from wfomc.engine.compilation import CompiledReducedProblem
     from wfomc.fol.syntax import Literal
 
 
+@dataclass(frozen=True)
+class ReducedPropositionalInputTemplate:
+    """Reusable reduced branch metadata for per-domain grounding."""
+
+    compiled: "CompiledReducedProblem"
+
+
+def build_input_template(
+    compiled: "CompiledReducedProblem",
+) -> ReducedPropositionalInputTemplate:
+    """Wrap a reduced numeric branch for staged grounding."""
+
+    return ReducedPropositionalInputTemplate(compiled)
+
+
+def instantiate_input_template(
+    template: ReducedPropositionalInputTemplate,
+    concrete: CompiledBranchInstance,
+    *,
+    options: AlgoOptions,
+) -> GroundCNFInput:
+    """Ground one reduced branch for a concrete domain."""
+
+    return build_reduced_input(
+        concrete,
+        options=options,
+        features=template.compiled.feature_set,
+    )
+
+
 def build_reduced_input(
-    reduced: CompiledProblem,
+    reduced: CompiledBranchInstance,
     *,
     options: AlgoOptions,
     features: FeatureSet,
@@ -123,4 +155,9 @@ def _literal_sort_key(literal: "Literal") -> tuple[object, ...]:
     )
 
 
-__all__ = ["build_reduced_input"]
+__all__ = [
+    "ReducedPropositionalInputTemplate",
+    "build_input_template",
+    "build_reduced_input",
+    "instantiate_input_template",
+]

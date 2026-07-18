@@ -12,8 +12,10 @@ from wfomc import (
     CardinalityConstraints,
     CardinalityTerm,
     Comparator,
+    Domain,
     LinearCardinalityConstraint,
     Problem,
+    ProblemInstance,
     WFOMCResult,
     parse_input,
     parse_problem,
@@ -23,6 +25,10 @@ from wfomc.fol import FOLContext
 
 
 ROOT = Path(__file__).parents[2]
+
+
+def _problem(*, domain, **kwargs) -> ProblemInstance:
+    return ProblemInstance(Problem(**kwargs), Domain(frozenset(domain)))
 
 
 def test_solve_returns_public_result_wrapper():
@@ -40,7 +46,7 @@ def test_result_exposes_projected_polynomial_terms():
     variable = fol.variable("X")
     predicate = fol.predicate("P", 1)
     symbol_context = fmpq_mpoly_ctx.get(("x",), "lex")
-    problem = Problem(
+    problem = _problem(
         sentence=fol.forall(variable, predicate(variable)),
         domain=frozenset((fol.constant("a"), fol.constant("b"))),
         weights={predicate: (symbol_context.gen(0), 1)},
@@ -85,7 +91,7 @@ def test_upper_cardinality_constraint_uses_truncated_polynomial_backend(algo):
     fol = FOLContext()
     variable = fol.variable("X")
     predicate = fol.predicate("P", 1)
-    problem = Problem(
+    problem = _problem(
         sentence=fol.forall(variable, predicate(variable) | ~predicate(variable)),
         domain=frozenset(fol.constant(f"d{index}") for index in range(10)),
         cardinality_constraints=CardinalityConstraints(
@@ -108,7 +114,7 @@ def test_binary_upper_cardinality_constraint_truncates_pair_weights():
     right = fol.variable("Y")
     relation = fol.predicate("R", 2)
     domain_size = 4
-    problem = Problem(
+    problem = _problem(
         sentence=fol.forall(
             left,
             fol.forall(right, relation(left, right) | ~relation(left, right)),
@@ -138,7 +144,7 @@ def test_joint_upper_cardinality_constraint_uses_truncated_mpoly_backend():
     first = fol.predicate("P", 1)
     second = fol.predicate("Q", 1)
     domain_size = 6
-    problem = Problem(
+    problem = _problem(
         sentence=fol.forall(
             variable,
             (first(variable) | ~first(variable))
@@ -171,7 +177,7 @@ def test_internal_cardinality_cap_does_not_truncate_colliding_user_symbol():
     symbol_name = "__wfomc_cardinality_0"
     symbol_context = fmpq_mpoly_ctx.get((symbol_name,), "lex")
     domain_size = 4
-    problem = Problem(
+    problem = _problem(
         sentence=fol.forall(
             variable,
             (weighted(variable) | ~weighted(variable))

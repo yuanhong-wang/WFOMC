@@ -174,13 +174,17 @@ class _OptimizedAnalysis(_GraphView):
                 ):
                     graph.add_edge(left, right)
 
+        # Clique independence is structural. A multi-cell clique necessarily
+        # has an internal choice interaction; a singleton is self-interacting
+        # exactly when its diagonal pair factor is non-unit. Do not probe
+        # J-terms up to the current domain size here: the layout is reusable
+        # across every n.
         self_loops = {
             clique_idx
-            for clique_idx in range(len(self.cliques))
-            if any(
-                self.get_J_term(clique_idx, size) != self.arithmetic.one()
-                for size in range(1, self.domain_size + 1)
-            )
+            for clique_idx, clique in enumerate(self.cliques)
+            if len(clique) > 1
+            or self.get_two_table_weight((clique[0], clique[0]))
+            != self.arithmetic.one()
         }
         without_self_loops = set(graph.nodes) - self_loops
         independent = (
@@ -332,15 +336,6 @@ class _EvidenceOptimizedAnalysis:
         )
 
     def _find_independent_sets(self) -> tuple[list[int], list[int], list[int]]:
-        max_profile = max(
-            range(len(self.evidence_profile_sizes)),
-            key=self.evidence_profile_sizes.__getitem__,
-        )
-        max_profile_cells = {
-            idx
-            for idx, cell in enumerate(self.cells)
-            if cell.evidence_profile_index == max_profile
-        }
         graph = nx.Graph()
         graph.add_nodes_from(range(len(self.cells)))
         for left in range(len(self.cells)):
@@ -356,17 +351,11 @@ class _EvidenceOptimizedAnalysis:
             if self.get_two_table_weight((cell, cell)) != self.arithmetic.one()
         }
         candidates = set(graph.nodes) - self_loops
-        if not candidates:
-            i1 = set()
-        elif candidates & max_profile_cells:
-            seed = set(
-                nx.maximal_independent_set(
-                    graph.subgraph(candidates & max_profile_cells)
-                )
-            )
-            i1 = set(nx.maximal_independent_set(graph.subgraph(candidates), nodes=seed))
-        else:
-            i1 = set(nx.maximal_independent_set(graph.subgraph(candidates)))
+        i1 = (
+            set()
+            if not candidates
+            else set(nx.maximal_independent_set(graph.subgraph(candidates)))
+        )
         independent = set(nx.maximal_independent_set(graph, nodes=i1))
         return list(i1), list(independent - i1), list(set(graph.nodes) - independent)
 

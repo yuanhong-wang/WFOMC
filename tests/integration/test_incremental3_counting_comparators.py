@@ -6,7 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from wfomc import AlgoName, compile_problem, parse_input, parse_problem, solve
+from wfomc import (
+    AlgoName,
+    compile_problem,
+    instantiate_problem,
+    parse_input,
+    parse_problem,
+    solve,
+)
 
 
 ROOT = Path(__file__).parents[2]
@@ -244,8 +251,14 @@ domain = 2
 """
     )
 
-    artifacts = compile_problem(impossible, algo=AlgoName.INCREMENTAL3)
-    mod_artifacts = compile_problem(large_modulus, algo=AlgoName.INCREMENTAL3)
+    artifacts = instantiate_problem(
+        compile_problem(impossible.problem, algo=AlgoName.INCREMENTAL3),
+        impossible.domain,
+    )
+    mod_artifacts = instantiate_problem(
+        compile_problem(large_modulus.problem, algo=AlgoName.INCREMENTAL3),
+        large_modulus.domain,
+    )
 
     assert artifacts.algo_input.counting_state.c_type_shape == (1,)
     assert mod_artifacts.algo_input.counting_state.c_type_shape == (2,)

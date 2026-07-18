@@ -13,13 +13,20 @@ from wfomc.algo.core import (
     PreparedBranch,
     option_resolver,
 )
-from wfomc.engine.features import FeatureSet, analyze_features
+from wfomc.engine.compilation import (
+    CompiledSourceProblem,
+    compile_source_problem,
+)
+from wfomc.engine.features import FeatureSet
 from wfomc.errors import UnsupportedFeatureError
 from wfomc.fol.grounding import LinearOrderEncoding
-from wfomc.problem import Problem
-from wfomc.reduction import identity_decoder
+from wfomc.problem import Domain, Problem
 
-from .input import build_input
+from .input import (
+    PropositionalInputTemplate,
+    build_input_template,
+    instantiate_input_template,
+)
 from .solve import solve
 
 
@@ -32,6 +39,10 @@ _BASE_RESOLVE_OPTIONS = option_resolver(
     supports_mod_counting=True,
     supports_binary_evidence=True,
 )
+
+
+def _identity_decoder(result: object, **_: object) -> object:
+    return result
 
 
 def resolve_options(
@@ -68,24 +79,57 @@ def resolve_options(
     return resolved
 
 
-def prepare(problem: Problem, options: AlgoOptions) -> tuple[PreparedBranch, ...]:
-    features = analyze_features(problem)
-    if (
-        options.linear_order_encoding is LinearOrderEncoding.AXIOMS
-        and any(order > 1 for order, _predicate in features.predecessor_predicates)
+def compile_branches(
+    problem: Problem,
+    options: AlgoOptions,
+) -> tuple[object, ...]:
+    compiled = compile_source_problem(problem, options)
+    if options.linear_order_encoding is LinearOrderEncoding.AXIOMS and any(
+        order > 1 for order, _predicate in compiled.feature_set.predecessor_predicates
     ):
         raise UnsupportedFeatureError(
             "direct propositional order axioms currently support only PRED/PRED1"
         )
-    algo_input = build_input(problem, options=options, features=features)
-    return (PreparedBranch(problem, algo_input, identity_decoder),)
+    return (compiled,)
+
+
+def build_propositional_input_template(
+    branch: object,
+    input_variant: object,
+    _options: AlgoOptions,
+) -> PropositionalInputTemplate:
+    if not isinstance(branch, CompiledSourceProblem):
+        raise TypeError("Propositional compiled branch has an invalid type")
+    if input_variant is not None:
+        raise TypeError("Propositional input does not use structural variants")
+    return build_input_template(branch)
+
+
+def instantiate_branch(
+    branch: object,
+    input_template: object,
+    domain: Domain,
+    options: AlgoOptions,
+) -> PreparedBranch:
+    if not isinstance(branch, CompiledSourceProblem):
+        raise TypeError("Propositional compiled branch has an invalid type")
+    if not isinstance(input_template, PropositionalInputTemplate):
+        raise TypeError("Propositional input template has an invalid type")
+    algo_input = instantiate_input_template(
+        input_template,
+        domain,
+        options=options,
+    )
+    return PreparedBranch(branch.problem, algo_input, _identity_decoder)
 
 
 SPEC = AlgoSpec(
     name=AlgoName.PROPOSITIONAL,
     resolve_options=resolve_options,
-    prepare=prepare,
     solve=solve,
+    compile_branches=compile_branches,
+    build_input_template=build_propositional_input_template,
+    instantiate_branch=instantiate_branch,
     maturity=AlgoMaturity.BETA,
     external_requirements=("Ganak executable",),
 )

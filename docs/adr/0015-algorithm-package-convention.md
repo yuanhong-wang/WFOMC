@@ -7,10 +7,10 @@ Accepted
 ## Context
 
 Algorithm packages exposed different builder and solver names, and every
-`__init__.py` implemented a lazy forwarding table. Tail-signature built its
-input in `solve.py`; bounded-treewidth kept its input models in `solve.py`.
-Following registration therefore required learning a different layout for each
-algorithm, while the engine registry only needed each package's `spec.SPEC`.
+`__init__.py` implemented a lazy forwarding table. Bounded-treewidth kept its
+input models in `solve.py`. Following registration therefore required learning
+a different layout for each algorithm, while the engine registry only needed
+each package's `spec.SPEC`.
 
 ## Decision
 
@@ -19,7 +19,8 @@ Packages that own an implementation use these roles:
 
 - `input.py`: input dataclasses and `build_input`;
 - `solve.py`: the public `solve(algo_input, runtime)` entry point;
-- `spec.py`: reductions, `prepare`, capability metadata, and `SPEC`;
+- `spec.py`: domain-free branch compilation, input-template construction,
+  concrete-domain instantiation, capability metadata, and `SPEC`;
 - `__init__.py`: package documentation only, with no lazy forwarding exports.
 
 Additional files are named for implementation responsibilities such as

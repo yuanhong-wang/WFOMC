@@ -29,6 +29,9 @@ match the codebase.
   CLI verbosity, and bounded phase/timing diagnostics.
 - `adr/0015-algorithm-package-convention.md`: consistent spec/input/solve
   ownership across algorithm packages.
+- `adr/0026-domain-separated-compilation.md`: separates reusable logical
+  compilation from concrete-domain instantiation and stages algorithm-owned
+  input templates.
 
 The earlier framework architecture pages were removed during the active
 framework migration. Use the dated review above as the current snapshot and
@@ -76,17 +79,23 @@ running system.
 ## Current Core Flow
 
 ```text
-Problem
-  -> source feature analysis + option resolution
-  -> lifted algorithms: ReducedProblem(C2NormalForm)
-       -> algorithm reduction chain
-       -> CompiledProblem(QF formula + compiled weights + branch arithmetic)
-  -> propositional: direct finite-domain grounding of the source Problem
-       -> model-preserving ground CNF + source-compiled branch arithmetic
-  -> propositional-reduced: normalize + apply logical reductions
-       -> CompiledProblem(QF formula) -> quantifier-free ground CNF
-  -> algorithm-owned AlgoInput sharing the branch arithmetic
+Problem (domain-free) + AlgoSpec/options
+  -> source feature analysis
+  -> CompiledProblem (reusable)
+       -> lifted algorithms: ReducedProblem branches + compiled weights
+       -> direct propositional: compiled source formula + weights
+       -> algorithm-owned reusable InputTemplate
+  + Domain
+  -> ProblemExecution
+       -> concrete reduction parameters and arithmetic degree limits
+       -> algorithm-owned AlgoInput with domain-sized state
   -> solve
   -> decode
   -> WFOMCResult
 ```
+
+All registered algorithms use this staged flow. Cell-graph inputs reuse
+structural graphs across compatible domain sizes. Propositional inputs reuse
+compilation but necessarily ground a fresh CNF for each domain. Incremental3
+includes its simplified counting automaton in the input-template variant, so a
+template is rebuilt only when that automaton's structure changes.

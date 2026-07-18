@@ -295,9 +295,56 @@ def materialize_optimized_operations(graph) -> OptimizedOperations:
     )
 
 
+def instantiate_optimized_operations(
+    operations: OptimizedOperations,
+    *,
+    arithmetic,
+    domain_size: int,
+) -> OptimizedOperations:
+    """Rebind static operation tables and allocate fresh per-domain caches."""
+
+    cell_weight = {
+        cell: arithmetic.coerce(weight)
+        for cell, weight in operations._cell_weight.items()
+    }
+    two_table = {
+        cells: arithmetic.coerce(weight)
+        for cells, weight in operations._two_table.items()
+    }
+    if isinstance(operations, MaterializedOptimizedEvidenceOperations):
+        return MaterializedOptimizedEvidenceOperations(
+            cells=list(operations.cells),
+            cliques=list(operations.cliques),
+            nonind=list(operations.nonind),
+            nonind_map=dict(operations.nonind_map),
+            i1_evidence_profile_partition=list(
+                operations.i1_evidence_profile_partition
+            ),
+            clique_evidence_profile_partitions=dict(
+                operations.clique_evidence_profile_partitions
+            ),
+            cell_weight=cell_weight,
+            two_table=two_table,
+            arithmetic=arithmetic,
+        )
+    return MaterializedOptimizedOperations(
+        cliques=list(operations.cliques),
+        nonind=list(operations.nonind),
+        nonind_map=dict(operations.nonind_map),
+        i1_ind=list(operations.i1_ind),
+        i2_ind=list(operations.i2_ind),
+        domain_size=domain_size,
+        modified_cell_symmetry=operations.modified_cell_symmetry,
+        cell_weight=cell_weight,
+        two_table=two_table,
+        arithmetic=arithmetic,
+    )
+
+
 __all__ = [
     "MaterializedOptimizedOperations",
     "MaterializedOptimizedEvidenceOperations",
     "materialize_optimized_operations",
+    "instantiate_optimized_operations",
     "OptimizedOperations",
 ]

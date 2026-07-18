@@ -96,49 +96,6 @@ def test_constraint_accepts_normalized_mod_comparison():
     assert not constraint.accepts(2)
 
 
-def test_safe_predicate_upper_bounds_use_nonnegative_upper_constraints():
-    constraints = CardinalityConstraints(
-        (
-            LinearCardinalityConstraint(
-                terms=(CardinalityTerm("P"),),
-                comparator=Comparator.LE,
-                rhs=7,
-            ),
-            LinearCardinalityConstraint(
-                terms=(CardinalityTerm("P"),),
-                comparator=Comparator.LT,
-                rhs=4,
-            ),
-            LinearCardinalityConstraint(
-                terms=(CardinalityTerm("P"), CardinalityTerm("Q", 2)),
-                comparator=Comparator.EQ,
-                rhs=5,
-            ),
-        )
-    )
-
-    assert constraints.safe_predicate_upper_bounds() == {"P": 3, "Q": 2}
-
-
-def test_safe_predicate_upper_bounds_ignore_non_upper_and_mixed_sign_constraints():
-    constraints = CardinalityConstraints(
-        (
-            LinearCardinalityConstraint(
-                terms=(CardinalityTerm("P"),),
-                comparator=Comparator.GE,
-                rhs=2,
-            ),
-            LinearCardinalityConstraint(
-                terms=(CardinalityTerm("P"), CardinalityTerm("Q", -1)),
-                comparator=Comparator.LE,
-                rhs=3,
-            ),
-        )
-    )
-
-    assert constraints.safe_predicate_upper_bounds() == {}
-
-
 def test_multinomial_coefficients_support_the_empty_domain(monkeypatch):
     from wfomc.multinomial import MultinomialCoefficients
 

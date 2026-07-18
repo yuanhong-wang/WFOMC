@@ -10,7 +10,6 @@ import json
 import math
 import os
 import re
-import shutil
 import signal
 import statistics
 import subprocess
@@ -80,7 +79,7 @@ def _number(value: object) -> str:
 
 
 def _serialize_formula(formula: object) -> str:
-    """Serialize the current typed AST using syntax shared with legacy modk."""
+    """Serialize the current typed AST using syntax understood by modk."""
 
     from wfomc.fol import (
         And,
@@ -100,7 +99,7 @@ def _serialize_formula(formula: object) -> str:
         terms = ",".join(str(term) for term in formula.terms)
         return f"{formula.predicate}({terms})" if formula.terms else str(formula.predicate)
     if isinstance(formula, BoolConst):
-        raise ValueError("the shared legacy DSL cannot serialize Boolean constants")
+        raise ValueError("the cross-branch DSL cannot serialize Boolean constants")
     if isinstance(formula, Eq):
         return f"{formula.left} = {formula.right}"
     if isinstance(formula, Not):
@@ -133,9 +132,10 @@ def _serialize_formula(formula: object) -> str:
 
 
 def serialize_catalog_case(case: BenchmarkCase) -> str:
-    """Render a typed catalog case into the legacy-compatible WFOMCS DSL."""
+    """Render a typed catalog case into the modk-compatible WFOMCS DSL."""
 
-    problem = case.build_problem()
+    instance = case.build_problem()
+    problem = instance.problem
     lines = [_serialize_formula(problem.sentence), f"D = {case.domain_size}"]
     for predicate, (positive, negative) in sorted(
         problem.weights.items(), key=lambda item: str(item[0])

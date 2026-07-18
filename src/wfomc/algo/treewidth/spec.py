@@ -13,7 +13,7 @@ from wfomc.algo.core import (
 )
 from .solve import solve
 from wfomc.errors import UnsupportedFeatureError
-from wfomc.problem import Problem
+from wfomc.problem import Domain, Problem
 
 
 def _reduce(
@@ -24,9 +24,31 @@ def _reduce(
     raise UnsupportedFeatureError("bounded-treewidth reduction is not yet implemented")
 
 
-def prepare(problem: Problem, options: AlgoOptions) -> tuple[PreparedBranch, ...]:
-    _reduce(problem, options=options)
-    return ()
+def compile_branches(
+    problem: Problem,
+    _options: AlgoOptions,
+) -> tuple[object, ...]:
+    return (problem,)
+
+
+def build_input_template(
+    branch: object,
+    _input_variant: object,
+    options: AlgoOptions,
+) -> object:
+    if not isinstance(branch, Problem):
+        raise TypeError("Bounded-treewidth compiled branch has an invalid type")
+    _reduce(branch, options=options)
+    raise AssertionError("unreachable")
+
+
+def instantiate_branch(
+    _branch: object,
+    _input_template: object,
+    _domain: Domain,
+    _options: AlgoOptions,
+) -> PreparedBranch:
+    raise RuntimeError("bounded-treewidth input construction did not fail")
 
 
 SPEC = AlgoSpec(
@@ -36,8 +58,10 @@ SPEC = AlgoSpec(
         default_unary_evidence=EvidenceStrategy.TREE_DECOMPOSITION_FACTORS,
         supported_unary_evidence=(EvidenceStrategy.TREE_DECOMPOSITION_FACTORS,),
     ),
-    prepare=prepare,
     solve=solve,
+    compile_branches=compile_branches,
+    build_input_template=build_input_template,
+    instantiate_branch=instantiate_branch,
     maturity=AlgoMaturity.UNAVAILABLE,
     external_requirements=("bounded-treewidth decomposition solver",),
 )

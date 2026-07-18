@@ -73,7 +73,7 @@ def _uses_general_cardinality(problem) -> bool:
 
     from wfomc.cardinality_constraints import Comparator
 
-    for constraint in problem.cardinality_constraints.constraints:
+    for constraint in problem.problem.cardinality_constraints.constraints:
         coefficients = defaultdict(int)
         for term in constraint.terms:
             coefficients[term.predicate] += term.coefficient
@@ -211,6 +211,7 @@ def test_direct_propositional_materializes_constraint_only_binary_predicate():
         CardinalityConstraints,
         CardinalityTerm,
         Comparator,
+        Domain,
         LinearCardinalityConstraint,
         Problem,
     )
@@ -221,7 +222,6 @@ def test_direct_propositional_materializes_constraint_only_binary_predicate():
     domain = frozenset(fol.constant(name) for name in ("a", "b"))
     problem = Problem(
         sentence=fol.true(),
-        domain=domain,
         cardinality_constraints=CardinalityConstraints(
             (
                 LinearCardinalityConstraint(
@@ -233,11 +233,15 @@ def test_direct_propositional_materializes_constraint_only_binary_predicate():
         ),
     )
 
-    assert solve(problem, algo=AlgoName.PROPOSITIONAL) == 4
+    assert solve(
+        problem,
+        Domain(domain),
+        algo=AlgoName.PROPOSITIONAL,
+    ) == 4
 
 
 def test_direct_propositional_counts_binary_evidence_without_reduction():
-    from wfomc import Problem
+    from wfomc import Domain, Problem
     from wfomc.evidence import BinaryEvidence, Evidence, GroundBinaryLiteral
     from wfomc.fol import FOLContext
 
@@ -246,7 +250,6 @@ def test_direct_propositional_counts_binary_evidence_without_reduction():
     left, right = (fol.constant(name) for name in ("a", "b"))
     problem = Problem(
         sentence=fol.true(),
-        domain=frozenset((left, right)),
         evidence=Evidence(
             binary=BinaryEvidence(
                 (GroundBinaryLiteral(relation, left, right, True),)
@@ -254,11 +257,15 @@ def test_direct_propositional_counts_binary_evidence_without_reduction():
         ),
     )
 
-    assert solve(problem, algo=AlgoName.PROPOSITIONAL) == 8
+    assert solve(
+        problem,
+        Domain(frozenset((left, right))),
+        algo=AlgoName.PROPOSITIONAL,
+    ) == 8
 
 
 def test_direct_propositional_counts_unmentioned_ground_relation_entries():
-    from wfomc import Problem
+    from wfomc import Domain, Problem
     from wfomc.fol import FOLContext
 
     fol = FOLContext()
@@ -266,8 +273,11 @@ def test_direct_propositional_counts_unmentioned_ground_relation_entries():
     first, second = (fol.constant(name) for name in ("a", "b"))
     problem = Problem(
         sentence=predicate(first),
-        domain=frozenset((first, second)),
     )
 
     # P(a) is fixed true while the unmentioned P(b) remains free.
-    assert solve(problem, algo=AlgoName.PROPOSITIONAL) == 2
+    assert solve(
+        problem,
+        Domain(frozenset((first, second))),
+        algo=AlgoName.PROPOSITIONAL,
+    ) == 2

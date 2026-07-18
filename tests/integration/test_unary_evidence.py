@@ -104,8 +104,8 @@ P(domain0)
 """
     )
 
-    # Lifted evidence assumes exchangeable unnamed domain elements. Keep the
-    # legacy rejection contract until named constants are explicitly supported.
+    # Lifted evidence assumes exchangeable unnamed domain elements, so named
+    # constants remain unsupported for this execution path.
     with pytest.raises(ValueError):
         solve(problem, algo=AlgoName.INCREMENTAL)
 

@@ -245,10 +245,6 @@ def default_context() -> FOLContext:
     return _DEFAULT_CONTEXT
 
 
-def current_context() -> FOLContext:
-    return default_context()
-
-
 def context_for(*values: object) -> FOLContext:
     for value in values:
         if isinstance(value, (Formula, Variable, Constant, Predicate)):
@@ -260,6 +256,5 @@ def context_for(*values: object) -> FOLContext:
 __all__ = [
     "FOLContext",
     "context_for",
-    "current_context",
     "default_context",
 ]

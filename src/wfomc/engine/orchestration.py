@@ -1,20 +1,21 @@
-"""Canonical WFOMC engine orchestration — pure dispatch, no algorithm branches."""
+"""Domain-separated WFOMC compilation, instantiation, and solving."""
 
 from __future__ import annotations
 
-import logging
-from dataclasses import dataclass
 from enum import Enum
+import logging
 import math
 from time import perf_counter
 
-from wfomc.algo.core import AlgoInput, AlgoName, AlgoOptions, PreparedBranch, algo_spec
+from wfomc.algo.core import AlgoInput, AlgoName, AlgoOptions, algo_spec
 from wfomc.engine.features import FeatureSet, analyze_features
 from wfomc.engine.runtime import RuntimeContext, RuntimeOptions
-from wfomc.problem import Problem
-from wfomc.reduction import (
-    ProblemWithDecoder,
-    ReducedProblems,
+from wfomc.problem import (
+    CompiledProblem,
+    Domain,
+    Problem,
+    ProblemExecution,
+    ProblemInstance,
 )
 from wfomc.result import WFOMCResult
 
@@ -22,140 +23,226 @@ from wfomc.result import WFOMCResult
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class CompileArtifacts:
-    parsed_problem: Problem
-    feature_set: FeatureSet | None = None
-    algo: AlgoName | None = None
-    algo_options: AlgoOptions | None = None
-    reduced_problem: ReducedProblems | None = None
-    algo_inputs: tuple[AlgoInput, ...] = ()
-    algo_input: AlgoInput | None = None
-
-
 def analyze_problem(
-    problem: Problem,
+    problem: Problem | ProblemInstance,
     *,
     runtime: RuntimeContext | RuntimeOptions | None = None,
-) -> CompileArtifacts:
+) -> FeatureSet:
+    """Analyze a logical problem independently of every concrete domain."""
+
+    source = _source_problem(problem)
     context = RuntimeContext.from_runtime(runtime)
     feature_set = context.cache.get_or_build(
         "features",
-        _feature_key(problem),
-        lambda: analyze_features(problem),
+        _feature_key(source),
+        lambda: analyze_features(source),
     )
-    return CompileArtifacts(
-        parsed_problem=problem,
-        feature_set=feature_set,
-    )
+    if not isinstance(feature_set, FeatureSet):
+        raise TypeError("feature cache returned a non-FeatureSet value")
+    return feature_set
 
 
 def compile_problem(
-    problem: Problem,
+    problem: Problem | ProblemInstance,
     *,
     algo: AlgoName = AlgoName.STANDARD,
     options: AlgoOptions | None = None,
     runtime: RuntimeContext | RuntimeOptions | None = None,
-) -> CompileArtifacts:
+) -> CompiledProblem:
+    """Compile a reusable logical problem without binding a domain."""
+
     started = perf_counter()
+    source = _source_problem(problem)
     context = RuntimeContext.from_runtime(runtime)
     selected_algo = _require_algo_name(algo)
-    analysis = analyze_problem(problem, runtime=context)
-    if analysis.feature_set is None:
-        raise RuntimeError("problem analysis did not produce features")
+    features = analyze_problem(source, runtime=context)
     spec = algo_spec(selected_algo)
-    resolved_options = spec.resolve_options(analysis.feature_set, options)
+    resolved_options = spec.resolve_options(features, options)
+    key = _compilation_key(source, selected_algo, resolved_options)
 
-    prepared = context.cache.get_or_build(
-        "algo_inputs",
-        _preparation_key(problem, selected_algo, resolved_options),
-        lambda: spec.prepare(problem, resolved_options),
-    )
-    if not isinstance(prepared, tuple) or not all(
-        isinstance(branch, PreparedBranch) for branch in prepared
-    ):
-        raise TypeError("algorithm prepare must return tuple[PreparedBranch, ...]")
-    reduced = ReducedProblems(
-        tuple(ProblemWithDecoder(branch.problem, branch.decoder) for branch in prepared)
-    )
-    algo_inputs = tuple(branch.algo_input for branch in prepared)
+    def build() -> CompiledProblem:
+        branches = spec.compile_branches(source, resolved_options)
+        if not isinstance(branches, tuple):
+            raise TypeError("compile_branches must return a tuple")
+        return CompiledProblem(
+            problem=source,
+            feature_set=features,
+            algo=selected_algo,
+            algo_options=resolved_options,
+            branches=branches,
+        )
+
+    compiled = context.cache.get_or_build("compiled_problems", key, build)
+    if not isinstance(compiled, CompiledProblem):
+        raise TypeError("compiled-problem cache returned an invalid value")
     logger.info(
-        "Compiled problem: algo=%s domain=%d branches=%d elapsed_ms=%.3f",
+        "Compiled domain-free problem: algo=%s branches=%d elapsed_ms=%.3f",
         selected_algo.value,
-        len(problem.domain),
-        len(algo_inputs),
+        len(compiled.branches),
         (perf_counter() - started) * 1000,
     )
+    return compiled
 
-    return CompileArtifacts(
-        parsed_problem=problem,
-        feature_set=analysis.feature_set,
-        algo=selected_algo,
-        algo_options=resolved_options,
-        reduced_problem=reduced,
-        algo_inputs=algo_inputs,
-        algo_input=algo_inputs[0] if algo_inputs else None,
+
+def instantiate_problem(
+    compiled: CompiledProblem,
+    domain: Domain,
+    *,
+    runtime: RuntimeContext | RuntimeOptions | None = None,
+) -> ProblemExecution:
+    """Instantiate one reusable compilation for a concrete finite domain."""
+
+    if not isinstance(compiled, CompiledProblem):
+        raise TypeError("compiled must be a CompiledProblem")
+    if not isinstance(domain, Domain):
+        raise TypeError("domain must be a Domain")
+    _validate_domain(compiled.problem, domain)
+    context = RuntimeContext.from_runtime(runtime)
+    key = _execution_key(compiled, domain)
+
+    def build() -> ProblemExecution:
+        spec = algo_spec(compiled.algo)
+        prepared_branches = []
+        for branch_index, branch in enumerate(compiled.branches):
+            if spec.branch_applies is not None and not spec.branch_applies(
+                branch, domain
+            ):
+                continue
+            input_variant = (
+                None
+                if spec.input_template_variant is None
+                else spec.input_template_variant(branch, domain)
+            )
+            input_template = context.cache.get_or_build(
+                "algo_input_templates",
+                _input_template_key(
+                    compiled,
+                    branch_index,
+                    input_variant,
+                ),
+                lambda branch=branch, input_variant=input_variant: (
+                    spec.build_input_template(
+                        branch,
+                        input_variant,
+                        compiled.algo_options,
+                    )
+                ),
+            )
+            instantiated = spec.instantiate_branch(
+                branch,
+                input_template,
+                domain,
+                compiled.algo_options,
+            )
+            if instantiated is not None:
+                prepared_branches.append(instantiated)
+        prepared = tuple(prepared_branches)
+        return ProblemExecution(
+            compiled_problem=compiled,
+            domain=domain,
+            prepared_branches=prepared,
+        )
+
+    execution = context.cache.get_or_build("executions", key, build)
+    context.cache.trim("executions", context.options.execution_cache_size)
+    if not isinstance(execution, ProblemExecution):
+        raise TypeError("execution cache returned an invalid value")
+    logger.info(
+        "Instantiated problem: algo=%s domain=%d branches=%d",
+        compiled.algo.value,
+        domain.size,
+        len(execution.prepared_branches),
     )
+    return execution
 
 
 def solve(
-    problem: Problem,
+    problem: Problem | ProblemInstance | CompiledProblem,
+    domain: Domain | None = None,
     *,
     algo: AlgoName = AlgoName.STANDARD,
     options: AlgoOptions | None = None,
     runtime: RuntimeContext | RuntimeOptions | None = None,
 ) -> WFOMCResult:
+    """Compile if needed, instantiate one domain, and solve."""
+
     context = RuntimeContext.from_runtime(runtime)
-    selected_algo = _require_algo_name(algo)
-    result_key = _result_key(problem, algo=selected_algo, options=options)
-
-    def compute() -> WFOMCResult:
-        started = perf_counter()
-        artifacts = compile_problem(
-            problem,
-            algo=selected_algo,
-            options=options,
-            runtime=context,
-        )
-        result = _run_reduced_problems(selected_algo, artifacts, context)
-        logger.info(
-            "Solved problem: algo=%s domain=%d branches=%d elapsed_ms=%.3f",
-            selected_algo.value,
-            len(problem.domain),
-            len(artifacts.algo_inputs),
-            (perf_counter() - started) * 1000,
-        )
-        return result
-
-    return context.cache.get_or_build("results", result_key, compute)
-
-
-def solve_uncached(
-    problem: Problem,
-    *,
-    algo: AlgoName = AlgoName.STANDARD,
-    options: AlgoOptions | None = None,
-    runtime: RuntimeContext | RuntimeOptions | None = None,
-) -> WFOMCResult:
-    context = RuntimeContext.from_runtime(runtime)
-    artifacts = compile_problem(
+    compiled, concrete_domain = _resolve_solve_target(
         problem,
+        domain,
         algo=algo,
         options=options,
         runtime=context,
     )
-    return _run_reduced_problems(artifacts.algo, artifacts, context)
+    result_key = _result_key(compiled, concrete_domain)
+
+    def compute() -> WFOMCResult:
+        started = perf_counter()
+        execution = instantiate_problem(
+            compiled,
+            concrete_domain,
+            runtime=context,
+        )
+        result = _run_execution(execution, context)
+        logger.info(
+            "Solved problem: algo=%s domain=%d branches=%d elapsed_ms=%.3f",
+            compiled.algo.value,
+            concrete_domain.size,
+            len(execution.prepared_branches),
+            (perf_counter() - started) * 1000,
+        )
+        return result
+
+    result = context.cache.get_or_build("results", result_key, compute)
+    if not isinstance(result, WFOMCResult):
+        raise TypeError("result cache returned an invalid value")
+    return result
 
 
-def _require_algo_name(algo: AlgoName) -> AlgoName:
-    if not isinstance(algo, AlgoName):
-        raise TypeError(f"algo must be AlgoName, got {type(algo).__name__}")
-    return algo
+def _resolve_solve_target(
+    target: Problem | ProblemInstance | CompiledProblem,
+    domain: Domain | None,
+    *,
+    algo: AlgoName,
+    options: AlgoOptions | None,
+    runtime: RuntimeContext,
+) -> tuple[CompiledProblem, Domain]:
+    if isinstance(target, CompiledProblem):
+        if domain is None:
+            raise TypeError("solve(compiled, ...) requires a Domain")
+        if options is not None:
+            raise TypeError("options are already fixed by CompiledProblem")
+        if algo is not AlgoName.STANDARD and algo is not target.algo:
+            raise TypeError("algo is already fixed by CompiledProblem")
+        return target, domain
+    if isinstance(target, ProblemInstance):
+        if domain is not None and domain != target.domain:
+            raise TypeError("domain was provided twice with different values")
+        domain = target.domain
+        target = target.problem
+    if not isinstance(target, Problem):
+        raise TypeError(
+            "solve target must be Problem, ProblemInstance, or CompiledProblem"
+        )
+    if domain is None:
+        raise TypeError("solve(problem, ...) requires a Domain")
+    return (
+        compile_problem(
+            target,
+            algo=algo,
+            options=options,
+            runtime=runtime,
+        ),
+        domain,
+    )
 
 
-def _run(algo: AlgoName, algo_input: AlgoInput, context: RuntimeContext) -> WFOMCResult:
-    spec = algo_spec(algo)
-    result = spec.solve(algo_input, context)
+def _run(
+    algo: AlgoName,
+    algo_input: AlgoInput,
+    context: RuntimeContext,
+) -> WFOMCResult:
+    result = algo_spec(algo).solve(algo_input, context)
     if not isinstance(result, WFOMCResult):
         raise TypeError(
             f"{algo.value} returned {type(result).__name__}; "
@@ -164,35 +251,23 @@ def _run(algo: AlgoName, algo_input: AlgoInput, context: RuntimeContext) -> WFOM
     return result
 
 
-def _run_reduced_problems(
-    algo: AlgoName | None,
-    artifacts: CompileArtifacts,
+def _run_execution(
+    execution: ProblemExecution,
     context: RuntimeContext,
 ) -> WFOMCResult:
-    if algo is None:
-        raise RuntimeError("compile artifacts do not specify an algorithm")
-    if artifacts.reduced_problem is None:
-        raise RuntimeError("compile artifacts do not contain reduced problems")
-    if len(artifacts.reduced_problem.problems) != len(artifacts.algo_inputs):
-        raise RuntimeError("reduced problem and algorithm input counts differ")
-
+    compiled = execution.compiled_problem
     total = None
     output_symbols: set[str] = set()
-    for reduced_problem, algo_input in zip(
-        artifacts.reduced_problem.problems,
-        artifacts.algo_inputs,
-    ):
-        raw = _run(algo, algo_input, context).raw
+    for branch in execution.prepared_branches:
+        algo_input = branch.algo_input
+        raw = _run(compiled.algo, algo_input, context).raw
         if (
-            artifacts.feature_set is not None
-            and artifacts.feature_set.has_linear_order
+            compiled.feature_set.has_linear_order
             and algo_input.include_order_factorial()
         ):
-            raw *= algo_input.arithmetic.from_int(
-                math.factorial(len(artifacts.parsed_problem.domain))
-            )
+            raw *= algo_input.arithmetic.from_int(math.factorial(execution.domain.size))
         output_symbols.update(algo_input.arithmetic.output_symbols)
-        decoded = reduced_problem.decoder(
+        decoded = branch.decoder(
             raw,
             arithmetic=algo_input.arithmetic,
             include_order_factorial=algo_input.include_order_factorial(),
@@ -200,46 +275,89 @@ def _run_reduced_problems(
         decoded = algo_input.arithmetic.project_to_output(decoded)
         total = decoded if total is None else total + decoded
     if total is None:
-        raise RuntimeError("reduction produced no problems")
+        raise RuntimeError("reduction produced no applicable problems")
     return WFOMCResult(total, tuple(sorted(output_symbols)))
 
 
-# ---------------------------------------------------------------------------
-# Cache keys
-#
-# Cache keys serialize mixed dataclass/enums/FLINT values internally, but the
-# public edge of each helper remains a source ``Problem``.
-# ---------------------------------------------------------------------------
+def _validate_domain(problem: Problem, domain: Domain) -> None:
+    missing = problem.required_domain_constants() - domain.elements
+    if missing:
+        raise ValueError(
+            "Domain does not contain referenced constants: "
+            + ", ".join(sorted(map(str, missing)))
+        )
+
+
+def _source_problem(problem: Problem | ProblemInstance) -> Problem:
+    if isinstance(problem, ProblemInstance):
+        return problem.problem
+    if isinstance(problem, Problem):
+        return problem
+    raise TypeError("problem must be Problem or ProblemInstance")
+
+
+def _require_algo_name(algo: AlgoName) -> AlgoName:
+    if not isinstance(algo, AlgoName):
+        raise TypeError(f"algo must be AlgoName, got {type(algo).__name__}")
+    return algo
 
 
 def _feature_key(problem: Problem) -> tuple[object, ...]:
-    return ("features-v1", problem.cache_key_parts(include_domain_size=False))
+    return ("features-v2", problem.cache_key_parts())
 
 
-def _preparation_key(
+def _compilation_key(
     problem: Problem,
     algo: AlgoName,
     options: AlgoOptions,
 ) -> tuple[object, ...]:
     return (
-        "prepared-v1",
+        "compiled-v2",
         algo.value,
-        problem.cache_key_parts(include_domain_size=True),
+        problem.cache_key_parts(),
         _options_key(options),
     )
 
 
-def _result_key(
-    problem: Problem,
-    *,
-    algo: AlgoName,
-    options: AlgoOptions | None,
+def _execution_key(
+    compiled: CompiledProblem,
+    domain: Domain,
 ) -> tuple[object, ...]:
     return (
-        "result-v1",
-        algo.value,
-        problem.cache_key_parts(include_domain_size=True),
-        _options_key(options),
+        "execution-v2",
+        _compilation_key(
+            compiled.problem,
+            compiled.algo,
+            compiled.algo_options,
+        ),
+        domain.cache_key_parts(),
+    )
+
+
+def _input_template_key(
+    compiled: CompiledProblem,
+    branch_index: int,
+    input_variant: object,
+) -> tuple[object, ...]:
+    return (
+        "algo-input-template-v2",
+        _compilation_key(
+            compiled.problem,
+            compiled.algo,
+            compiled.algo_options,
+        ),
+        branch_index,
+        input_variant,
+    )
+
+
+def _result_key(
+    compiled: CompiledProblem,
+    domain: Domain,
+) -> tuple[object, ...]:
+    return (
+        "result-v2",
+        _execution_key(compiled, domain),
     )
 
 
@@ -260,19 +378,13 @@ def _options_key(options: AlgoOptions | None) -> object:
     )
 
 
-def _mapping_key(mapping: object) -> object:
-    if not isinstance(mapping, dict):
-        return _object_key(mapping)
-    return tuple(sorted((_object_key(k), _object_key(v)) for k, v in mapping.items()))
-
-
 def _object_key(value: object) -> object:
     if value is None:
         return None
     if isinstance(value, (str, int, bool, float)):
         return value
     if isinstance(value, dict):
-        return _mapping_key(value)
+        return tuple(sorted((_object_key(k), _object_key(v)) for k, v in value.items()))
     if isinstance(value, (tuple, list)):
         return tuple(_object_key(item) for item in value)
     if isinstance(value, (set, frozenset)):
@@ -283,9 +395,8 @@ def _object_key(value: object) -> object:
 
 
 __all__ = [
-    "CompileArtifacts",
     "analyze_problem",
     "compile_problem",
+    "instantiate_problem",
     "solve",
-    "solve_uncached",
 ]

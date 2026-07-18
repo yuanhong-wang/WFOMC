@@ -8,9 +8,9 @@ Accepted
 
 `PlanningError` represented unrelated failures: unsupported problem features,
 wrong algorithm input types, incomplete materialization, inconsistent engine
-artifacts, and external tail-signature configuration. Callers could not tell a
-supported user error from an internal contract failure. Other domain errors
-did not share a common WFOMC base.
+artifacts, and external tool configuration. Callers could not tell a supported
+user error from an internal contract failure. Other domain errors did not share
+a common WFOMC base.
 
 ## Decision
 

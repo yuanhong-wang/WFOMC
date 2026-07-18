@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 RawWeightValue: TypeAlias = int | float | str | Fraction | _ArithmeticValue
-"""A raw weight value before compilation: numeric, symbolic, or legacy."""
+"""A raw weight value before compilation: numeric, symbolic, or backend-native."""
 
 CompiledWeightValue: TypeAlias = _ArithmeticValue
 """A compiled weight value after passing through an ArithmeticContext."""

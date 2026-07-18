@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from wfomc import AlgoName, Problem
+from wfomc import AlgoName, Problem, ProblemInstance
 from wfomc.fol import predicates
 
 from benchmarks.cases import benchmark_case, benchmark_cases, benchmark_suite_names
@@ -37,16 +37,17 @@ def test_benchmark_case_keys_are_unique_and_deterministic():
 def test_every_benchmark_case_builds_a_current_typed_problem():
     for case in benchmark_cases("all"):
         problem = case.build_problem()
-        declared = predicates(problem.sentence)
+        declared = predicates(problem.problem.sentence)
 
-        assert isinstance(problem, Problem), case.key
+        assert isinstance(problem, ProblemInstance), case.key
+        assert isinstance(problem.problem, Problem), case.key
         assert len(problem.domain) == case.domain_size, case.key
         assert isinstance(case.default_algorithm, AlgoName), case.key
         assert case.correction_divisor > 0, case.key
-        assert set(problem.weights) <= declared, case.key
+        assert set(problem.problem.weights) <= declared, case.key
         assert all(
             term.predicate in declared
-            for constraint in problem.cardinality_constraints.constraints
+            for constraint in problem.problem.cardinality_constraints.constraints
             for term in constraint.terms
         ), case.key
 
