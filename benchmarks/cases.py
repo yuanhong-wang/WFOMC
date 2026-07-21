@@ -89,8 +89,8 @@ def _pairwise_negative_binary(symbols: list[str]) -> list[str]:
     ]
 
 
-def _k_regular_definition(k: int) -> FormulaDefinition:
-    """Hand reduction of undirected k-regular graphs used by the FO2 suite."""
+def _k_neighbour_surjection_kernel_definition(k: int) -> FormulaDefinition:
+    """Weighted kernel assigning each vertex's neighbours onto ``k`` slots."""
 
     if k < 1:
         raise ValueError("k must be positive")
@@ -126,7 +126,7 @@ def _k_regular_definition(k: int) -> FormulaDefinition:
     return " & ".join(f"({clause})" for clause in clauses), weights
 
 
-def _k_coloured_definition(k: int) -> FormulaDefinition:
+def _properly_k_coloured_graph_definition(k: int) -> FormulaDefinition:
     if k < 2:
         raise ValueError("k must be at least 2")
 
@@ -145,14 +145,14 @@ def _k_coloured_definition(k: int) -> FormulaDefinition:
     return " & ".join(f"({clause})" for clause in clauses), weights
 
 
-def _derangements_definition() -> FormulaDefinition:
+def _loopless_bi_total_relation_definition() -> FormulaDefinition:
     return (
         "~F(x,x) & (S1(x) | ~F(x,y)) & (S2(x) | ~F(y,x))",
         {"S1": (1, -1), "S2": (1, -1), "F": (1, 1)},
     )
 
 
-def _k_matchings_definition(k: int) -> FormulaDefinition:
+def _k_edge_disjoint_edge_covers_definition(k: int) -> FormulaDefinition:
     if k < 1:
         raise ValueError("k must be positive")
 
@@ -176,25 +176,26 @@ def _k_matchings_definition(k: int) -> FormulaDefinition:
     return " & ".join(f"({clause})" for clause in clauses), weights
 
 
-def _row_column_definition() -> FormulaDefinition:
+def _bi_total_relation_definition() -> FormulaDefinition:
     return (
         "(Sx(x) | ~P(x,y)) & (Sy(y) | ~P(x,y))",
         {"Sx": (1, -1), "Sy": (1, -1), "P": (1, 1)},
     )
 
 
-def _total_mappings_definition() -> FormulaDefinition:
+def _left_total_relation_definition() -> FormulaDefinition:
     return "S(x) | ~F(x,y)", {"S": (1, -1), "F": (1, 1)}
 
 
-def _no_isolated_digraph_definition() -> FormulaDefinition:
+def _loopless_digraph_without_isolates_definition() -> FormulaDefinition:
     return (
         "~E(x,x) & (S(x) | E(x,y) | E(y,x))",
         {"S": (1, -1), "E": (1, 1)},
     )
 
 
-def _three_regular_four_coloured_definition() -> FormulaDefinition:
+def _properly_four_coloured_undirected_three_regular_reduction_definition(
+) -> FormulaDefinition:
     colours = [f"Col{i}" for i in range(1, 5)]
     skolem = [f"S{i}" for i in range(1, 4)]
     canonical = [f"T{j}" for j in range(4)]
@@ -235,7 +236,8 @@ def _three_regular_four_coloured_definition() -> FormulaDefinition:
     return " & ".join(f"({clause})" for clause in clauses), weights
 
 
-def _directed_three_regular_definition() -> FormulaDefinition:
+def _directed_three_in_three_out_regular_reduction_definition(
+) -> FormulaDefinition:
     out_skolem = [f"OutS{i}" for i in range(1, 4)]
     out_canonical = [f"OutT{j}" for j in range(4)]
     in_skolem = [f"InS{i}" for i in range(1, 4)]
@@ -346,7 +348,9 @@ def _matrix_problem(
     return _typed_problem(sentence, domain_size, weights, constraint_specs)
 
 
-def _c2_three_regular_problem(domain_size: int) -> ProblemInstance:
+def _direct_c2_undirected_three_regular_problem(
+    domain_size: int,
+) -> ProblemInstance:
     sentence = parse_formula(
         r"(\forall X: (~E(X,X))) & "
         r"(\forall X: (\forall Y: (E(X,Y) -> E(Y,X)))) & "
@@ -355,7 +359,9 @@ def _c2_three_regular_problem(domain_size: int) -> ProblemInstance:
     return _typed_problem(sentence, domain_size)
 
 
-def _c2_three_coloured_regular_problem(domain_size: int) -> ProblemInstance:
+def _direct_c2_properly_three_coloured_undirected_three_regular_problem(
+    domain_size: int,
+) -> ProblemInstance:
     colours = ["C1", "C2", "C3"]
     clauses = [
         "~E(x,x)",
@@ -374,7 +380,9 @@ def _c2_three_coloured_regular_problem(domain_size: int) -> ProblemInstance:
     )
 
 
-def _c2_directed_three_in_three_out_problem(domain_size: int) -> ProblemInstance:
+def _direct_c2_directed_three_in_three_out_regular_problem(
+    domain_size: int,
+) -> ProblemInstance:
     sentence = parse_formula(
         r"(\forall X: (~R(X,X))) & "
         r"(\forall X: (\exists_=3 Y: R(X,Y))) & "
@@ -383,18 +391,22 @@ def _c2_directed_three_in_three_out_problem(domain_size: int) -> ProblemInstance
     return _typed_problem(sentence, domain_size)
 
 
-def _three_regular_four_coloured_problem(domain_size: int) -> ProblemInstance:
+def _properly_four_coloured_undirected_three_regular_reduction_problem(
+    domain_size: int,
+) -> ProblemInstance:
     return _matrix_problem(
         domain_size,
-        _three_regular_four_coloured_definition,
+        _properly_four_coloured_undirected_three_regular_reduction_definition,
         lambda n: (("F", Comparator.EQ, 3 * n),),
     )
 
 
-def _directed_three_regular_problem(domain_size: int) -> ProblemInstance:
+def _directed_three_in_three_out_regular_reduction_problem(
+    domain_size: int,
+) -> ProblemInstance:
     return _matrix_problem(
         domain_size,
-        _directed_three_regular_definition,
+        _directed_three_in_three_out_regular_reduction_definition,
         lambda n: (("E", Comparator.EQ, 3 * n),),
     )
 
@@ -484,20 +496,38 @@ def _case(
     )
 
 
-_ROW_COLUMN = _row_column_definition
-_DERANGEMENTS = _derangements_definition
-_TOTAL_MAPPINGS = _total_mappings_definition
-_NO_ISOLATED_DIGRAPH = _no_isolated_digraph_definition
-_TWO_REGULAR = partial(_k_regular_definition, 2)
-_THREE_REGULAR = partial(_k_regular_definition, 3)
-_FOUR_REGULAR = partial(_k_regular_definition, 4)
-_TWO_COLOURED = partial(_k_coloured_definition, 2)
-_THREE_COLOURED = partial(_k_coloured_definition, 3)
-_FOUR_COLOURED = partial(_k_coloured_definition, 4)
-_FIVE_COLOURED = partial(_k_coloured_definition, 5)
-_TWO_MATCHINGS = partial(_k_matchings_definition, 2)
-_THREE_MATCHINGS = partial(_k_matchings_definition, 3)
-_FOUR_MATCHINGS = partial(_k_matchings_definition, 4)
+_BI_TOTAL_RELATION = _bi_total_relation_definition
+_LOOPLESS_BI_TOTAL_RELATION = _loopless_bi_total_relation_definition
+_LEFT_TOTAL_RELATION = _left_total_relation_definition
+_LOOPLESS_DIGRAPH_WITHOUT_ISOLATES = _loopless_digraph_without_isolates_definition
+_TWO_NEIGHBOUR_SURJECTION_KERNEL = partial(
+    _k_neighbour_surjection_kernel_definition, 2
+)
+_THREE_NEIGHBOUR_SURJECTION_KERNEL = partial(
+    _k_neighbour_surjection_kernel_definition, 3
+)
+_FOUR_NEIGHBOUR_SURJECTION_KERNEL = partial(
+    _k_neighbour_surjection_kernel_definition, 4
+)
+_PROPERLY_TWO_COLOURED_GRAPH = partial(_properly_k_coloured_graph_definition, 2)
+_PROPERLY_THREE_COLOURED_GRAPH = partial(
+    _properly_k_coloured_graph_definition, 3
+)
+_PROPERLY_FOUR_COLOURED_GRAPH = partial(
+    _properly_k_coloured_graph_definition, 4
+)
+_PROPERLY_FIVE_COLOURED_GRAPH = partial(
+    _properly_k_coloured_graph_definition, 5
+)
+_TWO_EDGE_DISJOINT_EDGE_COVERS = partial(
+    _k_edge_disjoint_edge_covers_definition, 2
+)
+_THREE_EDGE_DISJOINT_EDGE_COVERS = partial(
+    _k_edge_disjoint_edge_covers_definition, 3
+)
+_FOUR_EDGE_DISJOINT_EDGE_COVERS = partial(
+    _k_edge_disjoint_edge_covers_definition, 4
+)
 
 
 def _core_case(family: str, domain_size: int, definition: FormulaFactory) -> BenchmarkCase:
@@ -511,32 +541,82 @@ def _core_case(family: str, domain_size: int, definition: FormulaFactory) -> Ben
 
 
 _CORE_SMOKE_ENTRIES: tuple[tuple[str, int, FormulaFactory], ...] = (
-    ("row-column", 8, _ROW_COLUMN),
-    ("derangements", 8, _DERANGEMENTS),
-    ("2-coloured", 8, _TWO_COLOURED),
-    ("no-isolated-digraph", 8, _NO_ISOLATED_DIGRAPH),
+    ("bi-total-relation", 8, _BI_TOTAL_RELATION),
+    ("loopless-bi-total-relation", 8, _LOOPLESS_BI_TOTAL_RELATION),
+    ("properly-2-coloured-graph", 8, _PROPERLY_TWO_COLOURED_GRAPH),
+    (
+        "loopless-digraph-without-isolates",
+        8,
+        _LOOPLESS_DIGRAPH_WITHOUT_ISOLATES,
+    ),
 )
 
 _CORE_MAIN_ENTRIES: tuple[tuple[str, int, FormulaFactory], ...] = (
-    *(("row-column", n, _ROW_COLUMN) for n in (75, 100, 150)),
-    *(("3-regular", n, _THREE_REGULAR) for n in (30, 60, 100)),
-    *(("4-coloured", n, _FOUR_COLOURED) for n in (100, 200, 300)),
-    *(("derangements", n, _DERANGEMENTS) for n in (100, 200, 300)),
-    *(("3-matchings", n, _THREE_MATCHINGS) for n in (10, 20, 30, 40)),
+    *(("bi-total-relation", n, _BI_TOTAL_RELATION) for n in (75, 100, 150)),
+    *(
+        ("3-neighbour-surjection-kernel", n, _THREE_NEIGHBOUR_SURJECTION_KERNEL)
+        for n in (30, 60, 100)
+    ),
+    *(
+        ("properly-4-coloured-graph", n, _PROPERLY_FOUR_COLOURED_GRAPH)
+        for n in (100, 200, 300)
+    ),
+    *(
+        ("loopless-bi-total-relation", n, _LOOPLESS_BI_TOTAL_RELATION)
+        for n in (100, 200, 300)
+    ),
+    *(
+        ("3-edge-disjoint-edge-covers", n, _THREE_EDGE_DISJOINT_EDGE_COVERS)
+        for n in (10, 20, 30, 40)
+    ),
 )
 
 _CORE_EXTRA_ENTRIES: tuple[tuple[str, int, FormulaFactory], ...] = (
-    *(("row-column", n, _ROW_COLUMN) for n in (50, 125, 200)),
-    *(("2-regular", n, _TWO_REGULAR) for n in (30, 60, 100)),
-    *(("4-regular", n, _FOUR_REGULAR) for n in (20, 40, 60)),
-    *(("2-coloured", n, _TWO_COLOURED) for n in (100, 200, 300)),
-    *(("3-coloured", n, _THREE_COLOURED) for n in (100, 200, 300)),
-    *(("5-coloured", n, _FIVE_COLOURED) for n in (75, 150, 225)),
-    *(("derangements", n, _DERANGEMENTS) for n in (80, 150, 250)),
-    *(("total-mappings", n, _TOTAL_MAPPINGS) for n in (80, 160, 240)),
-    *(("no-isolated-digraph", n, _NO_ISOLATED_DIGRAPH) for n in (75, 150, 225)),
-    *(("2-matchings", n, _TWO_MATCHINGS) for n in (20, 30, 40)),
-    *(("4-matchings", n, _FOUR_MATCHINGS) for n in (8, 12, 16)),
+    *(("bi-total-relation", n, _BI_TOTAL_RELATION) for n in (50, 125, 200)),
+    *(
+        ("2-neighbour-surjection-kernel", n, _TWO_NEIGHBOUR_SURJECTION_KERNEL)
+        for n in (30, 60, 100)
+    ),
+    *(
+        ("4-neighbour-surjection-kernel", n, _FOUR_NEIGHBOUR_SURJECTION_KERNEL)
+        for n in (20, 40, 60)
+    ),
+    *(
+        ("properly-2-coloured-graph", n, _PROPERLY_TWO_COLOURED_GRAPH)
+        for n in (100, 200, 300)
+    ),
+    *(
+        ("properly-3-coloured-graph", n, _PROPERLY_THREE_COLOURED_GRAPH)
+        for n in (100, 200, 300)
+    ),
+    *(
+        ("properly-5-coloured-graph", n, _PROPERLY_FIVE_COLOURED_GRAPH)
+        for n in (75, 150, 225)
+    ),
+    *(
+        ("loopless-bi-total-relation", n, _LOOPLESS_BI_TOTAL_RELATION)
+        for n in (80, 150, 250)
+    ),
+    *(
+        ("left-total-relation", n, _LEFT_TOTAL_RELATION)
+        for n in (80, 160, 240)
+    ),
+    *(
+        (
+            "loopless-digraph-without-isolates",
+            n,
+            _LOOPLESS_DIGRAPH_WITHOUT_ISOLATES,
+        )
+        for n in (75, 150, 225)
+    ),
+    *(
+        ("2-edge-disjoint-edge-covers", n, _TWO_EDGE_DISJOINT_EDGE_COVERS)
+        for n in (20, 30, 40)
+    ),
+    *(
+        ("4-edge-disjoint-edge-covers", n, _FOUR_EDGE_DISJOINT_EDGE_COVERS)
+        for n in (8, 12, 16)
+    ),
 )
 
 _CORE_SMOKE_CASES = tuple(_core_case(*entry) for entry in _CORE_SMOKE_ENTRIES)
@@ -550,53 +630,65 @@ def _c2_cases() -> tuple[BenchmarkCase, ...]:
     cases: list[BenchmarkCase] = []
     direct_sizes = sorted({10, 15, 20, 25, 30, *range(10, 101, 10)})
     for n in direct_sizes:
-        comparison_group = f"c2-vs-hand-3-regular/n{n}" if n % 10 == 0 else None
+        comparison_group = f"undirected-3-regular/n{n}" if n % 10 == 0 else None
         cases.append(
             _case(
-                key=f"c2/3-regular/n{n}",
-                family="3-regular",
+                key=f"c2/undirected-3-regular/direct-c2/n{n}",
+                family="undirected-3-regular",
                 category="c2",
                 domain_size=n,
-                builder=_c2_three_regular_problem,
+                builder=_direct_c2_undirected_three_regular_problem,
+                variant="direct-c2",
                 comparison_group=comparison_group,
             )
         )
     for n in (8, 10, 12, 14, 16):
         cases.append(
             _case(
-                key=f"c2/3-coloured-3-regular/n{n}",
-                family="3-coloured-3-regular",
+                key=(
+                    "c2/properly-3-coloured-undirected-3-regular/"
+                    f"direct-c2/n{n}"
+                ),
+                family="properly-3-coloured-undirected-3-regular",
                 category="c2",
                 domain_size=n,
-                builder=_c2_three_coloured_regular_problem,
+                builder=(
+                    _direct_c2_properly_three_coloured_undirected_three_regular_problem
+                ),
+                variant="direct-c2",
             )
         )
     for n in range(1, 21):
         cases.append(
             _case(
-                key=f"c2/directed-3-in-3-out/n{n}",
-                family="directed-3-in-3-out",
+                key=f"c2/directed-3-in-3-out-regular/direct-c2/n{n}",
+                family="directed-3-in-3-out-regular",
                 category="c2",
                 domain_size=n,
-                builder=_c2_directed_three_in_three_out_problem,
+                builder=_direct_c2_directed_three_in_three_out_regular_problem,
+                variant="direct-c2",
             )
         )
     for n in range(10, 101, 10):
         cases.append(
             _case(
-                key=f"c2/3-regular-hand/n{n}",
-                family="3-regular-hand",
+                key=(
+                    "c2/undirected-3-regular/"
+                    f"fo2-cardinality-reduction/n{n}"
+                ),
+                family="undirected-3-regular",
                 category="c2",
                 domain_size=n,
                 builder=partial(
                     _matrix_problem,
-                    definition=_THREE_REGULAR,
+                    definition=_THREE_NEIGHBOUR_SURJECTION_KERNEL,
                     constraint_factory=lambda domain: (
                         ("F", Comparator.EQ, 3 * domain),
                     ),
                 ),
+                variant="fo2-cardinality-reduction",
                 correction_divisor=6**n,
-                comparison_group=f"c2-vs-hand-3-regular/n{n}",
+                comparison_group=f"undirected-3-regular/n{n}",
             )
         )
     return tuple(cases)
@@ -607,22 +699,32 @@ _C2_CASES = _c2_cases()
 _CARDINALITY_CASES = tuple(
     [
         _case(
-            key=f"cardinality/3-regular-properly-4-coloured/n{n}",
-            family="3-regular-properly-4-coloured",
+            key=(
+                "cardinality/properly-4-coloured-undirected-3-regular/"
+                f"fo2-cardinality-reduction/n{n}"
+            ),
+            family="properly-4-coloured-undirected-3-regular",
             category="cardinality",
             domain_size=n,
-            builder=_three_regular_four_coloured_problem,
+            builder=(
+                _properly_four_coloured_undirected_three_regular_reduction_problem
+            ),
+            variant="fo2-cardinality-reduction",
             correction_divisor=6**n,
         )
         for n in (10, 15, 20, 30, 50)
     ]
     + [
         _case(
-            key=f"cardinality/directed-3-regular/n{n}",
-            family="directed-3-regular",
+            key=(
+                "cardinality/directed-3-in-3-out-regular/"
+                f"fo2-cardinality-reduction/n{n}"
+            ),
+            family="directed-3-in-3-out-regular",
             category="cardinality",
             domain_size=n,
-            builder=_directed_three_regular_problem,
+            builder=_directed_three_in_three_out_regular_reduction_problem,
+            variant="fo2-cardinality-reduction",
             correction_divisor=36**n,
         )
         for n in range(10, 16)
@@ -640,16 +742,34 @@ _UNARY_FAMILIES: tuple[
     ],
     ...,
 ] = (
-    ("row-column-Sx", _ROW_COLUMN, "Sx", _exact_half, _middle_interval),
-    ("total-mappings-S", _TOTAL_MAPPINGS, "S", _exact_half, _middle_interval),
     (
-        "no-isolated-digraph-S",
-        _NO_ISOLATED_DIGRAPH,
+        "bi-total-relation/sx-cardinality",
+        _BI_TOTAL_RELATION,
+        "Sx",
+        _exact_half,
+        _middle_interval,
+    ),
+    (
+        "left-total-relation/s-cardinality",
+        _LEFT_TOTAL_RELATION,
         "S",
         _exact_half,
         _middle_interval,
     ),
-    ("4-coloured-C1", _FOUR_COLOURED, "C1", _exact_quarter, _colour_interval),
+    (
+        "loopless-digraph-without-isolates/s-cardinality",
+        _LOOPLESS_DIGRAPH_WITHOUT_ISOLATES,
+        "S",
+        _exact_half,
+        _middle_interval,
+    ),
+    (
+        "properly-4-coloured-graph/c1-cardinality",
+        _PROPERLY_FOUR_COLOURED_GRAPH,
+        "C1",
+        _exact_quarter,
+        _colour_interval,
+    ),
 )
 
 
@@ -677,13 +797,13 @@ def _unary_cases() -> tuple[BenchmarkCase, ...]:
                 )
 
     for family, definition, predicate, exact, interval in _UNARY_FAMILIES:
-        if family == "no-isolated-digraph-S":
+        if family == "loopless-digraph-without-isolates/s-cardinality":
             continue
         for n in (100, 200, 300):
             for variant in ("exact", "interval"):
                 cases.append(
                     _case(
-                        key=f"unary-structure/{family}/{variant}/n{n}",
+                        key=f"unary/{family}/{variant}/n{n}",
                         family=family,
                         category="unary-cardinality",
                         domain_size=n,

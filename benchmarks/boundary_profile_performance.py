@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark current boundary-profile against saved cross-branch results."""
+"""Reproduce the historical BP comparison against saved cross-branch results."""
 
 from __future__ import annotations
 
@@ -17,8 +17,10 @@ from benchmarks.cross_branch_performance import (
     RESOURCE_FAILURES,
     RESULT_FIELDS,
     Workload,
+    _resume_identity_matches,
     _skipped_row,
     _write_workload,
+    benchmark_run_id,
     collect_catalog_workloads,
     read_csv,
     resolve_commit,
@@ -113,6 +115,7 @@ def execute_boundary_profile(
     input_dir: Path,
     checkpoint_path: Path | None = None,
     resume_rows: Iterable[Mapping[str, object]] = (),
+    run_id: str = "",
 ) -> list[dict[str, object]]:
     """Run one configuration, truncating a series after a resource failure."""
 
@@ -140,15 +143,31 @@ def execute_boundary_profile(
             "variant": workload.variant,
             "domain_size": workload.domain_size,
             "source_sha256": workload.source_sha256,
+            "series_sha256": workload.series_sha256,
+            "comparison_group": workload.comparison_group,
+            "correction_divisor": workload.correction_divisor,
             "branch": BRANCH,
             "commit": commit,
             "algorithm": ALGORITHM,
         }
         workload_series = series_key(metadata)
         if workload_series in blocked:
-            row = _skipped_row(workload, BRANCH, commit, ALGORITHM, repetitions)
+            row = _skipped_row(
+                workload, BRANCH, commit, ALGORITHM, repetitions,
+                timeout_s=timeout_s, memory_bytes=memory_bytes, run_id=run_id,
+            )
         else:
-            previous = resumable.get((workload.source_sha256, workload.domain_size))
+            candidate = resumable.get((workload.source_sha256, workload.domain_size))
+            previous = (
+                candidate
+                if candidate is not None
+                and _resume_identity_matches(
+                    candidate, commit=commit, repetitions=repetitions,
+                    timeout_s=timeout_s, memory_bytes=memory_bytes,
+                    run_id=run_id,
+                )
+                else None
+            )
             if previous is not None:
                 row = {**previous, **metadata, "matches_consensus": None}
             else:
@@ -167,6 +186,9 @@ def execute_boundary_profile(
                     **measured,
                     "matches_consensus": None,
                     "repetitions": repetitions,
+                    "timeout_s": timeout_s,
+                    "memory_bytes": memory_bytes,
+                    "run_id": run_id,
                 }
             if row["status"] in RESOURCE_FAILURES:
                 blocked.add(workload_series)
@@ -192,7 +214,11 @@ def mark_against_saved_consensus(
         expected = successful.get(
             (str(row["source_sha256"]), int(row["domain_size"]))
         )
-        row["matches_consensus"] = None if not expected else str(row["result"]) in expected
+        row["matches_consensus"] = (
+            str(row["result"]) in expected
+            if expected is not None and len(expected) == 1
+            else None
+        )
 
 
 def _configs(rows: Iterable[Mapping[str, object]]) -> list[tuple[str, str]]:
@@ -249,17 +275,18 @@ def write_summary(
         if row["branch"] == BRANCH and row["algorithm"] == ALGORITHM
     )
     lines = [
-        "# Boundary-profile performance comparison",
+        "# Historical boundary-profile performance comparison",
         "",
         f"- Boundary-profile commit: `{boundary_commit}`",
         f"- Saved workload inventory commit: `{source_commit}`",
         f"- Limits: {timeout_s:g} seconds and {memory_bytes / 1024**3:g} GiB RSS per measurement",
         "- The four historical configurations were reused from `../cross_branch/results.csv`; they were not rerun.",
+        "- Do not use this report as a current head-to-head comparison; use `domain_series_performance.py`.",
         "",
         "## Status totals",
         "",
-        "| configuration | ok | timeout | memory | error | skipped |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| configuration | ok | timeout | memory | unsupported | invalid | error | skipped |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for config in configs:
         selected = [
@@ -268,12 +295,16 @@ def write_summary(
         ]
         count = lambda status: sum(row["status"] == status for row in selected)
         errors = sum(
-            row["status"] not in ("ok", "timeout", "memory", "skipped-after-resource")
+            row["status"] not in (
+                "ok", "timeout", "memory", "unsupported", "invalid",
+                "skipped-after-resource",
+            )
             for row in selected
         )
         lines.append(
             f"| {config[0]}/{config[1]} | {count('ok')} | {count('timeout')} | "
-            f"{count('memory')} | {errors} | {count('skipped-after-resource')} |"
+            f"{count('memory')} | {count('unsupported')} | {count('invalid')} | "
+            f"{errors} | {count('skipped-after-resource')} |"
         )
 
     boundary = [
@@ -410,6 +441,12 @@ def main() -> int:
     result_path = args.out / "results.csv"
     resume = [] if args.no_resume else read_csv(result_path)
     memory_bytes = int(args.memory_gib * 1024**3)
+    environments = {BRANCH: (Path(sys.executable), commit)}
+    run_id = benchmark_run_id(
+        workloads, environments, algorithms=(ALGORITHM,),
+        timeout_s=args.timeout, memory_bytes=memory_bytes,
+        repetitions=args.repetitions,
+    )
     boundary_rows = execute_boundary_profile(
         workloads,
         python=Path(sys.executable),
@@ -420,6 +457,7 @@ def main() -> int:
         input_dir=input_dir,
         checkpoint_path=result_path,
         resume_rows=resume,
+        run_id=run_id,
     )
     mark_against_saved_consensus(boundary_rows, saved_rows)
     write_csv(boundary_rows, result_path)
