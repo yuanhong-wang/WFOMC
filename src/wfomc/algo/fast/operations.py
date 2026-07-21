@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import math
 
+from wfomc.algo.symmetric_clique import TwistedBinomialConvolver
 from wfomc.arithmetic import ArithmeticValue
 from .weights import (
     optimized_J_term,
     optimized_d_term,
     optimized_term,
+    symmetric_clique_row,
 )
 
 
@@ -42,6 +44,9 @@ class MaterializedOptimizedOperations:
         self.term_cache: dict = {}
         self.j_term_cache: dict = {}
         self.d_term_cache: dict = {}
+        self.symmetric_message_cache: dict[
+            int, tuple[ArithmeticValue, ...]
+        ] = {}
 
     def get_cell_weight(self, cell) -> ArithmeticValue:
         return self._cell_weight[cell]
@@ -81,6 +86,7 @@ class MaterializedOptimizedEvidenceOperations:
         nonind_map,
         i1_evidence_profile_partition,
         clique_evidence_profile_partitions,
+        domain_size,
         cell_weight,
         two_table,
         arithmetic,
@@ -91,6 +97,7 @@ class MaterializedOptimizedEvidenceOperations:
         self.nonind_map = nonind_map
         self.i1_evidence_profile_partition = i1_evidence_profile_partition
         self.clique_evidence_profile_partitions = clique_evidence_profile_partitions
+        self.domain_size = domain_size
         self._cell_weight = cell_weight
         self._two_table = two_table
         self.arithmetic = arithmetic
@@ -99,6 +106,9 @@ class MaterializedOptimizedEvidenceOperations:
             tuple[int, int, int], ArithmeticValue
         ] = {}
         self._d_term_cache: dict[tuple[int, int, int, int], ArithmeticValue] = {}
+        self.partitioned_message_cache: dict[
+            tuple[int, int], tuple[ArithmeticValue, ...]
+        ] = {}
 
     def get_cell_weight(self, cell) -> ArithmeticValue:
         return self._cell_weight[cell]
@@ -184,6 +194,13 @@ class MaterializedOptimizedEvidenceOperations:
         cached = self._partitioned_j_term_cache.get(key)
         if cached is not None:
             return cached
+        if self.domain_size is not None:
+            result = self._get_partitioned_J_message(
+                clique_idx,
+                partition_idx,
+            )[count]
+            self._partitioned_j_term_cache[key] = result
+            return result
         cell_indices = self.clique_evidence_profile_partitions[clique_idx][
             partition_idx
         ]
@@ -201,6 +218,47 @@ class MaterializedOptimizedEvidenceOperations:
             result = self.get_d_term(clique_idx, count, partition_idx)
         self._partitioned_j_term_cache[key] = result
         return result
+
+    def _get_partitioned_J_message(
+        self,
+        clique_idx: int,
+        partition_idx: int,
+    ) -> tuple[ArithmeticValue, ...]:
+        key = (clique_idx, partition_idx)
+        cached = self.partitioned_message_cache.get(key)
+        if cached is not None:
+            return cached
+        if self.domain_size is None:
+            raise RuntimeError("optimized operations are not bound to a domain")
+
+        clique = self.cliques[clique_idx]
+        cell_indices = self.clique_evidence_profile_partitions[clique_idx][
+            partition_idx
+        ]
+        if not cell_indices:
+            raise ValueError("evidence clique partitions must contain a cell")
+        cells = [clique[cell_index] for cell_index in cell_indices]
+        rows = [
+            symmetric_clique_row(
+                self.domain_size,
+                self.get_cell_weight(cell),
+                self.get_two_table_weight((cell, cell)),
+                self.arithmetic,
+            )
+            for cell in cells
+        ]
+        interaction = (
+            self.get_two_table_weight((cells[0], cells[1]))
+            if len(cells) > 1
+            else self.arithmetic.one()
+        )
+        message = TwistedBinomialConvolver(
+            self.domain_size,
+            interaction,
+            self.arithmetic,
+        ).product(rows)
+        self.partitioned_message_cache[key] = message
+        return message
 
     def get_d_term(
         self,
@@ -295,6 +353,7 @@ def materialize_optimized_operations(graph) -> OptimizedOperations:
             clique_evidence_profile_partitions=dict(
                 graph.clique_evidence_profile_partitions
             ),
+            domain_size=None,
             cell_weight=cell_weight,
             two_table=two_table,
             arithmetic=graph.arithmetic,
@@ -341,6 +400,7 @@ def instantiate_optimized_operations(
             clique_evidence_profile_partitions=dict(
                 operations.clique_evidence_profile_partitions
             ),
+            domain_size=domain_size,
             cell_weight=cell_weight,
             two_table=two_table,
             arithmetic=arithmetic,

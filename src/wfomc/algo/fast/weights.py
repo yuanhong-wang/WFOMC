@@ -14,7 +14,30 @@ from __future__ import annotations
 
 import math
 
+from wfomc.algo.symmetric_clique import TwistedBinomialConvolver
 from wfomc.arithmetic import ArithmeticValue
+
+
+def symmetric_clique_row(
+    domain_size: int,
+    weight: ArithmeticValue,
+    self_interaction: ArithmeticValue,
+    arithmetic,
+) -> tuple[ArithmeticValue, ...]:
+    """Return ``weight^n * self_interaction^choose(n, 2)`` for all ``n``."""
+
+    row = [arithmetic.one()]
+    value = arithmetic.one()
+    interaction_power = arithmetic.one()
+    for _count in range(1, domain_size + 1):
+        value = arithmetic.multiply(value, weight)
+        value = arithmetic.multiply(value, interaction_power)
+        row.append(value)
+        interaction_power = arithmetic.multiply(
+            interaction_power,
+            self_interaction,
+        )
+    return tuple(row)
 
 
 def optimized_term(
@@ -88,7 +111,12 @@ def optimized_J_term(ops, clique_idx: int, nhat: int) -> ArithmeticValue:
     if key in ops.j_term_cache:
         return ops.j_term_cache[key]
 
-    if len(ops.cliques[clique_idx]) == 1:
+    if (
+        getattr(ops, "domain_size", None) is not None
+        and hasattr(ops, "symmetric_message_cache")
+    ):
+        thesum = optimized_J_message(ops, clique_idx)[nhat]
+    elif len(ops.cliques[clique_idx]) == 1:
         thesum = ops.arithmetic.power(
             ops.get_two_table_weight(
                 (ops.cliques[clique_idx][0], ops.cliques[clique_idx][0])
@@ -107,6 +135,48 @@ def optimized_J_term(ops, clique_idx: int, nhat: int) -> ArithmeticValue:
         thesum = optimized_d_term(ops, clique_idx, nhat)
     ops.j_term_cache[key] = thesum
     return thesum
+
+
+def optimized_J_message(ops, clique_idx: int) -> tuple[ArithmeticValue, ...]:
+    """Build the full cardinality message for one symmetric clique once."""
+
+    cached = ops.symmetric_message_cache.get(clique_idx)
+    if cached is not None:
+        return cached
+    if ops.domain_size is None:
+        raise RuntimeError("optimized operations are not bound to a domain")
+
+    clique = ops.cliques[clique_idx]
+    if not clique:
+        raise ValueError("symmetric cliques must contain at least one cell")
+    rows = []
+    for cell in clique:
+        weight = (
+            ops.get_cell_weight(cell)
+            if ops.modified_cell_symmetry
+            else ops.arithmetic.one()
+        )
+        rows.append(
+            symmetric_clique_row(
+                ops.domain_size,
+                weight,
+                ops.get_two_table_weight((cell, cell)),
+                ops.arithmetic,
+            )
+        )
+
+    interaction = (
+        ops.get_two_table_weight((clique[0], clique[1]))
+        if len(clique) > 1
+        else ops.arithmetic.one()
+    )
+    message = TwistedBinomialConvolver(
+        ops.domain_size,
+        interaction,
+        ops.arithmetic,
+    ).product(rows)
+    ops.symmetric_message_cache[clique_idx] = message
+    return message
 
 
 def optimized_d_term(ops, clique_idx: int, n: int, cur: int = 0) -> ArithmeticValue:
@@ -181,4 +251,10 @@ def optimized_d_term(ops, clique_idx: int, n: int, cur: int = 0) -> ArithmeticVa
     return ret
 
 
-__all__ = ["optimized_term", "optimized_J_term", "optimized_d_term"]
+__all__ = [
+    "optimized_term",
+    "optimized_J_term",
+    "optimized_J_message",
+    "optimized_d_term",
+    "symmetric_clique_row",
+]
