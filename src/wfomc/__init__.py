@@ -26,7 +26,12 @@ from wfomc.evidence import (
     UnaryEvidence,
 )
 from wfomc.fol.grounding import LinearOrderEncoding
-from wfomc.options import EvidenceStrategy, ExistentialStrategy, WeightOptions
+from wfomc.options import (
+    BoundaryProfileOptions,
+    EvidenceStrategy,
+    ExistentialStrategy,
+    WeightOptions,
+)
 from wfomc.parser import (
     parse_formula,
     parse_mln_problem,
@@ -43,6 +48,7 @@ __all__ = [
     "AlgoName",
     "AlgoMaturity",
     "AlgoOptions",
+    "BoundaryProfileOptions",
     "CardinalityConstraints",
     "CardinalityTerm",
     "Comparator",

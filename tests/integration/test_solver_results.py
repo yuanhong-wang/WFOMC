@@ -75,6 +75,7 @@ S(e_1), S(e_10), S(e_2), S(e_3), S(e_4), S(e_5), S(e_6), S(e_7), S(e_8), S(e_9)
 
     assert isinstance(result, WFOMCResult)
     assert result == 0
+    assert solve(problem, algo=AlgoName.BOUNDARY_PROFILE) == 0
 
 
 @pytest.mark.parametrize(
@@ -86,6 +87,7 @@ S(e_1), S(e_10), S(e_2), S(e_3), S(e_4), S(e_5), S(e_6), S(e_7), S(e_8), S(e_9)
         AlgoName.INCREMENTAL,
         AlgoName.INCREMENTAL3,
         AlgoName.RECURSIVE,
+        AlgoName.BOUNDARY_PROFILE,
     ),
 )
 def test_upper_cardinality_constraint_uses_truncated_polynomial_backend(algo):
@@ -192,6 +194,9 @@ def test_binary_upper_cardinality_constraint_truncates_pair_weights():
     assert solve(problem, algo=AlgoName.FASTV2) == sum(
         comb(domain_size**2, count) for count in range(3)
     )
+    assert solve(problem, algo=AlgoName.BOUNDARY_PROFILE) == sum(
+        comb(domain_size**2, count) for count in range(3)
+    )
 
 
 def test_joint_upper_cardinality_constraint_uses_one_linear_form_marker():
@@ -232,6 +237,9 @@ def test_joint_upper_cardinality_constraint_uses_one_linear_form_marker():
     )
     assert cardinality_symbols == ("__wfomc_cardinality_0",)
     assert solve(problem, algo=AlgoName.FASTV2) == sum(
+        comb(2 * domain_size, count) for count in range(3)
+    )
+    assert solve(problem, algo=AlgoName.BOUNDARY_PROFILE) == sum(
         comb(2 * domain_size, count) for count in range(3)
     )
 

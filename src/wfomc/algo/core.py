@@ -12,7 +12,12 @@ from typing import TYPE_CHECKING, Protocol, TypeAlias
 
 from wfomc.arithmetic import ArithmeticContext
 from wfomc.errors import UnsupportedFeatureError
-from wfomc.options import EvidenceStrategy, ExistentialStrategy, WeightOptions
+from wfomc.options import (
+    BoundaryProfileOptions,
+    EvidenceStrategy,
+    ExistentialStrategy,
+    WeightOptions,
+)
 from wfomc.stages import CompiledReducedBranch, GroundingProblem
 
 
@@ -71,6 +76,8 @@ class AlgoName(Enum):
     PROPOSITIONAL = "propositional"
     # Logical reduction followed by quantifier-free grounding and Ganak.
     PROPOSITIONAL_REDUCED = "propositional-reduced"
+    # Native binary-decomposition DP over cell boundary profiles.
+    BOUNDARY_PROFILE = "boundary-profile"
     # Extension point for a future bounded-treewidth solver.
     BOUNDED_TREEWIDTH = "bounded-treewidth"
 
@@ -101,6 +108,10 @@ class AlgoOptions:
     linear_order_encoding: LinearOrderEncoding | None = None
     # Numeric precision and symbolic-arithmetic backend selection.
     weight_options: WeightOptions = field(default_factory=WeightOptions)
+    # Boundary-Profile-only tree planning controls.
+    boundary_profile_options: BoundaryProfileOptions = field(
+        default_factory=BoundaryProfileOptions
+    )
 
 
 @dataclass(frozen=True)
@@ -195,6 +206,14 @@ def option_resolver(
         features: "FeatureSet", options: AlgoOptions | None = None
     ) -> AlgoOptions:
         options = options if options is not None else AlgoOptions()
+        if (
+            algo is not AlgoName.BOUNDARY_PROFILE
+            and options.boundary_profile_options != BoundaryProfileOptions()
+        ):
+            raise UnsupportedFeatureError(
+                "boundary-profile planning options are only configurable for "
+                "boundary-profile"
+            )
         resolved_linear_order_encoding = resolve_linear_order_encoding(
             options.linear_order_encoding
         )
@@ -217,6 +236,7 @@ def option_resolver(
             ),
             linear_order_encoding=resolved_linear_order_encoding,
             weight_options=options.weight_options,
+            boundary_profile_options=options.boundary_profile_options,
         )
         _validate_supported_features(
             algo=algo,
@@ -330,6 +350,7 @@ _SPEC_MODULES: dict[AlgoName, str] = {
     AlgoName.RECURSIVE: "wfomc.algo.recursive.spec",
     AlgoName.PROPOSITIONAL: "wfomc.algo.propositional.spec",
     AlgoName.PROPOSITIONAL_REDUCED: "wfomc.algo.propositional.reduced_spec",
+    AlgoName.BOUNDARY_PROFILE: "wfomc.algo.boundary_profile.spec",
     AlgoName.BOUNDED_TREEWIDTH: "wfomc.algo.treewidth.spec",
 }
 _SPEC_CACHE: dict[AlgoName, AlgoSpec] = {}

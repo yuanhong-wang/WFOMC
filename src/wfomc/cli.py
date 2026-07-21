@@ -17,7 +17,12 @@ from wfomc.engine import solve
 from wfomc.engine.runtime import RuntimeOptions
 from wfomc.errors import WFOMCError
 from wfomc.fol.grounding import LinearOrderEncoding
-from wfomc.options import EvidenceStrategy, ExistentialStrategy, WeightOptions
+from wfomc.options import (
+    BoundaryProfileOptions,
+    EvidenceStrategy,
+    ExistentialStrategy,
+    WeightOptions,
+)
 from wfomc.result import WFOMCResult
 
 
@@ -45,6 +50,9 @@ def build_parser() -> argparse.ArgumentParser:
     common = parser.add_argument_group("Common options")
     incremental3 = parser.add_argument_group("Incremental3-only options")
     propositional = parser.add_argument_group("Propositional-only options")
+    boundary_profile = parser.add_argument_group(
+        "Boundary-Profile-only options"
+    )
 
     common.add_argument("--input", "-i", help="Input model path.")
     common.add_argument(
@@ -106,6 +114,14 @@ def build_parser() -> argparse.ArgumentParser:
             "and propositional-reduced."
         ),
     )
+    boundary_profile.add_argument(
+        "--bp-tree-reference-domain-size",
+        type=int,
+        help=(
+            "Select one reusable Boundary-Profile tree using this reference "
+            "domain size; omit it for domain-independent structural planning."
+        ),
+    )
     return parser
 
 
@@ -118,6 +134,7 @@ def run(
     linear_order_encoding: LinearOrderEncoding | str | None = None,
     ganak_path: str | None = None,
     exact_symbolic_backend: str = "fmpq_mpoly",
+    bp_tree_reference_domain_size: int | None = None,
 ) -> CliResult:
     selected_algo = algo if isinstance(algo, AlgoName) else AlgoName(algo)
     if (
@@ -132,6 +149,14 @@ def run(
         raise ValueError(
             f"{' and '.join(invalid_options)} {verb} only valid for "
             "propositional algorithms"
+        )
+    if (
+        bp_tree_reference_domain_size is not None
+        and selected_algo is not AlgoName.BOUNDARY_PROFILE
+    ):
+        raise ValueError(
+            "--bp-tree-reference-domain-size is only valid for "
+            "boundary-profile"
         )
 
     from wfomc.parser import parse_problem_file
@@ -168,6 +193,9 @@ def run(
             weight_options=WeightOptions(
                 exact_symbolic_backend=exact_symbolic_backend,
             ),
+            boundary_profile_options=BoundaryProfileOptions(
+                tree_reference_domain_size=bp_tree_reference_domain_size,
+            ),
         ),
         runtime=RuntimeOptions(propositional_ganak_path=ganak_path),
     )
@@ -190,6 +218,7 @@ def main(argv: list[str] | None = None) -> int:
             linear_order_encoding=args.linear_order_encoding,
             ganak_path=args.ganak_path,
             exact_symbolic_backend=args.exact_symbolic_backend,
+            bp_tree_reference_domain_size=args.bp_tree_reference_domain_size,
         )
     except (WFOMCError, OSError, ValueError) as exc:
         parser.exit(2, f"wfomc: error: {type(exc).__name__}: {exc}\n")

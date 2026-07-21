@@ -475,6 +475,7 @@ def _options_key(options: AlgoOptions | None) -> object:
         _strategy_option_key(options.existential_strategy),
         _strategy_option_key(options.linear_order_encoding),
         _object_key(options.weight_options),
+        _object_key(options.boundary_profile_options),
     )
 
 
