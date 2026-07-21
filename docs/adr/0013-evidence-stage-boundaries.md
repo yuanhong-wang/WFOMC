@@ -24,8 +24,8 @@ Evidence is represented by three stage-specific contracts:
   `cell_graph/evidence.py`.
 
 Unary profile construction and CCS encoding belong to
-`reduction/reduce_unary_evidence.py`. `EvidenceStrategy` belongs to
-`algo/core.py`, beside `AlgoOptions`. Cell graphs and algorithm input builders
+`reduction/unary_evidence.py`. `EvidenceStrategy` belongs to the neutral
+`options.py` module. Cell graphs and algorithm input builders
 consume `ProfileCapacityConstraint` directly; no partition adapter is retained.
 
 Only raw evidence input types are exported from `wfomc.evidence`.

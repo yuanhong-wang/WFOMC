@@ -21,12 +21,15 @@ state are mixed between algorithm specs and engine orchestration.
 
 The public source model is split into two immutable values:
 
-- `Problem` contains the formula, weights, constraints, evidence, and source
-  options. It never contains a domain size or domain elements.
+- `Problem` contains the formula, weights, constraints, and evidence. It never
+  contains a domain size, domain elements, file provenance, or algorithm
+  options.
 - `Domain` contains the concrete domain elements and optional circular-order
   size.
-- `ProblemInstance` is a parser/convenience pair with explicit `.problem` and
-  `.domain` fields. It is not a problem stage used by the engine.
+- `ProblemInstance` is a parser/convenience value with explicit `.problem`,
+  `.domain`, and optional `.source_path` fields. Source path is diagnostic
+  provenance and does not participate in `Problem` equality or engine cache
+  keys. The instance is not a problem stage used by the engine.
 
 The engine exposes three separate operations:
 
@@ -38,9 +41,9 @@ The engine exposes three separate operations:
   `solve(problem, domain, algo, options)` compiles and instantiates internally.
 
 `CompiledProblem` records the selected algorithm, resolved options, analyzed
-features, and domain-free compiled branches. A
-`ProblemExecution` owns concrete algorithm inputs, arithmetic degree bounds,
-decoders, and all domain-sized state.
+features, and domain-free compiled branches. `ProblemExecution` owns a tuple of
+engine-level `ExecutionBranch` values. Each execution branch pairs the logical
+problem stage with one concrete algorithm input and its decoder.
 
 The engine owns lifecycle and caching:
 
@@ -53,7 +56,21 @@ The engine owns lifecycle and caching:
    for a concrete domain;
 7. run the algorithm, decode branches, and aggregate the result.
 
-Every registered algorithm implements the staged interface. Standard, Fast,
+Every registered algorithm implements the staged interface. `AlgoSpec` only
+declares option resolution, input-template construction, an optional structural
+template key, solving, and the two reduction-policy flags. The engine, rather
+than each algorithm spec, applies reductions, compiles numeric branches, checks
+domain applicability, instantiates decoders, and assembles execution branches.
+Input-template dataclasses own their concrete `.instantiate(...)` operation;
+there is no separate `instantiate_input` callback in `AlgoSpec`.
+The method is enforced through two nominal algorithm contracts:
+`ReducedInputTemplate` accepts a `CompiledBranchInstance`, while
+`GroundingInputTemplate` accepts a `Domain`. `AlgoSpec.build_input_template`
+returns their explicit union; engine orchestration rejects a template whose
+nominal kind does not match its compiled branch. Runtime `getattr`/`callable`
+probing is not part of this boundary.
+
+Standard, Fast,
 FastV2, Incremental, Incremental3, and Recursive cache structural cell-graph
 input templates. Domain size is introduced when arithmetic bounds, evidence
 capacities, order sizes, and solver-local caches are instantiated.
@@ -61,7 +78,7 @@ Independent-clique classification is part of Fast's static layout and does not
 inspect a range of sizes.
 
 Incremental3 keeps native counting sections in its reduced problem. Its
-domain-simplified counting automaton is part of the input-template variant:
+domain-simplified counting automaton is part of the input-template key:
 domains that select the same automaton reuse a graph, while a genuine automaton
 shape change creates another template.
 
@@ -90,12 +107,38 @@ The runtime cache is split by lifetime:
   algorithm, and resolved options;
 - algorithm input templates are keyed by compiled branch and static variant;
 - executions and results are keyed additionally by the full `Domain`;
-- concrete execution caches are bounded because each entry can contain large
-  arithmetic and recursive tables.
+- input-template, concrete-execution, and result buckets have independent
+  configurable bounds. Evicted operation objects own their recursive caches
+  and are therefore reclaimable.
 
-Compiler utilities live in `wfomc.engine.compilation`. Algorithm packages own
-only their reductions, input-template construction, input instantiation, and
-solver.
+Compiler utilities and execution artifacts live in `wfomc.engine`. Algorithm
+packages own only option/capability declarations, input templates, concrete
+algorithm inputs, and solvers. Reduction packages own only pure logical
+transformations.
+
+Cross-layer data contracts are lower than all three packages:
+
+- `wfomc.options` owns `EvidenceStrategy` and `ExistentialStrategy`;
+- `wfomc.problem` owns only source/domain values: `Problem`, `Domain`, and
+  `ProblemInstance`;
+- `wfomc.stages` owns neutral derived-stage data: `FeatureSet`,
+  `ReducedProblem`, decoder specifications, `GroundingProblem`, compiled
+  reduced branches, and concrete branch instances;
+- engine-owned runtime types may refer to algorithm inputs, but neutral problem
+  data never refers to engine, algorithms, or reductions.
+
+The enforced dependency direction is:
+
+```text
+algo      -> problem/stages/options
+reduction -> problem/stages/options
+engine    -> algo + reduction + problem/stages/options
+```
+
+Imports used only under `TYPE_CHECKING` follow the same rule. A static AST test
+rejects reverse imports instead of allowing type hints to create hidden cycles.
+The engine converts `RuntimeContext` into the smaller algorithm-owned
+`SolveContext`, so solver signatures do not import engine runtime types.
 
 ## Consequences
 
@@ -108,5 +151,9 @@ solver.
   not leak results between sizes.
 - Propositional algorithms reuse logical and numeric compilation while keeping
   grounding explicitly domain-sized.
+- Algorithm and reduction packages can be imported and type-checked without
+  importing the engine or each other.
 - Parser callers must explicitly distinguish the parsed logical problem from
   its domain.
+- `parse_problem_file` is the unambiguous file entry point; the legacy
+  `parse_input` alias is not part of the current API.

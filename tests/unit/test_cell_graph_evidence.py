@@ -14,7 +14,7 @@ from wfomc.cell_graph import (
 from wfomc.evidence.profile import EvidenceProfile, ProfileCapacityConstraint
 from wfomc.fol import Formula, Literal, Predicate, X
 from wfomc.fol.semantics import evaluate
-from wfomc.multinomial import MultinomialCoefficients
+from wfomc.multinomial import multinomial_coefficient
 
 
 def _arithmetic() -> ArithmeticContext:
@@ -55,12 +55,10 @@ def test_compiles_overlapping_cell_profile_compatibility():
     assert allocation.compatible_evidence_profiles_by_cell == ((), (0,), (1,), (0, 1))
     assert allocation.compatible_cells_by_evidence_profile == ((1, 3), (2, 3))
     assert allocation.compatible_cell_indices == (1, 2, 3)
-    assert allocation.compatibility_pair_count == 4
 
 
 def test_config_coefficients_match_brute_force_named_assignments():
     cells, allocation = _overlapping_allocation()
-    MultinomialCoefficients.setup(3)
 
     expected = defaultdict(int)
     for assignments in product(
@@ -82,7 +80,6 @@ def test_config_coefficients_match_brute_force_named_assignments():
 
 def test_relative_config_coefficients_remove_cell_multinomial():
     _cells_, allocation = _overlapping_allocation()
-    MultinomialCoefficients.setup(3)
 
     arithmetic = _arithmetic()
     absolute = dict(allocation.iter_config_coefficients(arithmetic))
@@ -95,14 +92,13 @@ def test_relative_config_coefficients_remove_cell_multinomial():
 
     assert relative == {
         config: coefficient
-        * arithmetic.from_fraction(1, MultinomialCoefficients.coef(config))
+        * arithmetic.from_fraction(1, multinomial_coefficient(config))
         for config, coefficient in absolute.items()
     }
 
 
 def test_threaded_transitions_normalize_to_config_coefficients():
     cells, allocation = _overlapping_allocation()
-    MultinomialCoefficients.setup(3)
     arithmetic = _arithmetic()
     states = {
         ((0,) * len(cells), allocation.initial_remaining_counts()): arithmetic.one()
@@ -140,7 +136,6 @@ def test_impossible_evidence_profile_has_no_configs():
         domain_size=1,
     )
     allocation = CellEvidenceAllocation.from_constraint(constraint, cells)
-    MultinomialCoefficients.setup(1)
 
     assert list(allocation.iter_config_coefficients(_arithmetic())) == []
 

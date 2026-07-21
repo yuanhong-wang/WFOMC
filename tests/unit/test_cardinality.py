@@ -96,17 +96,8 @@ def test_constraint_accepts_normalized_mod_comparison():
     assert not constraint.accepts(2)
 
 
-def test_multinomial_coefficients_support_the_empty_domain(monkeypatch):
-    from wfomc.multinomial import MultinomialCoefficients
+def test_multinomial_coefficient_supports_the_empty_domain():
+    from wfomc.multinomial import multinomial_coefficient
 
-    monkeypatch.setattr(MultinomialCoefficients, "pt", None)
-    monkeypatch.setattr(MultinomialCoefficients, "n", 0)
-    MultinomialCoefficients.coef.cache_clear()
-    MultinomialCoefficients.comb.cache_clear()
-
-    MultinomialCoefficients.setup(0)
-
-    assert MultinomialCoefficients.coef(()) == 1
-    assert MultinomialCoefficients.coef((0,)) == 1
-    MultinomialCoefficients.coef.cache_clear()
-    MultinomialCoefficients.comb.cache_clear()
+    assert multinomial_coefficient(()) == 1
+    assert multinomial_coefficient((0,)) == 1

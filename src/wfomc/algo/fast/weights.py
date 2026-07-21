@@ -12,8 +12,9 @@ algorithm. Each function takes an ``ops`` object exposing the structure indices
 
 from __future__ import annotations
 
+import math
+
 from wfomc.arithmetic import ArithmeticValue
-from wfomc.multinomial import MultinomialCoefficients
 
 
 def optimized_term(
@@ -49,7 +50,7 @@ def optimized_term(
     s = ops.i2_ind[len(ops.i2_ind) - iv]
     for nval in range(ops.domain_size - sum(partition) - bign + 1):
         smul = ops.arithmetic.from_int(
-            MultinomialCoefficients.comb(
+            math.comb(
                 ops.domain_size - sum(partition) - bign,
                 nval,
             )
@@ -136,18 +137,18 @@ def optimized_d_term(ops, clique_idx: int, n: int, cur: int = 0) -> ArithmeticVa
                 w,
                 ops.arithmetic.power(
                     s,
-                    MultinomialCoefficients.comb(n, 2),
+                    math.comb(n, 2),
                 ),
             )
         else:
             ret = ops.arithmetic.power(
                 s,
-                MultinomialCoefficients.comb(n, 2),
+                math.comb(n, 2),
             )
     else:
         ret = ops.arithmetic.zero()
         for ni in range(n + 1):
-            mult = ops.arithmetic.from_int(MultinomialCoefficients.comb(n, ni))
+            mult = ops.arithmetic.from_int(math.comb(n, ni))
             if ops.modified_cell_symmetry:
                 w = ops.arithmetic.power(
                     ops.get_cell_weight(ops.cliques[clique_idx][cur]),
@@ -164,7 +165,7 @@ def optimized_d_term(ops, clique_idx: int, n: int, cur: int = 0) -> ArithmeticVa
                 mult,
                 ops.arithmetic.power(
                     s,
-                    MultinomialCoefficients.comb(ni, 2),
+                    math.comb(ni, 2),
                 ),
             )
             mult = ops.arithmetic.multiply(

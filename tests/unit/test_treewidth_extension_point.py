@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from wfomc.arithmetic import ArithmeticBackend, ArithmeticContext
-from wfomc.algo import AlgoOptions
 from wfomc.algo.treewidth.input import (
     Factor,
     FactorGraph,
@@ -16,7 +15,7 @@ from wfomc.algo import AlgoName
 from wfomc.errors import UnsupportedFeatureError
 from wfomc.engine import solve as engine_solve
 from wfomc.algo.treewidth.solve import solve
-from wfomc.parser import parse_input
+from wfomc.parser import parse_problem_file
 
 
 def _arithmetic() -> ArithmeticContext:
@@ -47,8 +46,6 @@ def test_tree_decomposition_input_carries_factor_graph_contract():
     decomposition.validate_against(factor_graph)
 
     algo_input = TreeDecompositionInput(
-        algo=AlgoName.BOUNDED_TREEWIDTH,
-        options=AlgoOptions(),
         arithmetic=_arithmetic(),
         factor_graph=factor_graph,
         bags=decomposition.bags,
@@ -96,15 +93,13 @@ def test_bounded_treewidth_algo_rejects_until_solver_is_installed():
     with pytest.raises(UnsupportedFeatureError, match="bounded-treewidth"):
         algo(
             TreeDecompositionInput(
-                algo=AlgoName.BOUNDED_TREEWIDTH,
-                options=AlgoOptions(),
                 arithmetic=_arithmetic(),
             )
         )
 
 
 def test_compile_problem_treewidth_reduction_raises_unsupported():
-    problem = parse_input("models/2-colored-graph.wfomcs")
+    problem = parse_problem_file("models/2-colored-graph.wfomcs")
 
     with pytest.raises(UnsupportedFeatureError, match="bounded-treewidth"):
         engine_solve(problem, algo=AlgoName.BOUNDED_TREEWIDTH)

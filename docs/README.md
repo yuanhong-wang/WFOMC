@@ -4,8 +4,16 @@ This directory only keeps current framework documentation and active plans.
 Historical compiler/backend/lowering plans were removed because they no longer
 match the codebase.
 
+## Developer Guides
+
+- `adding-an-algorithm.md`: step-by-step guide to algorithm package ownership,
+  staged input templates, registration, cache behavior, and verification.
+
 ## Current Architecture
 
+- `architecture-ownership-review-2026-07-18.md`: implemented module ownership,
+  stage-boundary, cache-lifetime decisions, migration record, and verification
+  for the domain-separated engine.
 - `architecture-review-2026-07-10.md`: current-worktree architecture,
   verified failure modes, prioritized problems, target boundaries, and ADR
   recommendations.
@@ -34,9 +42,9 @@ match the codebase.
   input templates.
 
 The earlier framework architecture pages were removed during the active
-framework migration. Use the dated review above as the current snapshot and
-the plans below as proposed or in-progress work, not as descriptions of the
-running system.
+framework migration. Use the dated ownership review and ADR-0026 as the current
+running-system description. The plans below record either implemented work or
+explicitly named follow-up work.
 
 ## Active Plans
 
@@ -82,13 +90,14 @@ running system.
 Problem (domain-free) + AlgoSpec/options
   -> source feature analysis
   -> CompiledProblem (reusable)
-       -> lifted algorithms: ReducedProblem branches + compiled weights
+       -> engine applies declared reduction policy
+       -> lifted algorithms: one ReducedProblem + compiled weights
        -> direct propositional: compiled source formula + weights
-       -> algorithm-owned reusable InputTemplate
   + Domain
   -> ProblemExecution
-       -> concrete reduction parameters and arithmetic degree limits
-       -> algorithm-owned AlgoInput with domain-sized state
+       -> engine selects/caches algorithm-owned InputTemplate
+       -> nominal Reduced/Grounding InputTemplate.instantiate creates AlgoInput
+       -> ExecutionBranch holds problem stage + AlgoInput + decoder
   -> solve
   -> decode
   -> WFOMCResult
@@ -97,5 +106,9 @@ Problem (domain-free) + AlgoSpec/options
 All registered algorithms use this staged flow. Cell-graph inputs reuse
 structural graphs across compatible domain sizes. Propositional inputs reuse
 compilation but necessarily ground a fresh CNF for each domain. Incremental3
-includes its simplified counting automaton in the input-template variant, so a
+includes its simplified counting automaton in the input-template key, so a
 template is rebuilt only when that automaton's structure changes.
+
+The dependency boundary is strict, including type-only imports: `algo` and
+`reduction` depend only on neutral `problem`/`options` contracts, while `engine`
+is the sole orchestration layer that depends on both.

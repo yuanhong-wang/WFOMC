@@ -10,7 +10,7 @@ from wfomc import (
     AlgoName,
     compile_problem,
     instantiate_problem,
-    parse_input,
+    parse_problem_file,
     parse_problem,
     solve,
 )
@@ -80,7 +80,7 @@ BOUNDARY_CASES = (
 
 @pytest.mark.parametrize(("filename", "expected"), COUNTING_MODEL_CASES)
 def test_incremental3_counting_model_corpus(filename: str, expected: int):
-    problem = parse_input(str(COUNTING_MODEL_DIR / filename))
+    problem = parse_problem_file(str(COUNTING_MODEL_DIR / filename))
 
     assert solve(problem, algo=AlgoName.INCREMENTAL3) == expected
 

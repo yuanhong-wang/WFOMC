@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -9,21 +10,24 @@ from wfomc.cell_graph.evidence import (
     materialize_cell_evidence,
     profile_cell_formulas,
 )
-from wfomc.problem import CompiledBranchInstance
+from wfomc.problem import Domain
+from wfomc.stages import (
+    CompiledBranchInstance,
+    CompiledReducedBranch,
+)
 
 if TYPE_CHECKING:
-    from wfomc.cell_graph import CellGraphComponent, PairWeightMatrix
-    from wfomc.engine.compilation import CompiledReducedProblem
-    from wfomc.fol import Formula
-    from wfomc.problem import Domain
+    from wfomc.cell_graph.data import CellGraphComponent, PairWeightMatrix
+    from wfomc.evidence.profile import ProfileCapacityConstraint
+    from wfomc.fol.syntax import Formula
 
 
 CellGraphInputVariant = tuple[int, ...] | bool | None
 
 
 def select_input_variant(
-    compiled: "CompiledReducedProblem",
-    domain: "Domain",
+    compiled: CompiledReducedBranch,
+    domain: Domain,
 ) -> CellGraphInputVariant:
     """Select the profile-dependent cell-graph shape for one domain."""
 
@@ -40,11 +44,11 @@ def select_input_variant(
     return concrete_size == 0
 
 
-def build_structural_branch(
-    compiled: "CompiledReducedProblem",
-    input_variant: object,
-) -> tuple[CompiledBranchInstance, tuple["Formula", ...] | None]:
-    """Materialize only the profile structure needed to enumerate cells."""
+def select_cell_graph_structure(
+    compiled: CompiledReducedBranch,
+    input_variant: Hashable,
+) -> tuple["ProfileCapacityConstraint | None", tuple["Formula", ...] | None]:
+    """Select only the profile structure needed to enumerate cells."""
 
     reduced = compiled.reduced_problem
     profile = reduced.profile_constraint
@@ -71,15 +75,7 @@ def build_structural_branch(
     elif input_variant is not None:
         raise TypeError("Input variant is invalid without unary profiles")
 
-    return (
-        CompiledBranchInstance(
-            sentence=compiled.sentence,
-            arithmetic=compiled.arithmetic,
-            weights=compiled.weights,
-            profile_capacity_constraint=structural_profile,
-        ),
-        cell_formulas,
-    )
+    return structural_profile, cell_formulas
 
 
 def rebind_matrix(
@@ -121,8 +117,8 @@ def rebind_component(
 
 __all__ = [
     "CellGraphInputVariant",
-    "build_structural_branch",
     "rebind_component",
     "rebind_matrix",
+    "select_cell_graph_structure",
     "select_input_variant",
 ]

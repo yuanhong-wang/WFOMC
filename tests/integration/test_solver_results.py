@@ -17,7 +17,7 @@ from wfomc import (
     Problem,
     ProblemInstance,
     WFOMCResult,
-    parse_input,
+    parse_problem_file,
     parse_problem,
     solve,
 )
@@ -32,7 +32,7 @@ def _problem(*, domain, **kwargs) -> ProblemInstance:
 
 
 def test_solve_returns_public_result_wrapper():
-    problem = parse_input(str(ROOT / "models" / "2-colored-graph.wfomcs"))
+    problem = parse_problem_file(str(ROOT / "models" / "2-colored-graph.wfomcs"))
 
     result = solve(problem, algo=AlgoName.FASTV2)
 

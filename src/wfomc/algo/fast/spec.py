@@ -2,125 +2,48 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Hashable
 
 from wfomc.algo.core import (
+    AlgoBranch,
     AlgoName,
     AlgoOptions,
     AlgoSpec,
     EvidenceStrategy,
-    PreparedBranch,
     option_resolver,
 )
-from wfomc.engine.compilation import (
-    CompiledReducedProblem,
-    compile_reduced_problem,
-    instantiate_reduced_problem,
-)
-from wfomc.problem import Domain, Problem
-from wfomc.reduction import reduce_problem
 from wfomc.cell_graph.staging import select_input_variant
+from wfomc.problem import Domain
+from wfomc.stages import CompiledReducedBranch
 
-from .input import (
-    FastInputTemplate,
-    build_input_template,
-    instantiate_input_template,
-)
+from .input import FastInputTemplate, build_input_template
 from .solve import solve
 
 
-@dataclass(frozen=True)
-class CompiledFastBranch:
-    """Reusable logical/numeric branch and static Fast variant."""
-
-    numeric: CompiledReducedProblem
-    modified_cell_symmetry: bool
-
-
-def compile_fast_branches(
-    problem: Problem,
-    options: AlgoOptions,
-    *,
-    modified_cell_symmetry: bool,
-) -> tuple[object, ...]:
-    branches = []
-    for reduced in reduce_problem(problem, options):
-        numeric = compile_reduced_problem(reduced, options)
-        branches.append(
-            CompiledFastBranch(
-                numeric=numeric,
-                modified_cell_symmetry=modified_cell_symmetry,
-            )
-        )
-    return tuple(branches)
-
-
-def compile_branches(
-    problem: Problem,
-    options: AlgoOptions,
-) -> tuple[object, ...]:
-    return compile_fast_branches(
-        problem,
-        options,
-        modified_cell_symmetry=False,
-    )
-
-
-def instantiate_branch(
-    branch: object,
-    input_template: object,
-    domain: Domain,
-    options: AlgoOptions,
-) -> PreparedBranch | None:
-    if not isinstance(branch, CompiledFastBranch):
-        raise TypeError("Fast compiled branch has an invalid type")
-    instantiated = instantiate_reduced_problem(branch.numeric, domain)
-    if instantiated is None:
-        return None
-    concrete, decoder = instantiated
-    if not isinstance(input_template, FastInputTemplate):
-        raise TypeError("Fast input template has an invalid type")
-    algo_input = instantiate_input_template(
-        input_template,
-        concrete,
-        options=options,
-    )
-    return PreparedBranch(
-        branch.numeric.reduced_problem,
-        algo_input,
-        decoder,
-    )
-
-
-def branch_applies(branch: object, domain: Domain) -> bool:
-    if not isinstance(branch, CompiledFastBranch):
-        raise TypeError("Fast compiled branch has an invalid type")
-    return branch.numeric.reduced_problem.applies(domain)
-
-
-def input_template_variant(
-    branch: object,
+def input_template_key(
+    branch: AlgoBranch,
     domain: Domain,
 ) -> tuple[int, ...] | bool | None:
     """Select the Fast cell-graph shape needed by one concrete domain."""
 
-    if not isinstance(branch, CompiledFastBranch):
-        raise TypeError("Fast compiled branch has an invalid type")
-    return select_input_variant(branch.numeric, domain)
+    if not isinstance(branch, CompiledReducedBranch):
+        raise TypeError("Fast requires a compiled reduced branch")
+    return select_input_variant(branch, domain)
 
 
 def build_fast_input_template(
-    branch: object,
-    input_variant: object,
-    options: AlgoOptions,
+    branch: AlgoBranch,
+    input_key: Hashable,
+    _options: AlgoOptions,
+    *,
+    modified_cell_symmetry: bool = False,
 ) -> FastInputTemplate:
-    if not isinstance(branch, CompiledFastBranch):
-        raise TypeError("Fast compiled branch has an invalid type")
+    if not isinstance(branch, CompiledReducedBranch):
+        raise TypeError("Fast requires a compiled reduced branch")
     return build_input_template(
-        branch.numeric,
-        input_variant=input_variant,
-        modified_cell_symmetry=branch.modified_cell_symmetry,
-        options=options,
+        branch,
+        input_variant=input_key,
+        modified_cell_symmetry=modified_cell_symmetry,
     )
 
 
@@ -135,11 +58,8 @@ SPEC = AlgoSpec(
         ),
     ),
     solve=solve,
-    compile_branches=compile_branches,
-    branch_applies=branch_applies,
-    input_template_variant=input_template_variant,
     build_input_template=build_fast_input_template,
-    instantiate_branch=instantiate_branch,
+    input_template_key=input_template_key,
 )
 
 

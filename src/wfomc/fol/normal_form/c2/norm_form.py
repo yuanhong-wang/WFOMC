@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from wfomc.fol import Atom, Formula, Variable
+    from wfomc.fol.syntax import Atom, Formula, Variable
 
 
 @dataclass(frozen=True)

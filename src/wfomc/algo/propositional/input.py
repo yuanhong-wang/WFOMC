@@ -11,19 +11,19 @@ from typing import TYPE_CHECKING
 
 from wfomc.algo.core import (
     AlgoInput,
-    AlgoName,
     AlgoOptions,
+    GroundingInputTemplate,
 )
 from wfomc.arithmetic import ArithmeticValue
 from wfomc.cardinality_constraints import Comparator
-from wfomc.engine.compilation import CompiledSourceProblem
-from wfomc.engine.features import FeatureSet
 from wfomc.errors import UnsupportedFeatureError
+from wfomc.fol import Predicate
 from wfomc.problem import Domain, Problem
+from wfomc.stages import FeatureSet, GroundingProblem
 
 if TYPE_CHECKING:
     from wfomc.fol.grounding import LinearOrderEncoding
-    from wfomc.fol.syntax import Atom, Constant, Predicate
+    from wfomc.fol.syntax import Atom, Constant
 
 
 logger = logging.getLogger(__name__)
@@ -35,16 +35,7 @@ class GroundCNFInput(AlgoInput):
     literal_weights: dict[int, tuple[ArithmeticValue, ArithmeticValue]] = field(
         default_factory=dict
     )
-    evidence_unit_clauses: tuple[frozenset[int], ...] = ()
-    cardinality_clauses: tuple[frozenset[int], ...] = ()
-    domain_size: int = 0
-    domain: tuple[Constant, ...] = ()
-    atom_to_id: dict[Atom, int] = field(default_factory=dict)
-    id_to_predicate: dict[int, Predicate] = field(default_factory=dict)
-    clauses: tuple[frozenset[int], ...] = ()
-    order_unit_clauses: tuple[frozenset[int], ...] = ()
     linear_order_encoding: LinearOrderEncoding | None = None
-    symbolic: bool = False
     leq_present: bool = False
 
     def include_order_factorial(self) -> bool:
@@ -57,38 +48,37 @@ class GroundCNFInput(AlgoInput):
 
 
 @dataclass(frozen=True)
-class PropositionalInputTemplate:
+class PropositionalInputTemplate(GroundingInputTemplate):
     """Compiled source formula and weights reused across ground domains."""
 
-    compiled: CompiledSourceProblem
+    grounding_problem: GroundingProblem
+    options: AlgoOptions
+
+    def instantiate(
+        self,
+        domain: Domain,
+    ) -> GroundCNFInput:
+        """Ground a compiled source problem for one concrete domain."""
+
+        return _ground_input(
+            self.grounding_problem,
+            domain,
+            options=self.options,
+            features=self.grounding_problem.feature_set,
+        )
 
 
 def build_input_template(
-    compiled: CompiledSourceProblem,
+    grounding_problem: GroundingProblem,
+    options: AlgoOptions,
 ) -> PropositionalInputTemplate:
     """Wrap one domain-free source compilation for staged grounding."""
 
-    return PropositionalInputTemplate(compiled)
-
-
-def instantiate_input_template(
-    template: PropositionalInputTemplate,
-    domain: Domain,
-    *,
-    options: AlgoOptions,
-) -> GroundCNFInput:
-    """Ground a compiled source problem for one concrete domain."""
-
-    return _ground_input(
-        template.compiled,
-        domain,
-        options=options,
-        features=template.compiled.feature_set,
-    )
+    return PropositionalInputTemplate(grounding_problem, options)
 
 
 def _ground_input(
-    compiled: CompiledSourceProblem,
+    grounding_problem: GroundingProblem,
     domain_instance: Domain,
     *,
     options: AlgoOptions,
@@ -96,7 +86,6 @@ def _ground_input(
 ) -> GroundCNFInput:
     """Ground one compiled source problem into model-preserving CNF."""
 
-    from flint import fmpq_mpoly, fmpq_poly
     from wfomc.fol.analysis import predicates
     from wfomc.fol.cnf import encode_tseitin
     from wfomc.fol.grounding import (
@@ -108,9 +97,9 @@ def _ground_input(
         resolve_linear_order_encoding,
     )
 
-    problem = compiled.problem
-    arithmetic = compiled.arithmetic
-    compiled_weights = compiled.weights
+    problem = grounding_problem.problem
+    arithmetic = grounding_problem.arithmetic
+    compiled_weights = grounding_problem.weights
     encoding = resolve_linear_order_encoding(options.linear_order_encoding)
     domain = tuple(sorted(domain_instance.elements, key=str))
     grounded = ground_source_formula(problem.sentence, domain)
@@ -177,11 +166,6 @@ def _ground_input(
         variable: compiled_weights.get(predicate, (one, one))
         for variable, predicate in id_to_predicate.items()
     }
-    symbolic = any(
-        isinstance(weight, (fmpq_poly, fmpq_mpoly))
-        for pair in literal_weights.values()
-        for weight in pair
-    )
     cnf = (
         tuple(formula_clauses)
         + tuple(cardinality_clauses)
@@ -199,21 +183,10 @@ def _ground_input(
         len(order_clauses),
     )
     return GroundCNFInput(
-        algo=AlgoName.PROPOSITIONAL,
-        options=options,
         arithmetic=arithmetic,
         cnf=cnf,
         literal_weights=literal_weights,
-        evidence_unit_clauses=tuple(evidence_unit_clauses),
-        cardinality_clauses=tuple(cardinality_clauses),
-        domain_size=len(domain),
-        domain=domain,
-        atom_to_id=atom_to_id,
-        id_to_predicate=id_to_predicate,
-        clauses=tuple(formula_clauses),
-        order_unit_clauses=tuple(order_clauses),
         linear_order_encoding=encoding,
-        symbolic=symbolic,
         leq_present=features.leq_predicate is not None,
     )
 
@@ -260,14 +233,14 @@ def _ground_predicate_universe(
 ) -> None:
     """Allocate every relation entry belonging to the source vocabulary."""
 
+    typed_predicates = tuple(
+        predicate for predicate in predicates if isinstance(predicate, Predicate)
+    )
     for predicate in sorted(
-        predicates,
-        key=lambda item: (str(item), getattr(item, "arity", -1)),
+        typed_predicates,
+        key=lambda item: (item.name, item.arity),
     ):
-        arity = getattr(predicate, "arity", None)
-        if not isinstance(arity, int):
-            continue
-        for arguments in product(domain, repeat=arity):
+        for arguments in product(domain, repeat=predicate.arity):
             ensure_atom(predicate(*arguments))
 
 
@@ -307,14 +280,13 @@ def _ground_cardinality_constraints(
                 "|P| <= k, |P| = k, and |P| >= k global cardinality constraints"
             )
         predicate = next(iter(coefficients))
-        arity = getattr(predicate, "arity", None)
-        if not isinstance(arity, int):
+        if not isinstance(predicate, Predicate):
             raise UnsupportedFeatureError(
                 "direct propositional cardinality grounding requires a typed predicate"
             )
         literals = tuple(
             ensure_atom(predicate(*arguments))
-            for arguments in product(domain, repeat=arity)
+            for arguments in product(domain, repeat=predicate.arity)
         )
         clauses.extend(builders[constraint.comparator](literals, constraint.rhs))
     return clauses
@@ -324,5 +296,4 @@ __all__ = [
     "GroundCNFInput",
     "PropositionalInputTemplate",
     "build_input_template",
-    "instantiate_input_template",
 ]

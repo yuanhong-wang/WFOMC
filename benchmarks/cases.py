@@ -27,7 +27,6 @@ from math import comb
 from typing import Callable, Mapping
 
 from wfomc import (
-    AlgoName,
     CardinalityConstraints,
     CardinalityTerm,
     Comparator,
@@ -62,7 +61,6 @@ class BenchmarkCase:
     family: str
     category: str
     domain_size: int
-    default_algorithm: AlgoName
     variant: str = "default"
     purposes: frozenset[str] = frozenset()
     correction_divisor: int = 1
@@ -468,7 +466,6 @@ def _case(
     category: str,
     domain_size: int,
     builder: ProblemBuilder,
-    algorithm: AlgoName,
     variant: str = "default",
     purposes: frozenset[str] = frozenset(),
     correction_divisor: int = 1,
@@ -479,7 +476,6 @@ def _case(
         family=family,
         category=category,
         domain_size=domain_size,
-        default_algorithm=algorithm,
         variant=variant,
         purposes=purposes,
         correction_divisor=correction_divisor,
@@ -511,7 +507,6 @@ def _core_case(family: str, domain_size: int, definition: FormulaFactory) -> Ben
         category="core",
         domain_size=domain_size,
         builder=partial(_matrix_problem, definition=definition),
-        algorithm=AlgoName.FASTV2,
     )
 
 
@@ -563,7 +558,6 @@ def _c2_cases() -> tuple[BenchmarkCase, ...]:
                 category="c2",
                 domain_size=n,
                 builder=_c2_three_regular_problem,
-                algorithm=AlgoName.INCREMENTAL3,
                 comparison_group=comparison_group,
             )
         )
@@ -575,7 +569,6 @@ def _c2_cases() -> tuple[BenchmarkCase, ...]:
                 category="c2",
                 domain_size=n,
                 builder=_c2_three_coloured_regular_problem,
-                algorithm=AlgoName.INCREMENTAL3,
             )
         )
     for n in range(1, 21):
@@ -586,7 +579,6 @@ def _c2_cases() -> tuple[BenchmarkCase, ...]:
                 category="c2",
                 domain_size=n,
                 builder=_c2_directed_three_in_three_out_problem,
-                algorithm=AlgoName.INCREMENTAL3,
             )
         )
     for n in range(10, 101, 10):
@@ -603,7 +595,6 @@ def _c2_cases() -> tuple[BenchmarkCase, ...]:
                         ("F", Comparator.EQ, 3 * domain),
                     ),
                 ),
-                algorithm=AlgoName.FASTV2,
                 correction_divisor=6**n,
                 comparison_group=f"c2-vs-hand-3-regular/n{n}",
             )
@@ -621,7 +612,6 @@ _CARDINALITY_CASES = tuple(
             category="cardinality",
             domain_size=n,
             builder=_three_regular_four_coloured_problem,
-            algorithm=AlgoName.FASTV2,
             correction_divisor=6**n,
         )
         for n in (10, 15, 20, 30, 50)
@@ -633,7 +623,6 @@ _CARDINALITY_CASES = tuple(
             category="cardinality",
             domain_size=n,
             builder=_directed_three_regular_problem,
-            algorithm=AlgoName.FASTV2,
             correction_divisor=36**n,
         )
         for n in range(10, 16)
@@ -683,7 +672,6 @@ def _unary_cases() -> tuple[BenchmarkCase, ...]:
                             exact=exact,
                             interval=interval,
                         ),
-                        algorithm=AlgoName.FASTV2,
                         variant=variant,
                     )
                 )
@@ -707,7 +695,6 @@ def _unary_cases() -> tuple[BenchmarkCase, ...]:
                             exact=exact,
                             interval=interval,
                         ),
-                        algorithm=AlgoName.FASTV2,
                         variant=variant,
                         purposes=frozenset(("structure", "clique-gate")),
                     )

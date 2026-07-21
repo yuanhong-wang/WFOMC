@@ -95,7 +95,7 @@ for size in (5, 10, 20):
     print(size, solve(compiled, Domain.of_size(size)))
 ```
 
-`wfomc(...)` returns a `WFOMCResult`, not a raw FLINT polynomial. Use:
+`solve(...)` returns a `WFOMCResult`, not a raw FLINT polynomial. Use:
 
 - `result.is_zero()`
 - `result.is_constant()`
@@ -107,11 +107,13 @@ for size in (5, 10, 20):
 The underlying solver still uses FLINT internally for exact polynomial arithmetic,
 but callers should treat that as an implementation detail.
 
-The parser returns an explicit `ProblemInstance` with separate `.problem` and
-`.domain` fields. Programmatic callers may construct a typed `Problem` with the
-builders in `wfomc.fol`, then pass a separate `Domain` to `solve`. Exact FLINT
-values are an internal representation; public callers should prefer integers,
-fractions, and parsed model weights.
+`parse_problem(...)` parses text, while `parse_problem_file(...)` parses a
+`.wfomcs` or `.mln` path. Both return an explicit `ProblemInstance` with
+separate `.problem` and `.domain` fields; file parsing also records
+`.source_path` as non-semantic provenance. Programmatic callers may construct a
+typed `Problem` with the builders in `wfomc.fol`, then pass a separate `Domain`
+to `solve`. Exact FLINT values are an internal representation; public callers
+should prefer integers, fractions, and parsed model weights.
 
 The top-level package also exports the configuration types `AlgoOptions`,
 `EvidenceStrategy`, `ExistentialStrategy`, `LinearOrderEncoding`,
@@ -272,6 +274,13 @@ For the two propositional modes, the runtime lookup order is CLI `--ganak-path`
 then `ganak` on `PATH`. Lifted algorithms discover Ganak through `GANAK` or
 `PATH` for their pair-factor backend; if Ganak is unavailable or times out,
 they automatically use the installed PySDD backend instead.
+
+## Development
+
+To implement and register another solver, see
+[Adding a New Algorithm](docs/adding-an-algorithm.md). The guide covers the
+reduced and direct-source integration paths, input-template caching, feature
+declarations, registration, and required tests.
 
 ## References
 

@@ -17,11 +17,16 @@ each package's `spec.SPEC`.
 Every registered algorithm package owns `spec.py` with exactly one `SPEC`.
 Packages that own an implementation use these roles:
 
-- `input.py`: input dataclasses and `build_input`;
-- `solve.py`: the public `solve(algo_input, runtime)` entry point;
-- `spec.py`: domain-free branch compilation, input-template construction,
-  concrete-domain instantiation, capability metadata, and `SPEC`;
+- `input.py`: concrete input dataclasses, a nominal reusable input template,
+  and `build_input_template`;
+- `solve.py`: the public `solve(algo_input, context)` entry point;
+- `spec.py`: option/capability policy, an optional structural template-cache
+  key, the typed builder adapter, and `SPEC`;
 - `__init__.py`: package documentation only, with no lazy forwarding exports.
+
+The engine owns reductions, numeric branch compilation, concrete-domain branch
+instantiation, decoder application, and cache orchestration. Algorithm specs
+declare which engine path they require; they do not implement that orchestration.
 
 Additional files are named for implementation responsibilities such as
 `kernel.py`, `graph.py`, `operations.py`, `counting.py`, or `runtime.py`.

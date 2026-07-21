@@ -2,30 +2,31 @@
 
 from __future__ import annotations
 
+from collections.abc import Hashable
+
 from wfomc.algo.core import (
+    AlgoBranch,
     AlgoName,
     AlgoOptions,
     AlgoSpec,
     EvidenceStrategy,
     option_resolver,
 )
+from wfomc.algo.fast.input import FastInputTemplate
 from wfomc.algo.fast.solve import solve
 from wfomc.algo.fast.spec import (
-    branch_applies,
     build_fast_input_template,
-    compile_fast_branches,
-    input_template_variant,
-    instantiate_branch,
+    input_template_key,
 )
-from wfomc.problem import Problem
 
-
-def compile_branches(
-    problem: Problem,
+def build_fastv2_input_template(
+    branch: AlgoBranch,
+    input_key: Hashable,
     options: AlgoOptions,
-) -> tuple[object, ...]:
-    return compile_fast_branches(
-        problem,
+) -> FastInputTemplate:
+    return build_fast_input_template(
+        branch,
+        input_key,
         options,
         modified_cell_symmetry=True,
     )
@@ -42,11 +43,8 @@ SPEC = AlgoSpec(
         ),
     ),
     solve=solve,
-    compile_branches=compile_branches,
-    branch_applies=branch_applies,
-    input_template_variant=input_template_variant,
-    build_input_template=build_fast_input_template,
-    instantiate_branch=instantiate_branch,
+    build_input_template=build_fastv2_input_template,
+    input_template_key=input_template_key,
 )
 
 

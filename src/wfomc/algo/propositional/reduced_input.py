@@ -7,45 +7,50 @@ from itertools import product
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
-from wfomc.algo.core import AlgoName, AlgoOptions, EvidenceStrategy
-from wfomc.engine.features import FeatureSet
-from wfomc.problem import CompiledBranchInstance
+from wfomc.algo.core import (
+    AlgoOptions,
+    EvidenceStrategy,
+    ReducedInputTemplate,
+)
+from wfomc.stages import (
+    CompiledBranchInstance,
+    CompiledReducedBranch,
+    FeatureSet,
+)
 
 from .input import GroundCNFInput
 
 if TYPE_CHECKING:
-    from wfomc.engine.compilation import CompiledReducedProblem
     from wfomc.fol.syntax import Literal
 
 
 @dataclass(frozen=True)
-class ReducedPropositionalInputTemplate:
+class ReducedPropositionalInputTemplate(ReducedInputTemplate):
     """Reusable reduced branch metadata for per-domain grounding."""
 
-    compiled: "CompiledReducedProblem"
+    compiled: CompiledReducedBranch
+    options: AlgoOptions
+
+    def instantiate(
+        self,
+        concrete: CompiledBranchInstance,
+    ) -> GroundCNFInput:
+        """Ground one reduced branch for a concrete domain."""
+
+        return build_reduced_input(
+            concrete,
+            options=self.options,
+            features=self.compiled.feature_set,
+        )
 
 
 def build_input_template(
-    compiled: "CompiledReducedProblem",
+    compiled: CompiledReducedBranch,
+    options: AlgoOptions,
 ) -> ReducedPropositionalInputTemplate:
     """Wrap a reduced numeric branch for staged grounding."""
 
-    return ReducedPropositionalInputTemplate(compiled)
-
-
-def instantiate_input_template(
-    template: ReducedPropositionalInputTemplate,
-    concrete: CompiledBranchInstance,
-    *,
-    options: AlgoOptions,
-) -> GroundCNFInput:
-    """Ground one reduced branch for a concrete domain."""
-
-    return build_reduced_input(
-        concrete,
-        options=options,
-        features=template.compiled.feature_set,
-    )
+    return ReducedPropositionalInputTemplate(compiled, options)
 
 
 def build_reduced_input(
@@ -56,7 +61,6 @@ def build_reduced_input(
 ) -> GroundCNFInput:
     """Ground one fully reduced quantifier-free problem."""
 
-    from flint import fmpq_mpoly, fmpq_poly
     from wfomc.fol.grounding import (
         ground_qf_formula,
         linear_order_clauses,
@@ -122,27 +126,12 @@ def build_reduced_input(
         variable: weight_map.get(predicate, (one, one))
         for variable, predicate in id_to_predicate.items()
     }
-    symbolic = any(
-        isinstance(weight, (fmpq_poly, fmpq_mpoly))
-        for pair in literal_weights.values()
-        for weight in pair
-    )
     cnf = tuple(clauses) + tuple(evidence_unit_clauses) + tuple(order_clauses)
     return GroundCNFInput(
-        algo=AlgoName.PROPOSITIONAL_REDUCED,
-        options=options,
         arithmetic=reduced.arithmetic,
         cnf=cnf,
         literal_weights=literal_weights,
-        evidence_unit_clauses=tuple(evidence_unit_clauses),
-        domain_size=len(domain),
-        domain=domain,
-        atom_to_id=dict(atom_to_id),
-        id_to_predicate=dict(id_to_predicate),
-        clauses=tuple(clauses),
-        order_unit_clauses=tuple(order_clauses),
         linear_order_encoding=encoding,
-        symbolic=symbolic,
         leq_present=features.leq_predicate is not None,
     )
 
@@ -159,5 +148,4 @@ __all__ = [
     "ReducedPropositionalInputTemplate",
     "build_input_template",
     "build_reduced_input",
-    "instantiate_input_template",
 ]

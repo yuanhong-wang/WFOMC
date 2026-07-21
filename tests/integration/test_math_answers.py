@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from wfomc import AlgoName, parse_input, solve
-from wfomc.engine.features import analyze_features
+from wfomc import AlgoName, parse_problem_file, solve
+from wfomc.engine.features import analyze_problem_features
 
 
 ROOT = Path(__file__).parents[2]
@@ -18,12 +18,12 @@ MATH_FILES = tuple(sorted((ROOT / "models" / "MATH").glob("*.wfomcs")))
 
 @pytest.mark.parametrize("model_file", MATH_FILES, ids=lambda path: path.stem)
 def test_math_published_answers(model_file: Path):
-    problem = parse_input(str(model_file))
+    problem = parse_problem_file(str(model_file))
     expected = int(MATH_ANSWERS[model_file.stem]["answer"])
     if RUN_SLOW:
         algorithm = AlgoName.INCREMENTAL
     else:
-        features = analyze_features(problem)
+        features = analyze_problem_features(problem.problem)
         algorithm = (
             AlgoName.INCREMENTAL
             if features.has_predk or features.has_circular_pred

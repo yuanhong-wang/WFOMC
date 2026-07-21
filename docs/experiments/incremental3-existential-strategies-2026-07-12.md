@@ -7,7 +7,7 @@
 - Five warmups and 50 repetitions for `existential.wfomcs`; three warmups and
   30 repetitions for the other models.
 - Every benchmark command was wrapped in a 30-second hard timeout.
-- Times below are median end-to-end `parse_input + solve` times in one Python
+- Times below are median end-to-end `parse_problem_file + solve` times in one Python
   process, so interpreter startup is excluded.
 
 ## Results

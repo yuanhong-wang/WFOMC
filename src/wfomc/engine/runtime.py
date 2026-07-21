@@ -12,12 +12,21 @@ class RuntimeOptions:
 
     # Explicit Ganak executable; None uses GANAK or PATH discovery.
     propositional_ganak_path: str | None = None
+    # Maximum reusable algorithm input templates retained by one runtime.
+    input_template_cache_size: int = 32
     # Maximum concrete per-domain executions retained by one runtime.
     execution_cache_size: int = 8
+    # Maximum fully decoded per-domain results retained by one runtime.
+    result_cache_size: int = 128
 
     def __post_init__(self) -> None:
-        if self.execution_cache_size < 0:
-            raise ValueError("execution_cache_size must be non-negative")
+        for name, size in (
+            ("input_template_cache_size", self.input_template_cache_size),
+            ("execution_cache_size", self.execution_cache_size),
+            ("result_cache_size", self.result_cache_size),
+        ):
+            if size < 0:
+                raise ValueError(f"{name} must be non-negative")
 
 
 @dataclass(frozen=True)
@@ -47,7 +56,7 @@ class RuntimeCache:
     features: dict[object, object] = field(default_factory=dict)
     # Reusable domain-free compilations keyed by problem, algorithm, and options.
     compiled_problems: dict[object, object] = field(default_factory=dict)
-    # Reusable algorithm-owned input templates keyed by compiled branch.
+    # Reusable algorithm-owned input templates keyed by branch and structural key.
     algo_input_templates: dict[object, object] = field(default_factory=dict)
     # Concrete per-domain executions. This bucket is bounded by RuntimeOptions.
     executions: dict[object, object] = field(default_factory=dict)
@@ -102,7 +111,7 @@ class RuntimeCache:
 
 @dataclass
 class RuntimeContext:
-    """Runtime state passed through engine, input builders, and algorithms."""
+    """Engine runtime state and instance-scoped caches."""
 
     # External dependencies and executable overrides for this runtime.
     options: RuntimeOptions = field(default_factory=RuntimeOptions)

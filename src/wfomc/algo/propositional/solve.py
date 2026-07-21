@@ -2,20 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+from wfomc.algo.core import SolveContext
 from .input import GroundCNFInput
 from wfomc.arithmetic import ArithmeticBackend
 from wfomc.errors import ArithmeticBackendError
 from wfomc.result import WFOMCResult
 
-if TYPE_CHECKING:
-    from wfomc.engine.runtime import RuntimeContext
-
-
 def solve(
     algo_input: GroundCNFInput,
-    runtime: "RuntimeContext | None" = None,
+    context: SolveContext | None = None,
 ) -> WFOMCResult:
     from .counting import propositional_ground_wfomc
 
@@ -31,9 +26,7 @@ def solve(
             "fmpq/fmpq_poly/fmpq_mpoly arithmetic"
         )
 
-    ganak_path = (
-        runtime.options.propositional_ganak_path if runtime is not None else None
-    )
+    ganak_path = context.ganak_path if context is not None else None
     result = propositional_ground_wfomc(
         algo_input.cnf,
         algo_input.literal_weights,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from wfomc import AlgoName, Problem, ProblemInstance
+from wfomc import Problem, ProblemInstance
 from wfomc.fol import predicates
 
 from benchmarks.cases import benchmark_case, benchmark_cases, benchmark_suite_names
@@ -42,7 +42,6 @@ def test_every_benchmark_case_builds_a_current_typed_problem():
         assert isinstance(problem, ProblemInstance), case.key
         assert isinstance(problem.problem, Problem), case.key
         assert len(problem.domain) == case.domain_size, case.key
-        assert isinstance(case.default_algorithm, AlgoName), case.key
         assert case.correction_divisor > 0, case.key
         assert set(problem.problem.weights) <= declared, case.key
         assert all(
@@ -54,8 +53,6 @@ def test_every_benchmark_case_builds_a_current_typed_problem():
 
 def test_representative_case_metadata_is_preserved():
     assert benchmark_case("core/row-column/n8").domain_size == 8
-    assert benchmark_case("core/3-regular/n100").default_algorithm is AlgoName.FASTV2
-    assert benchmark_case("c2/3-regular/n100").default_algorithm is AlgoName.INCREMENTAL3
     assert benchmark_case("c2/3-regular-hand/n100").comparison_group == "c2-vs-hand-3-regular/n100"
     assert benchmark_case("cardinality/directed-3-regular/n15").correction_divisor == 36**15
 

@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass
-from functools import reduce
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass, replace
+from fractions import Fraction
+from functools import reduce
+import math
 from typing import TYPE_CHECKING
 
 from wfomc.cardinality_constraints import (
-    CardinalityConstraints,
     CardinalityTerm,
     Comparator,
-    LinearCardinalityConstraint,
 )
 from wfomc.fol import FOLContext
 from wfomc.fol import (
@@ -24,26 +23,68 @@ from wfomc.fol import (
     true as _true,
 )
 from wfomc.fol.normal_form import C2NormalForm
+from wfomc.stages import (
+    DivideDecoderSpec,
+    DomainExpr,
+    N,
+    ReducedCardinalityConstraint,
+    ReducedProblem,
+)
 
 if TYPE_CHECKING:
-    from wfomc.arithmetic import ArithmeticValue
     from wfomc.fol.normal_form.c2.norm_form import CountSection, ForallCountSection
 
 
 @dataclass(frozen=True)
-class CountingReduction:
+class _CountingReduction:
     formula_patch: Formula
-    weights: tuple[tuple[object, tuple["ArithmeticValue", "ArithmeticValue"]], ...]
-    cardinality_constraints: CardinalityConstraints
-    repeat_factor: int = 1
+    weights: tuple[tuple[object, tuple[object, object]], ...]
+    cardinality_constraints: tuple[ReducedCardinalityConstraint, ...]
+    repeat_factor: DomainExpr = DomainExpr.constant(1)
 
     def weight_map(
         self,
-    ) -> dict[object, tuple["ArithmeticValue", "ArithmeticValue"]]:
+    ) -> dict[object, tuple[object, object]]:
         return dict(self.weights)
 
 
-def can_reduce_counting_to_ufo2(normal_form: "C2NormalForm") -> bool:
+def reduce_counting_quantifiers(problem: ReducedProblem) -> ReducedProblem:
+    """Lower supported counting sections into UFO² plus cardinality metadata."""
+
+    normal_form = problem.normal_form
+    if not normal_form.has_counting:
+        return problem
+    from wfomc.fol import conjunction, true
+
+    reduction = _build_counting_reduction(
+        normal_form,
+        reserved_predicate_names=(str(predicate) for predicate in problem.weights),
+    )
+    weights = dict(problem.weights)
+    weights.update(reduction.weight_map())
+    qf_formula = normal_form.qf_formula
+    if qf_formula is None:
+        qf_formula = true()
+    return replace(
+        problem,
+        normal_form=replace(
+            normal_form,
+            qf_formula=conjunction(qf_formula, reduction.formula_patch),
+            counts=(),
+            forall_counts=(),
+            count_definitions=(),
+        ),
+        weights=weights,
+        cardinality_constraints=(
+            problem.cardinality_constraints + reduction.cardinality_constraints
+        ),
+        decoder_spec=problem.decoder_spec.append(
+            DivideDecoderSpec(reduction.repeat_factor)
+        ),
+    )
+
+
+def _can_reduce_counting_to_ufo2(normal_form: "C2NormalForm") -> bool:
     if not normal_form.has_counting:
         return True
     if normal_form.count_definitions:
@@ -53,27 +94,25 @@ def can_reduce_counting_to_ufo2(normal_form: "C2NormalForm") -> bool:
     ) and all(_can_reduce_row_count(rc) for rc in normal_form.forall_counts)
 
 
-def reduce_counting(
+def _build_counting_reduction(
     normal_form: "C2NormalForm",
     *,
-    domain_size: int,
-    rational_cls: type,
     reserved_predicate_names: Iterable[str] = (),
-) -> CountingReduction:
+) -> _CountingReduction:
     if not normal_form.has_counting:
-        return CountingReduction(
+        return _CountingReduction(
             formula_patch=_true(),
             weights=(),
-            cardinality_constraints=CardinalityConstraints(),
+            cardinality_constraints=(),
         )
-    if not can_reduce_counting_to_ufo2(normal_form):
+    if not _can_reduce_counting_to_ufo2(normal_form):
         raise ValueError("Counting sections not reducible to UFO2 + cardinality")
 
     ctx = FOLContext()
     formula_patch = _true()
     weights: dict[object, tuple[object, object]] = {}
-    constraints: list[LinearCardinalityConstraint] = []
-    repeat_factor = 1
+    constraints: list[ReducedCardinalityConstraint] = []
+    repeat_factor = DomainExpr.constant(1)
     fresh_predicate = _fresh_predicate_factory(
         normal_form,
         ctx,
@@ -83,43 +122,42 @@ def reduce_counting(
     for gc in normal_form.counts:
         atom = _count_body_atom(gc.body, arity=1, label="global count")
         constraints.append(
-            LinearCardinalityConstraint(
+            ReducedCardinalityConstraint(
                 terms=(CardinalityTerm(_count_body_pred(atom), 1),),
                 comparator=Comparator(str(gc.comparator)),
-                rhs=int(gc.count),
+                rhs=DomainExpr.constant(int(gc.count)),
             )
         )
 
     for rc in normal_form.forall_counts:
-        rf, rw, rcst, rp = reduce_exact_row_count(
+        rf, rw, rcst, rp = _reduce_exact_row_count(
             rc,
-            domain_size=domain_size,
             ctx=ctx,
-            rational_cls=rational_cls,
             fresh_predicate=fresh_predicate,
         )
         formula_patch = conjunction(formula_patch, rf)
         weights.update(rw)
         constraints.append(rcst)
-        repeat_factor *= rp
+        repeat_factor = repeat_factor * rp
 
-    return CountingReduction(
+    return _CountingReduction(
         formula_patch=formula_patch,
         weights=_sort_weight_items(weights),
-        cardinality_constraints=CardinalityConstraints(tuple(constraints)),
+        cardinality_constraints=tuple(constraints),
         repeat_factor=repeat_factor,
     )
 
 
-def reduce_exact_row_count(
+def _reduce_exact_row_count(
     row_count: "ForallCountSection",
     *,
-    domain_size: int,
     ctx: FOLContext,
-    rational_cls: type,
     fresh_predicate: Callable[[str, int], object] | None = None,
 ) -> tuple[
-    Formula, dict[object, tuple[object, object]], LinearCardinalityConstraint, int
+    Formula,
+    dict[object, tuple[object, object]],
+    ReducedCardinalityConstraint,
+    DomainExpr,
 ]:
     body = _count_body_atom(row_count.body, arity=2, label="row count")
     count = int(row_count.count)
@@ -127,7 +165,7 @@ def reduce_exact_row_count(
     counted_var = row_count.counted_var
     formula = _true()
     weights: dict[object, tuple[object, object]] = {}
-    repeat_factor = (math.factorial(count)) ** domain_size
+    repeat_factor = DomainExpr.constant(math.factorial(count)).power(N)
     if fresh_predicate is None:
         fresh_predicate = _standalone_fresh_predicate(ctx)
 
@@ -159,7 +197,7 @@ def reduce_exact_row_count(
             skolem_axioms,
             disjunction(ctx.atom(sp, outer_var), neg(sa)),
         )
-        weights[sp] = (rational_cls(1, 1), rational_cls(-1, 1))
+        weights[sp] = (Fraction(1, 1), Fraction(-1, 1))
 
     c_preds = [fresh_predicate(f"__C_{j}", 1) for j in range(count + 1)]
     gamma_body = _true()
@@ -178,7 +216,7 @@ def reduce_exact_row_count(
         _false(),
     )
     for j, p in enumerate(c_preds):
-        weights[p] = (rational_cls(math.comb(count, j), 1), rational_cls(1, 1))
+        weights[p] = (Fraction(math.comb(count, j), 1), Fraction(1, 1))
 
     return (
         reduce(
@@ -187,10 +225,10 @@ def reduce_exact_row_count(
             _true(),
         ),
         weights,
-        LinearCardinalityConstraint(
+        ReducedCardinalityConstraint(
             terms=(CardinalityTerm(aux_pred, 1),),
             comparator=Comparator.EQ,
-            rhs=domain_size * count,
+            rhs=N * count,
         ),
         repeat_factor,
     )
@@ -245,7 +283,7 @@ def _fresh_predicate_from_names(
 
 
 # ---------------------------------------------------------------------------
-# Count-body validation helpers (moved from duck-typing accessor layer)
+# Count-body validation helpers
 # ---------------------------------------------------------------------------
 
 
@@ -295,8 +333,5 @@ def _can_reduce_row_count(rc: "ForallCountSection") -> bool:
 
 
 __all__ = [
-    "CountingReduction",
-    "can_reduce_counting_to_ufo2",
-    "reduce_counting",
-    "reduce_exact_row_count",
+    "reduce_counting_quantifiers",
 ]

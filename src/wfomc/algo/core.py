@@ -2,62 +2,34 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass, field
 from enum import Enum
 from importlib import import_module
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, TypeAlias
 
 from wfomc.arithmetic import ArithmeticContext
 from wfomc.errors import UnsupportedFeatureError
-from wfomc.weights import WeightOptions
+from wfomc.options import EvidenceStrategy, ExistentialStrategy, WeightOptions
+from wfomc.stages import CompiledReducedBranch, GroundingProblem
 
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from wfomc.engine.features import FeatureSet
-    from wfomc.engine.runtime import RuntimeContext
     from wfomc.fol.grounding import LinearOrderEncoding
-    from wfomc.problem import Domain, Problem
-    from wfomc.reduction.reduced import ReducedProblem
+    from wfomc.problem import Domain
+    from wfomc.stages import (
+        CompiledBranchInstance,
+        FeatureSet,
+    )
     from wfomc.result import WFOMCResult
 
 
-class EvidenceStrategy(Enum):
-    """Algorithm strategy for consuming unary evidence."""
-
-    # No evidence encoding is needed because the source problem has no evidence.
-    NONE = "none"
-    # Lower evidence profiles to cardinality constraints before compilation.
-    CCS = "ccs"
-    # Preserve profile capacities for lifted configuration-coefficient counting.
-    LIFTED_PROFILES = "lifted-profiles"
-    # Emit one propositional unit clause for each ground evidence literal.
-    GROUND_UNITS = "ground-units"
-    # Reserve evidence capacities for a profile-aware dynamic program.
-    PROFILE_CAPACITY_DP = "profile-capacity-dp"
-    # Materialize evidence as factors in a tree-decomposition backend.
-    TREE_DECOMPOSITION_FACTORS = "tree-decomposition-factors"
-
-    def __str__(self) -> str:
-        return self.value
-
-
-class ExistentialStrategy(Enum):
-    """Incremental3 strategy for existential normal-form sections."""
-
-    # Convert existential sections to native count-at-least-one constraints.
-    COUNTING = "counting"
-    # Eliminate existential sections with exact weighted Skolemization.
-    SKOLEM = "skolem"
-
-    def __str__(self) -> str:
-        return self.value
-
-
 SupportedEvidence = tuple[EvidenceStrategy, ...]
+AlgoBranch: TypeAlias = CompiledReducedBranch | GroundingProblem
 
 
 class DefaultEvidenceStrategy(Protocol):
@@ -71,12 +43,12 @@ class DefaultEvidenceStrategy(Protocol):
 
 
 class SolveFn(Protocol):
-    """Protocol for ``spec.solve``: ``AlgoInput × RuntimeContext|None → WFOMCResult``."""
+    """Protocol for ``spec.solve``: ``AlgoInput × SolveContext → WFOMCResult``."""
 
     def __call__(
         self,
         algo_input: "AlgoInput",
-        context: "RuntimeContext | None",
+        context: "SolveContext | None",
     ) -> "WFOMCResult": ...
 
 
@@ -113,8 +85,6 @@ class AlgoMaturity(Enum):
     STABLE = "stable"
     # Runnable and CLI-visible, but still subject to documented limitations.
     BETA = "beta"
-    # Available through the Python API for evaluation, but hidden from the CLI.
-    EXPERIMENTAL = "experimental"
     # Registered only as an extension point and not currently runnable.
     UNAVAILABLE = "unavailable"
 
@@ -134,6 +104,39 @@ class AlgoOptions:
 
 
 @dataclass(frozen=True)
+class SolveContext:
+    """Algorithm-visible external dependencies for one solve call."""
+
+    # Explicit Ganak executable for propositional solving.
+    ganak_path: str | None = None
+
+
+class ReducedInputTemplate(ABC):
+    """Nominal contract for templates instantiated from a reduced branch."""
+
+    @abstractmethod
+    def instantiate(
+        self,
+        concrete: "CompiledBranchInstance",
+    ) -> "AlgoInput":
+        """Create one concrete algorithm input."""
+
+
+class GroundingInputTemplate(ABC):
+    """Nominal contract for templates instantiated directly from a domain."""
+
+    @abstractmethod
+    def instantiate(
+        self,
+        domain: "Domain",
+    ) -> "AlgoInput":
+        """Create one concrete grounding input."""
+
+
+AlgoInputTemplate: TypeAlias = ReducedInputTemplate | GroundingInputTemplate
+
+
+@dataclass(frozen=True)
 class AlgoSpec:
     """Small engine-facing contract for one algorithm."""
 
@@ -143,39 +146,28 @@ class AlgoSpec:
     resolve_options: Callable[["FeatureSet", AlgoOptions | None], AlgoOptions]
     # Evaluate one algorithm-owned input and return its undecoded branch result.
     solve: SolveFn
-    # Compile domain-free branches.
-    compile_branches: Callable[
-        ["Problem", AlgoOptions],
-        tuple[object, ...],
-    ]
     # Build one reusable algorithm-owned input template.
     build_input_template: Callable[
-        [object, object, AlgoOptions],
-        object,
+        [AlgoBranch, Hashable, AlgoOptions],
+        AlgoInputTemplate,
     ]
-    # Instantiate one branch and input template for a concrete domain.
-    instantiate_branch: Callable[
-        [object, object, "Domain", AlgoOptions],
-        "PreparedBranch | None",
-    ]
-    # Test whether a branch applies to one concrete domain.
-    branch_applies: Callable[[object, "Domain"], bool] | None = None
-    # Select an algorithm-owned structural variant for the input-template cache.
-    input_template_variant: Callable[[object, "Domain"], object] | None = None
+    # Select a small structural key for the input-template cache.
+    input_template_key: Callable[
+        [AlgoBranch, "Domain"],
+        Hashable,
+    ] | None = None
+    # Whether the engine applies logical reductions before numeric compilation.
+    uses_reduction: bool = True
+    # Whether the engine lowers counting quantifiers during reduction.
+    reduce_counting_quantifiers: bool = True
     # Readiness level controlling whether the algorithm appears in the CLI.
     maturity: AlgoMaturity = AlgoMaturity.STABLE
-    # Human-readable external programs or factories required at runtime.
-    external_requirements: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class AlgoInput:
     """Base fields shared by every materialized algorithm input."""
 
-    # Algorithm that owns this input; None is reserved for generic adapters.
-    algo: AlgoName | None
-    # Fully resolved options used to prepare this input.
-    options: AlgoOptions
     # Branch-local numeric domain used for weights, solving, and decoding.
     arithmetic: ArithmeticContext
 
@@ -183,18 +175,6 @@ class AlgoInput:
         """Whether result decoding should restore the linear-order factor."""
 
         return True
-
-
-@dataclass(frozen=True)
-class PreparedBranch:
-    """One reduced/source problem paired with solver input and result decoder."""
-
-    # Problem stage whose reductions are reversed by decoder.
-    problem: "Problem | ReducedProblem"
-    # Concrete input consumed by the selected algorithm's solve function.
-    algo_input: AlgoInput
-    # Compose reduction corrections and map the raw branch result toward output.
-    decoder: Callable[..., object]
 
 
 def option_resolver(
@@ -372,13 +352,17 @@ def algo_spec(algo: AlgoName | str) -> AlgoSpec:
 
 __all__ = [
     "AlgoInput",
+    "AlgoInputTemplate",
+    "AlgoBranch",
     "AlgoMaturity",
     "AlgoName",
     "AlgoOptions",
     "AlgoSpec",
     "EvidenceStrategy",
     "ExistentialStrategy",
-    "PreparedBranch",
+    "GroundingInputTemplate",
+    "ReducedInputTemplate",
+    "SolveContext",
     "algo_spec",
     "option_resolver",
 ]

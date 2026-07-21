@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import functools
+import math
 
 from wfomc.arithmetic import ArithmeticValue
-from wfomc.multinomial import MultinomialCoefficients
 from .weights import (
     optimized_J_term,
     optimized_d_term,
@@ -59,6 +58,8 @@ class MaterializedOptimizedOperations:
         bign: int,
         partition: tuple[int, ...],
     ) -> ArithmeticValue:
+        if self.domain_size is None:
+            raise RuntimeError("optimized operations are not bound to a domain")
         return optimized_term(self, iv, bign, partition)
 
     def get_J_term(self, clique_idx: int, nhat: int) -> ArithmeticValue:
@@ -93,6 +94,11 @@ class MaterializedOptimizedEvidenceOperations:
         self._cell_weight = cell_weight
         self._two_table = two_table
         self.arithmetic = arithmetic
+        self._j_term_cache: dict[tuple[int, tuple[int, ...]], ArithmeticValue] = {}
+        self._partitioned_j_term_cache: dict[
+            tuple[int, int, int], ArithmeticValue
+        ] = {}
+        self._d_term_cache: dict[tuple[int, int, int, int], ArithmeticValue] = {}
 
     def get_cell_weight(self, cell) -> ArithmeticValue:
         return self._cell_weight[cell]
@@ -130,63 +136,72 @@ class MaterializedOptimizedEvidenceOperations:
             )
         return result
 
-    @functools.lru_cache(maxsize=None)
     def get_J_term(
         self,
         clique_idx: int,
         clique_config: tuple[int, ...],
     ) -> ArithmeticValue:
+        key = (clique_idx, clique_config)
+        cached = self._j_term_cache.get(key)
+        if cached is not None:
+            return cached
         result = self.arithmetic.one()
         clique = self.cliques[clique_idx]
         evidence_profile_groups = self.clique_evidence_profile_partitions[clique_idx]
         if len(evidence_profile_groups) == 1:
-            return self.get_partitioned_J_term(clique_idx, 0, clique_config[0])
-
-        relation = self.get_two_table_weight((clique[0], clique[1]))
-        cross_pairs = sum(
-            left_count * right_count
-            for left_idx, left_count in enumerate(clique_config)
-            for right_idx, right_count in enumerate(clique_config)
-            if left_idx < right_idx
-        )
-        result = self.arithmetic.multiply(
-            result,
-            self.arithmetic.power(relation, cross_pairs),
-        )
-        for partition_idx in range(len(evidence_profile_groups)):
+            result = self.get_partitioned_J_term(clique_idx, 0, clique_config[0])
+        else:
+            relation = self.get_two_table_weight((clique[0], clique[1]))
+            cross_pairs = sum(
+                left_count * right_count
+                for left_idx, left_count in enumerate(clique_config)
+                for right_idx, right_count in enumerate(clique_config)
+                if left_idx < right_idx
+            )
             result = self.arithmetic.multiply(
                 result,
-                self.get_partitioned_J_term(
-                    clique_idx,
-                    partition_idx,
-                    clique_config[partition_idx],
-                ),
+                self.arithmetic.power(relation, cross_pairs),
             )
+            for partition_idx in range(len(evidence_profile_groups)):
+                result = self.arithmetic.multiply(
+                    result,
+                    self.get_partitioned_J_term(
+                        clique_idx,
+                        partition_idx,
+                        clique_config[partition_idx],
+                    ),
+                )
+        self._j_term_cache[key] = result
         return result
 
-    @functools.lru_cache(maxsize=None)
     def get_partitioned_J_term(
         self,
         clique_idx: int,
         partition_idx: int,
         count: int,
     ) -> ArithmeticValue:
+        key = (clique_idx, partition_idx, count)
+        cached = self._partitioned_j_term_cache.get(key)
+        if cached is not None:
+            return cached
         cell_indices = self.clique_evidence_profile_partitions[clique_idx][
             partition_idx
         ]
         clique = self.cliques[clique_idx]
         if len(cell_indices) == 1:
             cell = clique[cell_indices[0]]
-            return self.arithmetic.multiply(
+            result = self.arithmetic.multiply(
                 self.arithmetic.power(
                     self.get_two_table_weight((cell, cell)),
-                    MultinomialCoefficients.comb(count, 2),
+                    math.comb(count, 2),
                 ),
                 self.arithmetic.power(self.get_cell_weight(cell), count),
             )
-        return self.get_d_term(clique_idx, count, partition_idx)
+        else:
+            result = self.get_d_term(clique_idx, count, partition_idx)
+        self._partitioned_j_term_cache[key] = result
+        return result
 
-    @functools.lru_cache(maxsize=None)
     def get_d_term(
         self,
         clique_idx: int,
@@ -194,6 +209,10 @@ class MaterializedOptimizedEvidenceOperations:
         partition_idx: int,
         cur: int = 0,
     ) -> ArithmeticValue:
+        key = (clique_idx, count, partition_idx, cur)
+        cached = self._d_term_cache.get(key)
+        if cached is not None:
+            return cached
         cell_indices = self.clique_evidence_profile_partitions[clique_idx][
             partition_idx
         ]
@@ -205,47 +224,46 @@ class MaterializedOptimizedEvidenceOperations:
         weight = self.get_cell_weight(cell)
 
         if cur == len(cell_indices) - 1:
-            return self.arithmetic.multiply(
+            result = self.arithmetic.multiply(
                 self.arithmetic.power(weight, count),
                 self.arithmetic.power(
                     self_relation,
-                    MultinomialCoefficients.comb(count, 2),
+                    math.comb(count, 2),
                 ),
             )
-
-        result = self.arithmetic.zero()
-        for cell_count in range(count + 1):
-            term = self.arithmetic.from_int(
-                MultinomialCoefficients.comb(count, cell_count)
-            )
-            term = self.arithmetic.multiply(
-                term,
-                self.arithmetic.power(weight, cell_count),
-            )
-            term = self.arithmetic.multiply(
-                term,
-                self.arithmetic.power(
-                    self_relation,
-                    MultinomialCoefficients.comb(cell_count, 2),
-                ),
-            )
-            term = self.arithmetic.multiply(
-                term,
-                self.arithmetic.power(
-                    relation,
-                    cell_count * (count - cell_count),
-                ),
-            )
-            term = self.arithmetic.multiply(
-                term,
-                self.get_d_term(
-                    clique_idx,
-                    count - cell_count,
-                    partition_idx,
-                    cur + 1,
-                ),
-            )
-            result = self.arithmetic.add(result, term)
+        else:
+            result = self.arithmetic.zero()
+            for cell_count in range(count + 1):
+                term = self.arithmetic.from_int(math.comb(count, cell_count))
+                term = self.arithmetic.multiply(
+                    term,
+                    self.arithmetic.power(weight, cell_count),
+                )
+                term = self.arithmetic.multiply(
+                    term,
+                    self.arithmetic.power(
+                        self_relation,
+                        math.comb(cell_count, 2),
+                    ),
+                )
+                term = self.arithmetic.multiply(
+                    term,
+                    self.arithmetic.power(
+                        relation,
+                        cell_count * (count - cell_count),
+                    ),
+                )
+                term = self.arithmetic.multiply(
+                    term,
+                    self.get_d_term(
+                        clique_idx,
+                        count - cell_count,
+                        partition_idx,
+                        cur + 1,
+                    ),
+                )
+                result = self.arithmetic.add(result, term)
+        self._d_term_cache[key] = result
         return result
 
 
@@ -287,7 +305,7 @@ def materialize_optimized_operations(graph) -> OptimizedOperations:
         nonind_map=dict(graph.nonind_map),
         i1_ind=list(graph.i1_ind),
         i2_ind=list(graph.i2_ind),
-        domain_size=graph.domain_size,
+        domain_size=None,
         modified_cell_symmetry=graph.modified_cell_symmetry,
         cell_weight=cell_weight,
         two_table=two_table,

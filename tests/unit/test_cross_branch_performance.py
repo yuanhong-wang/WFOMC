@@ -14,7 +14,6 @@ from benchmarks.cross_branch_performance import (
     series_key,
     Workload,
     serialize_catalog_case,
-    truncation_key,
 )
 from wfomc import parse_problem
 
@@ -97,7 +96,7 @@ def test_paired_branch_stats_uses_successful_matching_algorithm_pairs() -> None:
     }
 
 
-def test_resource_failures_and_truncation_key_are_branch_algorithm_specific() -> None:
+def test_resource_failures_block_the_whole_problem_series() -> None:
     row = {
         "source_kind": "catalog",
         "family": "3-regular",
@@ -108,13 +107,6 @@ def test_resource_failures_and_truncation_key_are_branch_algorithm_specific() ->
     }
 
     assert row["status"] in RESOURCE_FAILURES
-    assert truncation_key(row) == (
-        "catalog",
-        "3-regular",
-        "default",
-        "devel",
-        "incremental3",
-    )
     assert series_key(row) == ("catalog", "3-regular", "default")
 
 

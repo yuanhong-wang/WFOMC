@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from wfomc.algo import AlgoName, AlgoOptions, ExistentialStrategy
+from wfomc.algo import AlgoName, AlgoOptions
+from wfomc.options import ExistentialStrategy
 from wfomc.algo.incremental3.counting_kernel import (
     ConfigSpace,
     _build_elimination_orders,
@@ -12,7 +13,7 @@ from wfomc.algo.incremental3.input import _initial_state
 from wfomc.cell_graph import Cell
 from wfomc.engine import compile_problem, instantiate_problem, solve
 from wfomc.fol import Predicate
-from wfomc.parser import parse_input, parse_problem
+from wfomc.parser import parse_problem_file, parse_problem
 from wfomc.errors import UnsupportedFeatureError
 
 
@@ -75,7 +76,7 @@ def test_positive_mod_cell_wraps_initial_remainder():
 
 
 def test_incremental3_materialization_carries_counting_state():
-    problem = parse_input("models/modk/1mod2-regular-graph.wfomcs")
+    problem = parse_problem_file("models/modk/1mod2-regular-graph.wfomcs")
     artifacts = instantiate_problem(
         compile_problem(
             problem.problem,
@@ -103,7 +104,7 @@ domain = 2
 
     compiled = compile_problem(problem.problem, algo=AlgoName.INCREMENTAL3)
     artifacts = instantiate_problem(compiled, problem.domain)
-    normal_form = artifacts.prepared_branches[0].problem.normal_form
+    normal_form = artifacts.branches[0].problem.normal_form
     masks = artifacts.algo_input.unary_cardinality_masks
 
     assert normal_form.qf_formula is None
@@ -127,7 +128,7 @@ domain = 2
 
     compiled = compile_problem(problem.problem, algo=AlgoName.INCREMENTAL3)
     artifacts = instantiate_problem(compiled, problem.domain)
-    normal_form = artifacts.prepared_branches[0].problem.normal_form
+    normal_form = artifacts.branches[0].problem.normal_form
 
     assert compiled.algo_options.existential_strategy is ExistentialStrategy.COUNTING
     assert normal_form.forall_exists == ()

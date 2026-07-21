@@ -8,31 +8,37 @@ from wfomc.algo import (
     AlgoMaturity,
     AlgoName,
     AlgoOptions,
-    EvidenceStrategy,
-    LinearOrderEncoding,
     algo_spec,
 )
 from wfomc.algo.fast.input import OptimizedCellGraphInput
 from wfomc.algo.incremental.input import OrderedCellGraphInput
 from wfomc.algo.propositional.input import GroundCNFInput
 from wfomc.algo.standard.input import StandardInput
+from wfomc.algo.core import GroundingInputTemplate, ReducedInputTemplate
 from wfomc.engine import (
     analyze_problem,
     compile_problem,
     instantiate_problem,
     solve,
 )
-from wfomc.engine.features import FeatureSet
+from wfomc.engine.artifacts import (
+    CompiledProblem,
+    ExecutionBranch,
+    ProblemExecution,
+)
 from wfomc.engine.runtime import RuntimeContext
 from wfomc.errors import UnsupportedFeatureError
 from wfomc.evidence import Evidence, GroundUnaryLiteral, UnaryEvidence
 from wfomc.fol import CountingQuantifier, FOLContext, walk
-from wfomc.parser import parse_input, parse_problem
-from wfomc.problem import CompiledProblem, Domain, ProblemExecution
+from wfomc.fol.grounding import LinearOrderEncoding
+from wfomc.options import EvidenceStrategy
+from wfomc.parser import parse_problem_file, parse_problem
+from wfomc.problem import Domain
+from wfomc.stages import FeatureSet, GroundingProblem
 
 
 def test_analyze_problem_returns_domain_free_features():
-    instance = parse_input("models/unary_evidence/evidence-only.wfomcs")
+    instance = parse_problem_file("models/unary_evidence/evidence-only.wfomcs")
 
     features = analyze_problem(instance.problem)
 
@@ -40,17 +46,14 @@ def test_analyze_problem_returns_domain_free_features():
     assert features.has_unary_evidence
 
 
-def test_algorithm_specs_declare_maturity_and_external_requirements():
+def test_algorithm_specs_declare_maturity():
     assert algo_spec(AlgoName.STANDARD).maturity is AlgoMaturity.STABLE
     assert algo_spec(AlgoName.PROPOSITIONAL).maturity is AlgoMaturity.BETA
-    assert algo_spec(AlgoName.PROPOSITIONAL).external_requirements == (
-        "Ganak executable",
-    )
     assert algo_spec(AlgoName.BOUNDED_TREEWIDTH).maturity is AlgoMaturity.UNAVAILABLE
 
 
 def test_standard_compiles_domain_free_branch_and_instantiates_input_later():
-    instance = parse_input("models/unary_evidence/evidence-only.wfomcs")
+    instance = parse_problem_file("models/unary_evidence/evidence-only.wfomcs")
 
     compiled = compile_problem(instance.problem, algo=AlgoName.STANDARD)
 
@@ -59,15 +62,16 @@ def test_standard_compiles_domain_free_branch_and_instantiates_input_later():
     assert compiled.branches
     execution = instantiate_problem(compiled, instance.domain)
     assert isinstance(execution, ProblemExecution)
+    assert isinstance(execution.branches[0], ExecutionBranch)
     assert isinstance(execution.algo_input, StandardInput)
 
 
 def test_every_registered_algorithm_uses_staged_contract():
     for algo in AlgoName:
         spec = algo_spec(algo)
-        assert callable(spec.compile_branches)
         assert callable(spec.build_input_template)
-        assert callable(spec.instantiate_branch)
+        assert isinstance(spec.uses_reduction, bool)
+        assert isinstance(spec.reduce_counting_quantifiers, bool)
 
 
 @pytest.mark.parametrize(
@@ -84,18 +88,25 @@ def test_every_registered_algorithm_uses_staged_contract():
     ),
 )
 def test_staged_algorithm_reuses_input_template_across_domains(algo):
-    instance = parse_input("models/2-colored-graph.wfomcs")
+    instance = parse_problem_file("models/2-colored-graph.wfomcs")
     runtime = RuntimeContext()
     compiled = compile_problem(instance.problem, algo=algo, runtime=runtime)
 
     small = instantiate_problem(compiled, Domain.of_size(2), runtime=runtime)
     large = instantiate_problem(compiled, Domain.of_size(3), runtime=runtime)
 
-    assert small.algo_input.domain_size == 2
-    assert large.algo_input.domain_size == 3
+    assert small.domain.size == 2
+    assert large.domain.size == 3
     stats = runtime.cache.stats()
     assert stats.misses["algo_input_templates"] == 1
     assert stats.hits["algo_input_templates"] == 1
+    template = next(iter(runtime.cache.algo_input_templates.values()))
+    expected_template_type = (
+        GroundingInputTemplate
+        if algo is AlgoName.PROPOSITIONAL
+        else ReducedInputTemplate
+    )
+    assert isinstance(template, expected_template_type)
 
 
 def test_incremental3_rebuilds_template_only_when_counting_state_changes():
@@ -123,7 +134,7 @@ domain = 3
 
 @pytest.mark.parametrize("algo", (AlgoName.FAST, AlgoName.FASTV2))
 def test_fast_compiles_reusable_branches_and_instantiates_concrete_input(algo):
-    instance = parse_input("models/2-colored-graph.wfomcs")
+    instance = parse_problem_file("models/2-colored-graph.wfomcs")
 
     compiled = compile_problem(instance.problem, algo=algo)
     execution = instantiate_problem(compiled, instance.domain)
@@ -134,7 +145,7 @@ def test_fast_compiles_reusable_branches_and_instantiates_concrete_input(algo):
 
 
 def test_fast_input_template_is_reused_but_operations_are_fresh_per_domain():
-    instance = parse_input("models/2-colored-graph.wfomcs")
+    instance = parse_problem_file("models/2-colored-graph.wfomcs")
     runtime = RuntimeContext()
     compiled = compile_problem(
         instance.problem,
@@ -295,13 +306,14 @@ domain = 3
 
 
 def test_propositional_inputs_are_created_only_during_instantiation():
-    instance = parse_input("models/unary_evidence/evidence-only.wfomcs")
+    instance = parse_problem_file("models/unary_evidence/evidence-only.wfomcs")
     compiled = compile_problem(instance.problem, algo=AlgoName.PROPOSITIONAL)
 
+    assert isinstance(compiled.branches[0], GroundingProblem)
     execution = instantiate_problem(compiled, instance.domain)
 
     assert isinstance(execution.algo_input, GroundCNFInput)
-    assert execution.algo_input.evidence_unit_clauses
+    assert execution.algo_input.cnf
 
 
 def test_direct_and_reduced_propositional_modes_keep_distinct_formulas():
@@ -326,12 +338,10 @@ domain = 2
 
     assert isinstance(direct.algo_input, GroundCNFInput)
     assert isinstance(reduced.algo_input, GroundCNFInput)
-    assert direct.algo_input.algo is AlgoName.PROPOSITIONAL
-    assert reduced.algo_input.algo is AlgoName.PROPOSITIONAL_REDUCED
 
 
 def test_propositional_order_option_is_fixed_by_compilation():
-    instance = parse_input("models/linear_order/head-middle-tail.wfomcs")
+    instance = parse_problem_file("models/linear_order/head-middle-tail.wfomcs")
     compiled = compile_problem(
         instance.problem,
         algo=AlgoName.PROPOSITIONAL,
@@ -341,11 +351,11 @@ def test_propositional_order_option_is_fixed_by_compilation():
     execution = instantiate_problem(compiled, instance.domain)
 
     assert execution.algo_input.linear_order_encoding is LinearOrderEncoding.AXIOMS
-    assert execution.algo_input.order_unit_clauses
+    assert not execution.algo_input.include_order_factorial()
 
 
 def test_unsupported_features_are_rejected_during_domain_free_compilation():
-    instance = parse_input("models/linear_order/head-middle-tail.wfomcs")
+    instance = parse_problem_file("models/linear_order/head-middle-tail.wfomcs")
 
     with pytest.raises(UnsupportedFeatureError, match="linear order"):
         compile_problem(instance.problem, algo=AlgoName.STANDARD)
@@ -368,7 +378,7 @@ domain = {a}
 
 
 def test_compile_cache_reuses_same_domain_free_artifact():
-    instance = parse_input("models/2-colored-graph.wfomcs")
+    instance = parse_problem_file("models/2-colored-graph.wfomcs")
     runtime = RuntimeContext()
 
     first = compile_problem(instance.problem, algo=AlgoName.FAST, runtime=runtime)

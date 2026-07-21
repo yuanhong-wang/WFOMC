@@ -100,7 +100,7 @@ def test_collect_symbolic_weight_variables_empty_when_none():
     from wfomc.problem import Problem
 
     problem = Problem(sentence=_true())
-    assert collect_symbolic_weight_variables(problem) == ()
+    assert collect_symbolic_weight_variables(problem.weights) == ()
 
 
 def test_cardinality_constraints_are_not_weight_symbols_before_reduction():
@@ -125,7 +125,7 @@ def test_cardinality_constraints_are_not_weight_symbols_before_reduction():
             )
         ),
     )
-    assert collect_symbolic_weight_variables(problem) == ()
+    assert collect_symbolic_weight_variables(problem.weights) == ()
 
 
 def test_collect_symbolic_weight_variables_only_reads_actual_weights():
@@ -138,17 +138,11 @@ def test_collect_symbolic_weight_variables_only_reads_actual_weights():
     from wfomc.fol import true as _true
     from wfomc.problem import Problem
 
-    class _Sym:
-        def __init__(self, name: str) -> None:
-            self.name = name
-
-        @property
-        def free_symbols(self) -> set[str]:
-            return {self.name}
+    context = fmpq_mpoly_ctx.get(["w"], "lex")
 
     problem = Problem(
         sentence=_true(),
-        weights={("P", 1): (_Sym("w"), 1)},
+        weights={("P", 1): (context.gen(0), 1)},
         cardinality_constraints=CardinalityConstraints(
             (
                 LinearCardinalityConstraint(
@@ -159,7 +153,7 @@ def test_collect_symbolic_weight_variables_only_reads_actual_weights():
             )
         ),
     )
-    assert collect_symbolic_weight_variables(problem) == ("w",)
+    assert collect_symbolic_weight_variables(problem.weights) == ("w",)
 
 
 # --- compile_weight_mapping ---

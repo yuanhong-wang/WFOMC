@@ -18,6 +18,7 @@ from wfomc import (
     compile_problem,
     instantiate_problem,
     parse_problem,
+    parse_problem_file,
     solve,
 )
 
@@ -44,6 +45,7 @@ def test_documented_top_level_api_is_importable():
             compile_problem,
             instantiate_problem,
             parse_problem,
+            parse_problem_file,
             solve,
         )
     )

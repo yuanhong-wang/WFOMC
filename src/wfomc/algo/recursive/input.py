@@ -2,23 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from wfomc.arithmetic import ArithmeticValue
-from wfomc.algo.core import AlgoInput, AlgoOptions
+from wfomc.algo.core import AlgoInput, ReducedInputTemplate
 from wfomc.cell_graph import CellGraphComponent, CellGraphData, build_cell_graphs
 from wfomc.cell_graph.staging import (
-    build_structural_branch,
     rebind_component,
+    select_cell_graph_structure,
 )
-from wfomc.problem import CompiledBranchInstance
-from wfomc.engine.features import FeatureSet
-
-if TYPE_CHECKING:
-    from wfomc.engine.compilation import CompiledReducedProblem
-    from wfomc.fol import Formula
-
+from wfomc.stages import (
+    CompiledBranchInstance,
+    CompiledReducedBranch,
+)
 
 @dataclass(frozen=True)
 class RecursiveInput(AlgoInput):
@@ -27,75 +24,46 @@ class RecursiveInput(AlgoInput):
 
 
 @dataclass(frozen=True)
-class RecursiveInputTemplate:
+class RecursiveInputTemplate(ReducedInputTemplate):
     """Reusable ordered cell graphs for recursive solving."""
 
     components: tuple[CellGraphComponent, ...]
 
+    def instantiate(
+        self,
+        concrete: CompiledBranchInstance,
+    ) -> RecursiveInput:
+        """Bind recursive graph weights for one concrete domain."""
 
-def build_input(
-    reduced: CompiledBranchInstance,
-    *,
-    options: AlgoOptions,
-    features: FeatureSet,
-    cell_formulas: tuple["Formula", ...] | None = None,
-) -> RecursiveInput:
-    leq = features.leq_predicate
-    components = tuple(
-        _component(data, graph_weight)
-        for data, graph_weight in build_cell_graphs(
-            reduced.sentence,
-            reduced.weights,
-            reduced.arithmetic,
-            leq_pred=leq,
-            cell_formulas=cell_formulas,
+        return RecursiveInput(
+            arithmetic=concrete.arithmetic,
+            components=tuple(
+                rebind_component(component, concrete, include_evidence=False)
+                for component in self.components
+            ),
+            domain_size=len(concrete.domain),
         )
-    )
-    return RecursiveInput(
-        algo=None,
-        options=options,
-        arithmetic=reduced.arithmetic,
-        components=components,
-        domain_size=len(reduced.domain),
-    )
 
 
 def build_input_template(
-    compiled: "CompiledReducedProblem",
+    compiled: CompiledReducedBranch,
     *,
-    input_variant: object,
-    options: AlgoOptions,
+    input_variant: Hashable,
 ) -> RecursiveInputTemplate:
     """Build recursive cell graphs without binding a domain."""
 
-    structural, cell_formulas = build_structural_branch(compiled, input_variant)
-    built = build_input(
-        structural,
-        options=options,
-        features=compiled.feature_set,
-        cell_formulas=cell_formulas,
+    _profile, cell_formulas = select_cell_graph_structure(compiled, input_variant)
+    components = tuple(
+        _component(data, graph_weight)
+        for data, graph_weight in build_cell_graphs(
+            compiled.sentence,
+            compiled.weights,
+            compiled.arithmetic,
+            leq_pred=compiled.feature_set.leq_predicate,
+            cell_formulas=cell_formulas,
+        )
     )
-    return RecursiveInputTemplate(built.components)
-
-
-def instantiate_input_template(
-    template: RecursiveInputTemplate,
-    concrete: CompiledBranchInstance,
-    *,
-    options: AlgoOptions,
-) -> RecursiveInput:
-    """Bind recursive graph weights for one concrete domain."""
-
-    return RecursiveInput(
-        algo=None,
-        options=options,
-        arithmetic=concrete.arithmetic,
-        components=tuple(
-            rebind_component(component, concrete, include_evidence=False)
-            for component in template.components
-        ),
-        domain_size=len(concrete.domain),
-    )
+    return RecursiveInputTemplate(components)
 
 
 def _component(
@@ -113,7 +81,5 @@ def _component(
 __all__ = [
     "RecursiveInput",
     "RecursiveInputTemplate",
-    "build_input",
     "build_input_template",
-    "instantiate_input_template",
 ]

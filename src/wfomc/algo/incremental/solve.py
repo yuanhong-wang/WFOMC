@@ -3,18 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+from wfomc.algo.core import SolveContext
 from .input import (
     OrderedCellGraphComponent,
     OrderedCellGraphInput,
 )
-from wfomc.multinomial import MultinomialCoefficients
 from wfomc.result import WFOMCResult
-
-if TYPE_CHECKING:
-    from wfomc.engine.runtime import RuntimeContext
-
 
 _ZERO_FACTOR = object()
 _ONE_FACTOR = object()
@@ -29,12 +24,11 @@ class _PairRow:
 
 def solve(
     algo_input: OrderedCellGraphInput,
-    runtime: "RuntimeContext | None" = None,
+    context: SolveContext | None = None,
 ) -> WFOMCResult:
     if not isinstance(algo_input, OrderedCellGraphInput):
         raise TypeError("incremental algorithm expects an OrderedCellGraphInput")
 
-    MultinomialCoefficients.setup(algo_input.domain_size)
     circle_len = (
         algo_input.circle_len
         if algo_input.circle_len is not None

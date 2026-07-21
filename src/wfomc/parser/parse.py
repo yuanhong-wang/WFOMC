@@ -52,13 +52,7 @@ def _with_source_path(
     instance: ProblemInstance,
     path: Path,
 ) -> ProblemInstance:
-    return replace(
-        instance,
-        problem=replace(
-            instance.problem,
-            options={**instance.problem.options, "source_path": str(path)},
-        ),
-    )
+    return replace(instance, source_path=str(path))
 
 
 __all__ = [

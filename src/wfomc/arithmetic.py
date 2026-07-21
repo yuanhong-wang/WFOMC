@@ -6,7 +6,7 @@ and decode/cardinality factor is produced through an
 Algorithms never import FLINT types to
 mint constants directly; they ask the context for ``zero`` / ``one`` /
 ``from_int`` / ``from_fraction`` / ``coerce``. This guarantees the
-user-selected :class:`wfomc.weights.WeightOptions` controls the entire
+user-selected :class:`wfomc.options.WeightOptions` controls the entire
 arithmetic type stack end to end.
 """
 
@@ -25,15 +25,12 @@ from flint import (
     fmpq_mpoly_ctx,
     fmpq_poly,
     fmpz,
-    fmpz_mpoly,
-    fmpz_mpoly_ctx,
-    fmpz_poly,
 )
 
 from wfomc.errors import ArithmeticBackendError
 
 if TYPE_CHECKING:
-    from wfomc.weights import WeightOptions
+    from wfomc.options import WeightOptions
 
 
 ArithmeticValue: TypeAlias = (
@@ -42,10 +39,8 @@ ArithmeticValue: TypeAlias = (
     | fmpz
     | fmpq
     | arb
-    | fmpz_poly
     | fmpq_poly
     | arb_poly
-    | fmpz_mpoly
     | fmpq_mpoly
 )
 
@@ -53,22 +48,16 @@ ArithmeticValue: TypeAlias = (
 class ArithmeticBackend(Enum):
     """Numeric domain used by one prepared branch."""
 
-    # Exact integer scalars.
-    FMPZ = "fmpz"
     # Exact rational scalars.
     FMPQ = "fmpq"
     # Native double-precision floating-point scalars.
     FLOAT = "float"
     # Arbitrary-precision real-ball scalars.
     ARB = "arb"
-    # Exact univariate polynomials with integer coefficients.
-    FMPZ_POLY = "fmpz_poly"
     # Exact univariate polynomials with rational coefficients.
     FMPQ_POLY = "fmpq_poly"
     # Univariate polynomials with arbitrary-precision ball coefficients.
     ARB_POLY = "arb_poly"
-    # Exact multivariate polynomials with integer coefficients.
-    FMPZ_MPOLY = "fmpz_mpoly"
     # Exact multivariate polynomials with rational coefficients.
     FMPQ_MPOLY = "fmpq_mpoly"
 
@@ -178,8 +167,6 @@ class ArithmeticContext:
         mpoly_context = None
         if self.backend is ArithmeticBackend.FMPQ_MPOLY:
             mpoly_context = fmpq_mpoly_ctx.get(list(names), "lex")
-        elif self.backend is ArithmeticBackend.FMPZ_MPOLY:
-            mpoly_context = fmpz_mpoly_ctx.get(list(names), "lex")
         object.__setattr__(self, "_cached_mpoly_context", mpoly_context)
 
         direct_fmpq = self.backend is ArithmeticBackend.FMPQ and not normalized
@@ -196,10 +183,6 @@ class ArithmeticContext:
     def one(self):
         """Multiplicative identity for this backend."""
         return self._cached_one
-
-    def neg_one(self):
-        """Negative one for this backend."""
-        return self.from_int(-1)
 
     def from_int(self, value: int):
         """Create a backend value from a Python int."""
@@ -235,8 +218,6 @@ class ArithmeticContext:
             return self._from_fraction(int(value.p), int(value.q))
         if isinstance(value, arb):
             return self._coerce_arb(value)
-        if isinstance(value, fmpz_poly) and self.backend is ArithmeticBackend.FMPZ_POLY:
-            return value
         if isinstance(value, fmpq_poly) and self.backend is ArithmeticBackend.FMPQ_POLY:
             return self.truncate(value)
         if isinstance(value, arb_poly) and self.backend is ArithmeticBackend.ARB_POLY:
@@ -272,16 +253,12 @@ class ArithmeticContext:
         index = self._symbol_indices[name]
         if self.backend is ArithmeticBackend.FMPQ_MPOLY:
             return self.truncate(self._mpoly_ctx(fmpq_mpoly_ctx).gen(index))
-        if self.backend is ArithmeticBackend.FMPZ_MPOLY:
-            return self._mpoly_ctx(fmpz_mpoly_ctx).gen(index)
         if index != 0:
             raise ArithmeticBackendError(
                 f"Backend {self.backend!s} cannot expose symbol {name!r}"
             )
         if self.backend is ArithmeticBackend.FMPQ_POLY:
             return self.truncate(fmpq_poly([0, 1]))
-        if self.backend is ArithmeticBackend.FMPZ_POLY:
-            return fmpz_poly([0, 1])
         if self.backend is ArithmeticBackend.ARB_POLY:
             return arb_poly([0, 1])
         raise ArithmeticBackendError(
@@ -437,24 +414,16 @@ class ArithmeticContext:
 
     def _from_fraction(self, numerator: int, denominator: int):
         backend = self.backend
-        if backend is ArithmeticBackend.FMPZ:
-            self._require_unit_denominator(backend, numerator, denominator)
-            return fmpz(numerator)
         if backend is ArithmeticBackend.FMPQ:
             return fmpq(numerator, denominator)
         if backend is ArithmeticBackend.FLOAT:
             return numerator / denominator
         if backend is ArithmeticBackend.ARB:
             return arb(numerator) / arb(denominator)
-        if backend is ArithmeticBackend.FMPZ_POLY:
-            self._require_unit_denominator(backend, numerator, denominator)
-            return fmpz_poly([numerator])
         if backend is ArithmeticBackend.FMPQ_POLY:
             return fmpq_poly([fmpq(numerator, denominator)])
         if backend is ArithmeticBackend.ARB_POLY:
             return arb_poly([arb(numerator) / arb(denominator)])
-        if backend is ArithmeticBackend.FMPZ_MPOLY:
-            return self._mpoly_ctx(fmpz_mpoly_ctx).constant(numerator)
         if backend is ArithmeticBackend.FMPQ_MPOLY:
             return self._mpoly_ctx(fmpq_mpoly_ctx).constant(
                 fmpq(numerator, denominator)
@@ -488,23 +457,10 @@ class ArithmeticContext:
             if (
                 self.backend is ArithmeticBackend.FMPQ_MPOLY
                 and ctx_factory is fmpq_mpoly_ctx
-            ) or (
-                self.backend is ArithmeticBackend.FMPZ_MPOLY
-                and ctx_factory is fmpz_mpoly_ctx
             ):
                 return self._cached_mpoly_context
         names = self.symbolic_variables or ("_w",)
         return ctx_factory.get(list(names), "lex")
-
-    @staticmethod
-    def _require_unit_denominator(
-        backend: ArithmeticBackend, numerator: int, denominator: int
-    ) -> None:
-        if denominator != 1:
-            raise ValueError(
-                f"{backend!s} backend cannot represent the non-integer "
-                f"fraction {numerator}/{denominator}"
-            )
 
 
 __all__ = [

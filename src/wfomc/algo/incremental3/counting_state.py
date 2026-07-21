@@ -15,7 +15,7 @@ from wfomc.fol.normal_form import (
 )
 
 if TYPE_CHECKING:
-    from wfomc.cell_graph import Cell
+    from wfomc.cell_graph.data import Cell
 
 
 @dataclass(frozen=True)

@@ -3,21 +3,20 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from wfomc.algo.core import SolveContext
 from .input import (
     CountingCellGraphComponent,
     CountingDPInput,
 )
-from wfomc.multinomial import MultinomialCoefficients
 from wfomc.result import WFOMCResult
 
 if TYPE_CHECKING:
     from .counting_state import CountingState, UnaryCardinalityMasks
-    from wfomc.engine.runtime import RuntimeContext
 
 
 def solve(
     algo_input: CountingDPInput,
-    runtime: "RuntimeContext | None" = None,
+    context: SolveContext | None = None,
 ) -> WFOMCResult:
     if not isinstance(algo_input, CountingDPInput):
         raise TypeError("incremental3 algorithm expects a CountingDPInput")
@@ -26,7 +25,6 @@ def solve(
     if algo_input.unary_cardinality_masks is None:
         raise RuntimeError("incremental3 algorithm requires unary cardinality masks")
 
-    MultinomialCoefficients.setup(algo_input.domain_size)
     arithmetic = algo_input.arithmetic
     result = arithmetic.zero()
     for component in algo_input.components:

@@ -2,25 +2,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+from wfomc.algo.core import SolveContext
 from wfomc.cell_graph import CellEvidenceAllocation, CellGraphComponent
 from .input import StandardInput
 from wfomc.result import WFOMCResult
 
-if TYPE_CHECKING:
-    from wfomc.engine.runtime import RuntimeContext
-from wfomc.multinomial import MultinomialCoefficients
-
-
 def solve(
     algo_input: StandardInput,
-    runtime: "RuntimeContext | None" = None,
+    context: SolveContext | None = None,
 ) -> WFOMCResult:
     if not isinstance(algo_input, StandardInput):
         raise TypeError("standard algorithm expects a StandardInput")
 
-    MultinomialCoefficients.setup(algo_input.domain_size)
     arithmetic = algo_input.arithmetic
     result = arithmetic.zero()
     for component in algo_input.components:

@@ -4,27 +4,22 @@ from __future__ import annotations
 
 from collections import defaultdict
 from itertools import product
-from typing import TYPE_CHECKING
 
+from wfomc.algo.core import SolveContext
 from .input import (
     OptimizedCellGraphComponent,
     OptimizedCellGraphInput,
 )
-from wfomc.multinomial import MultinomialCoefficients
+from wfomc.multinomial import multinomial_coefficient, multinomial_less_than
 from wfomc.result import WFOMCResult
-
-if TYPE_CHECKING:
-    from wfomc.engine.runtime import RuntimeContext
-
 
 def solve(
     algo_input: OptimizedCellGraphInput,
-    runtime: "RuntimeContext | None" = None,
+    context: SolveContext | None = None,
 ) -> WFOMCResult:
     if not isinstance(algo_input, OptimizedCellGraphInput):
         raise TypeError("fast algorithm expects an OptimizedCellGraphInput")
 
-    MultinomialCoefficients.setup(algo_input.domain_size)
     arithmetic = algo_input.arithmetic
     result = arithmetic.zero()
     for component in algo_input.components:
@@ -49,8 +44,6 @@ def _solve_component_without_evidence(
     domain_size: int,
     arithmetic,
 ) -> object:
-    from wfomc.multinomial import MultinomialCoefficients, multinomial_less_than
-
     operations = _operations(component)
     cliques = component.cliques
     nonind = component.non_independent
@@ -63,7 +56,7 @@ def _solve_component_without_evidence(
             mu = tuple(partition) + (domain_size - sum(partition),)
         else:
             mu = tuple(partition)
-        coefficient = arithmetic.from_int(MultinomialCoefficients.coef(mu))
+        coefficient = arithmetic.from_int(multinomial_coefficient(mu))
         body = arithmetic.one()
 
         for i, clique1 in enumerate(cliques):
@@ -112,8 +105,6 @@ def _solve_component_with_evidence(
     component: OptimizedCellGraphComponent,
     arithmetic,
 ) -> object:
-    from wfomc.multinomial import MultinomialCoefficients, multinomial_less_than
-
     operations = _operations(component)
     cliques = component.cliques
     nonind = component.non_independent
@@ -146,7 +137,7 @@ def _solve_component_with_evidence(
             mu = tuple(config) + (constrained_num - sum(config),)
             coefficient = arithmetic.multiply(
                 coefficient,
-                arithmetic.from_int(MultinomialCoefficients.coef(mu)),
+                arithmetic.from_int(multinomial_coefficient(mu)),
             )
             for count, clique_idx in zip(
                 config,

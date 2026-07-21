@@ -2,21 +2,47 @@
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from enum import Enum
 import logging
 import math
 from time import perf_counter
 
-from wfomc.algo.core import AlgoInput, AlgoName, AlgoOptions, algo_spec
-from wfomc.engine.features import FeatureSet, analyze_features
+from wfomc.algo.core import (
+    AlgoInput,
+    AlgoInputTemplate,
+    AlgoName,
+    AlgoOptions,
+    AlgoSpec,
+    GroundingInputTemplate,
+    ReducedInputTemplate,
+    SolveContext,
+    algo_spec,
+)
+from wfomc.engine.artifacts import (
+    CompiledProblem,
+    ExecutionBranch,
+    ProblemExecution,
+)
+from wfomc.engine.compilation import (
+    compile_reduced_branch,
+    compile_grounding_problem,
+    instantiate_reduced_branch,
+)
+from wfomc.engine.features import analyze_problem_features
 from wfomc.engine.runtime import RuntimeContext, RuntimeOptions
 from wfomc.problem import (
-    CompiledProblem,
     Domain,
     Problem,
-    ProblemExecution,
     ProblemInstance,
 )
+from wfomc.stages import (
+    CompiledReducedBranch,
+    FeatureSet,
+    GroundingProblem,
+    ReducedProblem,
+)
+from wfomc.reduction import reduce_problem
 from wfomc.result import WFOMCResult
 
 
@@ -35,7 +61,7 @@ def analyze_problem(
     feature_set = context.cache.get_or_build(
         "features",
         _feature_key(source),
-        lambda: analyze_features(source),
+        lambda: analyze_problem_features(source),
     )
     if not isinstance(feature_set, FeatureSet):
         raise TypeError("feature cache returned a non-FeatureSet value")
@@ -61,9 +87,12 @@ def compile_problem(
     key = _compilation_key(source, selected_algo, resolved_options)
 
     def build() -> CompiledProblem:
-        branches = spec.compile_branches(source, resolved_options)
-        if not isinstance(branches, tuple):
-            raise TypeError("compile_branches must return a tuple")
+        branches = _compile_branches(
+            source,
+            features,
+            spec,
+            resolved_options,
+        )
         return CompiledProblem(
             problem=source,
             feature_set=features,
@@ -102,45 +131,54 @@ def instantiate_problem(
 
     def build() -> ProblemExecution:
         spec = algo_spec(compiled.algo)
-        prepared_branches = []
+        execution_branches = []
         for branch_index, branch in enumerate(compiled.branches):
-            if spec.branch_applies is not None and not spec.branch_applies(
-                branch, domain
-            ):
-                continue
-            input_variant = (
+            input_key = (
                 None
-                if spec.input_template_variant is None
-                else spec.input_template_variant(branch, domain)
+                if spec.input_template_key is None
+                else spec.input_template_key(branch, domain)
             )
-            input_template = context.cache.get_or_build(
+            def build_template() -> AlgoInputTemplate:
+                return spec.build_input_template(
+                    branch,
+                    input_key,
+                    compiled.algo_options,
+                )
+
+            cached_template = context.cache.get_or_build(
                 "algo_input_templates",
                 _input_template_key(
                     compiled,
                     branch_index,
-                    input_variant,
+                    input_key,
                 ),
-                lambda branch=branch, input_variant=input_variant: (
-                    spec.build_input_template(
-                        branch,
-                        input_variant,
-                        compiled.algo_options,
-                    )
-                ),
+                build_template,
             )
-            instantiated = spec.instantiate_branch(
+            if not isinstance(
+                cached_template,
+                (ReducedInputTemplate, GroundingInputTemplate),
+            ):
+                raise TypeError(
+                    f"{compiled.algo.value} input builder returned "
+                    f"{type(cached_template).__name__}, expected an "
+                    "algorithm input template"
+                )
+            input_template = cached_template
+            context.cache.trim(
+                "algo_input_templates",
+                context.options.input_template_cache_size,
+            )
+            instantiated = _instantiate_execution_branch(
                 branch,
                 input_template,
                 domain,
-                compiled.algo_options,
             )
             if instantiated is not None:
-                prepared_branches.append(instantiated)
-        prepared = tuple(prepared_branches)
+                execution_branches.append(instantiated)
         return ProblemExecution(
             compiled_problem=compiled,
             domain=domain,
-            prepared_branches=prepared,
+            branches=tuple(execution_branches),
         )
 
     execution = context.cache.get_or_build("executions", key, build)
@@ -151,7 +189,7 @@ def instantiate_problem(
         "Instantiated problem: algo=%s domain=%d branches=%d",
         compiled.algo.value,
         domain.size,
-        len(execution.prepared_branches),
+        len(execution.branches),
     )
     return execution
 
@@ -188,12 +226,13 @@ def solve(
             "Solved problem: algo=%s domain=%d branches=%d elapsed_ms=%.3f",
             compiled.algo.value,
             concrete_domain.size,
-            len(execution.prepared_branches),
+            len(execution.branches),
             (perf_counter() - started) * 1000,
         )
         return result
 
     result = context.cache.get_or_build("results", result_key, compute)
+    context.cache.trim("results", context.options.result_cache_size)
     if not isinstance(result, WFOMCResult):
         raise TypeError("result cache returned an invalid value")
     return result
@@ -242,7 +281,10 @@ def _run(
     algo_input: AlgoInput,
     context: RuntimeContext,
 ) -> WFOMCResult:
-    result = algo_spec(algo).solve(algo_input, context)
+    solve_context = SolveContext(
+        ganak_path=context.options.propositional_ganak_path,
+    )
+    result = algo_spec(algo).solve(algo_input, solve_context)
     if not isinstance(result, WFOMCResult):
         raise TypeError(
             f"{algo.value} returned {type(result).__name__}; "
@@ -258,7 +300,7 @@ def _run_execution(
     compiled = execution.compiled_problem
     total = None
     output_symbols: set[str] = set()
-    for branch in execution.prepared_branches:
+    for branch in execution.branches:
         algo_input = branch.algo_input
         raw = _run(compiled.algo, algo_input, context).raw
         if (
@@ -277,6 +319,64 @@ def _run_execution(
     if total is None:
         raise RuntimeError("reduction produced no applicable problems")
     return WFOMCResult(total, tuple(sorted(output_symbols)))
+
+
+def _compile_branches(
+    problem: Problem,
+    feature_set: FeatureSet,
+    spec: AlgoSpec,
+    options: AlgoOptions,
+) -> tuple[CompiledReducedBranch | GroundingProblem, ...]:
+    if not spec.uses_reduction:
+        return (compile_grounding_problem(problem, options, feature_set),)
+    reduced = reduce_problem(
+        problem,
+        evidence_strategy=options.evidence_strategy,
+        existential_strategy=options.existential_strategy,
+        lower_counting=spec.reduce_counting_quantifiers,
+    )
+    return (compile_reduced_branch(reduced, options),)
+
+
+def _instantiate_execution_branch(
+    branch: CompiledReducedBranch | GroundingProblem,
+    input_template: AlgoInputTemplate,
+    domain: Domain,
+) -> ExecutionBranch | None:
+    logical_problem: Problem | ReducedProblem
+    if isinstance(branch, CompiledReducedBranch):
+        if not isinstance(input_template, ReducedInputTemplate):
+            raise TypeError(
+                f"{type(branch).__name__} requires ReducedInputTemplate, got "
+                f"{type(input_template).__name__}"
+            )
+        instantiated = instantiate_reduced_branch(branch, domain)
+        if instantiated is None:
+            return None
+        concrete, decoder = instantiated
+        algo_input = input_template.instantiate(concrete)
+        logical_problem = branch.reduced_problem
+    elif isinstance(branch, GroundingProblem):
+        if not isinstance(input_template, GroundingInputTemplate):
+            raise TypeError(
+                f"{type(branch).__name__} requires GroundingInputTemplate, got "
+                f"{type(input_template).__name__}"
+            )
+        algo_input = input_template.instantiate(domain)
+        logical_problem = branch.problem
+        decoder = _identity_decoder
+    else:
+        raise TypeError(f"Unknown compiled branch: {type(branch).__name__}")
+    if not isinstance(algo_input, AlgoInput):
+        raise TypeError(
+            f"{type(input_template).__name__}.instantiate() returned "
+            f"{type(algo_input).__name__}, expected AlgoInput"
+        )
+    return ExecutionBranch(logical_problem, algo_input, decoder)
+
+
+def _identity_decoder(result: object, **_: object) -> object:
+    return result
 
 
 def _validate_domain(problem: Problem, domain: Domain) -> None:
@@ -337,7 +437,7 @@ def _execution_key(
 def _input_template_key(
     compiled: CompiledProblem,
     branch_index: int,
-    input_variant: object,
+    input_key: Hashable,
 ) -> tuple[object, ...]:
     return (
         "algo-input-template-v2",
@@ -347,7 +447,7 @@ def _input_template_key(
             compiled.algo_options,
         ),
         branch_index,
-        input_variant,
+        input_key,
     )
 
 

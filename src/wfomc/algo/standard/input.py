@@ -2,28 +2,27 @@
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from wfomc.arithmetic import ArithmeticValue
-from wfomc.algo.core import AlgoInput, AlgoOptions
+from wfomc.algo.core import AlgoInput, ReducedInputTemplate
 from wfomc.cell_graph import (
     CellGraphComponent,
     CellGraphData,
     build_cell_graphs,
     materialize_cell_evidence,
-    profile_cell_formulas,
     required_profile_predicates,
 )
 from wfomc.cell_graph.staging import (
-    build_structural_branch,
     rebind_component,
+    select_cell_graph_structure,
 )
-from wfomc.problem import CompiledBranchInstance
+from wfomc.stages import CompiledBranchInstance, CompiledReducedBranch
 
 if TYPE_CHECKING:
-    from wfomc.engine.compilation import CompiledReducedProblem
-    from wfomc.fol import Formula
+    from wfomc.evidence.profile import ProfileCapacityConstraint
 
 
 @dataclass(frozen=True)
@@ -33,82 +32,54 @@ class StandardInput(AlgoInput):
 
 
 @dataclass(frozen=True)
-class StandardInputTemplate:
+class StandardInputTemplate(ReducedInputTemplate):
     """Reusable scalar cell graphs for the Standard algorithm."""
 
     components: tuple[CellGraphComponent, ...]
 
+    def instantiate(
+        self,
+        concrete: CompiledBranchInstance,
+    ) -> StandardInput:
+        """Bind arithmetic and unary-evidence capacities for one domain."""
 
-def build_input(
-    reduced: CompiledBranchInstance,
-    *,
-    options: AlgoOptions,
-    cell_formulas: tuple["Formula", ...] | None = None,
-) -> StandardInput:
-    components = tuple(
-        _standard_component_from_cell_graph(reduced, cell_graph, graph_weight)
-        for cell_graph, graph_weight in build_cell_graphs(
-            reduced.sentence,
-            reduced.weights,
-            reduced.arithmetic,
-            required_unary_preds=required_profile_predicates(
-                reduced.profile_capacity_constraint
+        return StandardInput(
+            arithmetic=concrete.arithmetic,
+            components=tuple(
+                rebind_component(component, concrete, include_evidence=True)
+                for component in self.components
             ),
-            cell_formulas=(
-                cell_formulas
-                if cell_formulas is not None
-                else profile_cell_formulas(reduced.profile_capacity_constraint)
-            ),
+            domain_size=len(concrete.domain),
         )
-    )
-    return StandardInput(
-        algo=None,
-        options=options,
-        arithmetic=reduced.arithmetic,
-        components=components,
-        domain_size=len(reduced.domain),
-    )
 
 
 def build_input_template(
-    compiled: "CompiledReducedProblem",
+    compiled: CompiledReducedBranch,
     *,
-    input_variant: object,
-    options: AlgoOptions,
+    input_variant: Hashable,
 ) -> StandardInputTemplate:
     """Build Standard cell graphs without binding a concrete domain."""
 
-    structural, cell_formulas = build_structural_branch(compiled, input_variant)
-    built = build_input(
-        structural,
-        options=options,
-        cell_formulas=cell_formulas,
+    profile, cell_formulas = select_cell_graph_structure(compiled, input_variant)
+    components = tuple(
+        _standard_component_from_cell_graph(
+            profile,
+            cell_graph,
+            graph_weight,
+        )
+        for cell_graph, graph_weight in build_cell_graphs(
+            compiled.sentence,
+            compiled.weights,
+            compiled.arithmetic,
+            required_unary_preds=required_profile_predicates(profile),
+            cell_formulas=cell_formulas,
+        )
     )
-    return StandardInputTemplate(built.components)
-
-
-def instantiate_input_template(
-    template: StandardInputTemplate,
-    concrete: CompiledBranchInstance,
-    *,
-    options: AlgoOptions,
-) -> StandardInput:
-    """Bind arithmetic and unary-evidence capacities for one domain."""
-
-    return StandardInput(
-        algo=None,
-        options=options,
-        arithmetic=concrete.arithmetic,
-        components=tuple(
-            rebind_component(component, concrete, include_evidence=True)
-            for component in template.components
-        ),
-        domain_size=len(concrete.domain),
-    )
+    return StandardInputTemplate(components)
 
 
 def _standard_component_from_cell_graph(
-    reduced: CompiledBranchInstance,
+    profile: "ProfileCapacityConstraint | None",
     cell_graph: CellGraphData,
     graph_weight: ArithmeticValue,
 ) -> CellGraphComponent:
@@ -119,7 +90,7 @@ def _standard_component_from_cell_graph(
         pair_weights=pair_weights,
         graph_weight=graph_weight,
         cell_evidence_allocation=materialize_cell_evidence(
-            reduced.profile_capacity_constraint,
+            profile,
             cell_graph.cells,
         ),
     )
@@ -128,7 +99,5 @@ def _standard_component_from_cell_graph(
 __all__ = [
     "StandardInput",
     "StandardInputTemplate",
-    "build_input",
     "build_input_template",
-    "instantiate_input_template",
 ]

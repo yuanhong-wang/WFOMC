@@ -10,7 +10,7 @@ not exist) is rejected at planning time rather than silently falling back to
 from __future__ import annotations
 
 import pytest
-from flint import arb, fmpq, fmpq_mpoly_ctx, fmpq_poly, fmpz
+from flint import arb, fmpq, fmpq_mpoly_ctx, fmpq_poly
 
 from wfomc.arithmetic import (
     ArithmeticBackend,
@@ -40,7 +40,6 @@ def test_fmpq_context_creates_fmpq_zero_one_fraction():
     assert zero == fmpq(0)
     assert one == fmpq(1)
     assert half == fmpq(3, 2)
-    assert ctx.neg_one() == fmpq(-1)
 
 
 def test_plain_fmpq_context_reuses_identities_and_adds_products_directly():
@@ -91,21 +90,6 @@ def test_arb_context_coerces_float_to_arb():
 
     assert isinstance(value, arb)
     assert value == arb(1.5)
-
-
-def test_fmpz_context_rejects_non_integer_fraction():
-    ctx = _ctx(ArithmeticBackend.FMPZ)
-
-    five = ctx.from_int(5)
-    assert isinstance(five, fmpz)
-    assert five == fmpz(5)
-
-    # Integer fractions are fine.
-    assert ctx.from_fraction(4, 1) == fmpz(4)
-
-    # Non-unit denominations cannot be represented as exact integers.
-    with pytest.raises(ValueError, match="(?i)fmpz"):
-        ctx.from_fraction(3, 2)
 
 
 def test_unsupported_arb_mpoly_fails_early():

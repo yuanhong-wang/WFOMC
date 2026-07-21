@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from wfomc.algo import AlgoOptions, EvidenceStrategy
+from wfomc.options import EvidenceStrategy
 from wfomc.cardinality_constraints import (
     CardinalityConstraints,
     CardinalityTerm,
@@ -14,11 +14,11 @@ from wfomc.cardinality_constraints import (
 from wfomc.evidence import Evidence, GroundUnaryLiteral, UnaryEvidence
 from wfomc.fol import true
 from wfomc.problem import Problem
-from wfomc.reduction import (
+from wfomc.reduction import reduce_problem
+from wfomc.stages import (
     CardinalityDecoderSpec,
     DivideDecoderSpec,
     ReducedProfileConstraint,
-    reduce_problem,
 )
 
 
@@ -48,8 +48,8 @@ def _problem_with_evidence(
 def test_empty_evidence_does_not_create_a_profile_constraint():
     reduced = reduce_problem(
         Problem(sentence=true()),
-        AlgoOptions(evidence_strategy=EvidenceStrategy.LIFTED_PROFILES),
-    )[0]
+        evidence_strategy=EvidenceStrategy.LIFTED_PROFILES,
+    )
 
     assert reduced.profile_constraint is None
     assert reduced.evidence.unary.is_empty
@@ -58,8 +58,8 @@ def test_empty_evidence_does_not_create_a_profile_constraint():
 def test_lifted_profiles_are_domain_free_until_instantiation():
     reduced = reduce_problem(
         _problem_with_evidence(),
-        AlgoOptions(evidence_strategy=EvidenceStrategy.LIFTED_PROFILES),
-    )[0]
+        evidence_strategy=EvidenceStrategy.LIFTED_PROFILES,
+    )
 
     assert isinstance(reduced.profile_constraint, ReducedProfileConstraint)
     assert reduced.profile_constraint.profile_sizes(3) == (1, 1, 1)
@@ -71,8 +71,8 @@ def test_lifted_profiles_are_domain_free_until_instantiation():
 def test_lifted_profile_reduction_clears_unary_evidence():
     reduced = reduce_problem(
         _problem_with_evidence(),
-        AlgoOptions(evidence_strategy=EvidenceStrategy.LIFTED_PROFILES),
-    )[0]
+        evidence_strategy=EvidenceStrategy.LIFTED_PROFILES,
+    )
 
     assert reduced.evidence.unary.is_empty
 
@@ -95,8 +95,8 @@ def test_lifted_profiles_group_equal_evidence_deterministically():
 
     profile = reduce_problem(
         problem,
-        AlgoOptions(evidence_strategy=EvidenceStrategy.LIFTED_PROFILES),
-    )[0].profile_constraint
+        evidence_strategy=EvidenceStrategy.LIFTED_PROFILES,
+    ).profile_constraint
 
     assert profile is not None
     assert profile.profile_sizes(4) == (2, 1, 1)
@@ -121,15 +121,15 @@ def test_lifted_profiles_reject_conflicting_evidence():
     with pytest.raises(ValueError, match="consistent"):
         reduce_problem(
             problem,
-            AlgoOptions(evidence_strategy=EvidenceStrategy.LIFTED_PROFILES),
+            evidence_strategy=EvidenceStrategy.LIFTED_PROFILES,
         )
 
 
 def test_ccs_reduction_uses_data_only_decoder_steps():
     reduced = reduce_problem(
         _problem_with_evidence(),
-        AlgoOptions(evidence_strategy=EvidenceStrategy.CCS),
-    )[0]
+        evidence_strategy=EvidenceStrategy.CCS,
+    )
 
     assert reduced.evidence.unary.is_empty
     assert len(reduced.ccs_profile_markers) == 2
@@ -152,8 +152,8 @@ def test_ccs_reduction_preserves_source_cardinality_constraints():
 
     reduced = reduce_problem(
         _problem_with_evidence(cardinality_constraints=existing),
-        AlgoOptions(evidence_strategy=EvidenceStrategy.CCS),
-    )[0]
+        evidence_strategy=EvidenceStrategy.CCS,
+    )
     cardinality_step = reduced.decoder_spec.steps[-1]
 
     assert isinstance(cardinality_step, CardinalityDecoderSpec)

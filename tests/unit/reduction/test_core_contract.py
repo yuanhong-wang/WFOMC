@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import pytest
-
-from wfomc.algo import AlgoOptions
 from wfomc.arithmetic import ArithmeticBackend, ArithmeticContext
-from wfomc.problem import CompiledBranchInstance, Domain, Problem
-from wfomc.reduction import ReducedProblem, reduce_problem
+from wfomc.problem import Domain, Problem
+from wfomc.reduction import reduce_problem
+from wfomc.stages import CompiledBranchInstance, ReducedProblem
 
 
 def _arithmetic() -> ArithmeticContext:
@@ -18,11 +17,10 @@ def test_reduce_problem_creates_stable_c2_stage():
     from wfomc.fol import true
     from wfomc.fol.normal_form import C2NormalForm
 
-    branches = reduce_problem(Problem(sentence=true()), AlgoOptions())
+    reduced = reduce_problem(Problem(sentence=true()))
 
-    assert len(branches) == 1
-    assert isinstance(branches[0], ReducedProblem)
-    assert isinstance(branches[0].normal_form, C2NormalForm)
+    assert isinstance(reduced, ReducedProblem)
+    assert isinstance(reduced.normal_form, C2NormalForm)
 
 
 def test_reduced_problem_records_nonempty_domain_requirement():
@@ -39,11 +37,9 @@ def test_reduced_problem_records_nonempty_domain_requirement():
         ),
     )
 
-    reduced = reduce_problem(Problem(sentence=source), AlgoOptions())[0]
+    reduced = reduce_problem(Problem(sentence=source))
 
     assert reduced.min_domain_size == 1
-    assert not reduced.applies(Domain())
-    assert reduced.applies(Domain(frozenset({"a"})))
 
 
 def test_reduce_problem_reserves_weight_only_predicate_names():
@@ -63,8 +59,7 @@ def test_reduce_problem_reserves_weight_only_predicate_names():
 
     reduced = reduce_problem(
         Problem(sentence=source, weights={reserved: (2, 1)}),
-        AlgoOptions(),
-    )[0]
+    )
     names = {predicate.name for predicate in predicates(reduced.normal_form.qf_formula)}
 
     assert "@c2_quant_0" not in names
@@ -107,7 +102,7 @@ def test_counting_reduction_uses_fresh_internal_predicates():
 domain = 3
 """
     )
-    reduced = reduce_problem(parsed.problem, AlgoOptions())[0]
+    reduced = reduce_problem(parsed.problem)
 
     assert (
         len(
@@ -119,6 +114,72 @@ domain = 3
         )
         == 4
     )
+
+
+def test_counting_reduction_keeps_domain_terms_symbolic():
+    import math
+
+    from wfomc.stages import CardinalityDecoderSpec, DivideDecoderSpec
+    from wfomc.parser import parse_problem
+
+    parsed = parse_problem(
+        r"""
+\forall X: (\exists_{=2} Y: (R(X,Y)))
+domain = 3
+"""
+    )
+
+    reduced = reduce_problem(parsed.problem)
+    divide = next(
+        step
+        for step in reduced.decoder_spec.steps
+        if isinstance(step, DivideDecoderSpec)
+    )
+    cardinality = next(
+        step
+        for step in reduced.decoder_spec.steps
+        if isinstance(step, CardinalityDecoderSpec)
+    )
+    row_constraint = cardinality.constraints[0]
+
+    assert divide.coefficient.evaluate(2) == math.factorial(2) ** 2
+    assert divide.coefficient.evaluate(5) == math.factorial(2) ** 5
+    assert row_constraint.rhs.evaluate(2) == 4
+    assert row_constraint.rhs.evaluate(5) == 10
+
+
+def test_cardinality_reduction_preserves_raw_weights_until_compilation():
+    from fractions import Fraction
+
+    from wfomc.cardinality_constraints import (
+        CardinalityConstraints,
+        CardinalityTerm,
+        Comparator,
+        LinearCardinalityConstraint,
+    )
+    from wfomc.fol import FOLContext
+
+    fol = FOLContext()
+    predicate = fol.predicate("P", 1)
+    raw_weights = (Fraction(2, 3), Fraction(5, 7))
+    problem = Problem(
+        sentence=fol.true(),
+        weights={predicate: raw_weights},
+        cardinality_constraints=CardinalityConstraints(
+            (
+                LinearCardinalityConstraint(
+                    terms=(CardinalityTerm(predicate),),
+                    comparator=Comparator.EQ,
+                    rhs=1,
+                ),
+            )
+        ),
+    )
+
+    reduced = reduce_problem(problem)
+
+    assert reduced.weights[predicate] == raw_weights
+    assert reduced.internal_weight_symbols
 
 
 def test_existential_reduction_uses_fresh_collision_free_predicates():
@@ -137,7 +198,7 @@ def test_existential_reduction_uses_fresh_collision_free_predicates():
         weights={existing: (1, 1)},
     )
 
-    reduced = reduce_problem(problem, AlgoOptions())[0]
+    reduced = reduce_problem(problem)
     generated = {
         predicate.name
         for predicate in reduced.weights

@@ -2,19 +2,13 @@
 
 from __future__ import annotations
 
-
-from typing import TYPE_CHECKING
-
+from wfomc.algo.core import SolveContext
 from .input import RecursiveInput
 from wfomc.result import WFOMCResult
 
-if TYPE_CHECKING:
-    from wfomc.engine.runtime import RuntimeContext
-
-
 def solve(
     algo_input: RecursiveInput,
-    runtime: "RuntimeContext | None" = None,
+    context: SolveContext | None = None,
 ) -> WFOMCResult:
     from .kernel import NautyContext, dfs_wfomc_real
 

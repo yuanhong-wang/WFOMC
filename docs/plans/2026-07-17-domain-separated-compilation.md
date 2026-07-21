@@ -21,7 +21,6 @@ pytest, Ruff.
 
 - Modify: `src/wfomc/problem.py`
 - Modify: `src/wfomc/parser/`
-- Modify: `src/wfomc/api.py`
 - Modify: `src/wfomc/__init__.py`
 - Test: `tests/unit/test_problem_parser.py`
 - Test: `tests/unit/reduction/test_core_contract.py`

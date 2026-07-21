@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import functools
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -19,7 +18,6 @@ from wfomc.cell_graph import (
     build_cell_graphs,
 )
 from wfomc.fol import Formula, Predicate
-from wfomc.multinomial import MultinomialCoefficients
 
 if TYPE_CHECKING:
     from wfomc.arithmetic import ArithmeticContext
@@ -61,20 +59,16 @@ class _OptimizedAnalysis(_GraphView):
     def __init__(
         self,
         data: CellGraphData,
-        domain_size: int,
         modified_cell_symmetry: bool,
     ):
         super().__init__(data)
         self.modified_cell_symmetry = modified_cell_symmetry
-        self.domain_size = domain_size
         self.i1_evidence_profile_partition = None
         self.evidence_profile_sizes = None
         self.evidence_profile_cliques = None
         self.term_cache: dict = {}
         self.j_term_cache: dict = {}
         self.d_term_cache: dict = {}
-        MultinomialCoefficients.setup(domain_size)
-
         if modified_cell_symmetry:
             i1, i2, nonind = self._find_independent_sets()
             self.cliques, groups = self._build_symmetric_cliques_in_groups(
@@ -248,11 +242,9 @@ class _EvidenceOptimizedAnalysis:
         self,
         data: CellGraphData,
         constraint: "ProfileCapacityConstraint",
-        domain_size: int,
     ):
         self.data = data
         self.arithmetic = data.arithmetic
-        self.domain_size = domain_size
         self.modified_cell_symmetry = False
         self._base_index = {cell: idx for idx, cell in enumerate(data.cells)}
         allocation = CellEvidenceAllocation.from_constraint(constraint, data.cells)
@@ -315,7 +307,6 @@ class _EvidenceOptimizedAnalysis:
     def get_cell_weight(self, cell: CellWithEvidenceProfile) -> ArithmeticValue:
         return self.data.cell_weights[self._base_index[cell.base_cell]]
 
-    @functools.lru_cache(maxsize=None)
     def get_two_table_weight(
         self,
         cells: tuple[CellWithEvidenceProfile, CellWithEvidenceProfile],
@@ -405,7 +396,6 @@ def build_optimized_cell_graphs(
     weights: Mapping[Predicate, tuple[ArithmeticValue, ArithmeticValue]],
     arithmetic: "ArithmeticContext",
     *,
-    domain_size: int,
     modified_cell_symmetry: bool,
     required_unary_preds: frozenset[Predicate] = frozenset(),
     profile_capacity_constraint: "ProfileCapacityConstraint | None" = None,
@@ -421,12 +411,11 @@ def build_optimized_cell_graphs(
         cell_formulas=cell_formulas,
     ):
         analysis = (
-            _OptimizedAnalysis(data, domain_size, modified_cell_symmetry)
+            _OptimizedAnalysis(data, modified_cell_symmetry)
             if profile_capacity_constraint is None
             else _EvidenceOptimizedAnalysis(
                 data,
                 profile_capacity_constraint,
-                domain_size,
             )
         )
         yield analysis, graph_weight

@@ -9,8 +9,8 @@ from functools import reduce
 from typing import TYPE_CHECKING, Iterator, Protocol
 
 from wfomc.evidence.profile import ProfileCapacityConstraint
-from wfomc.fol import Formula, Literal, Predicate, true
-from wfomc.multinomial import MultinomialCoefficients, multinomial
+from wfomc.fol import Formula, Predicate, true
+from wfomc.multinomial import multinomial, multinomial_coefficient
 
 if TYPE_CHECKING:
     from wfomc.arithmetic import ArithmeticContext, ArithmeticValue
@@ -37,7 +37,6 @@ class CellEvidenceAllocation:
     compatible_evidence_profiles_by_cell: tuple[tuple[int, ...], ...]
     compatible_cells_by_evidence_profile: tuple[tuple[int, ...], ...]
     evidence_assignment_count: Fraction = Fraction(1)
-    profile_literals: tuple[frozenset[Literal], ...] = ()
 
     @classmethod
     def unconstrained(
@@ -84,7 +83,6 @@ class CellEvidenceAllocation:
             compatible_evidence_profiles_by_cell=compatible_profiles_by_cell,
             compatible_cells_by_evidence_profile=compatible_cells_by_profile,
             evidence_assignment_count=constraint.assignment_count,
-            profile_literals=tuple(profile.literals for profile in constraint.profiles),
         )
 
     @property
@@ -95,13 +93,6 @@ class CellEvidenceAllocation:
                 self.compatible_evidence_profiles_by_cell
             )
             if profile_indices
-        )
-
-    @property
-    def compatibility_pair_count(self) -> int:
-        return sum(
-            len(profile_indices)
-            for profile_indices in self.compatible_evidence_profiles_by_cell
         )
 
     def iter_config_coefficients(
@@ -128,7 +119,7 @@ class CellEvidenceAllocation:
                     term = arithmetic.multiply(
                         coefficient,
                         arithmetic.from_int(
-                            MultinomialCoefficients.coef(distribution)
+                            multinomial_coefficient(distribution)
                         ),
                     )
                     new_states[config] = arithmetic.add(
@@ -143,7 +134,7 @@ class CellEvidenceAllocation:
                     coefficient,
                     arithmetic.from_fraction(
                         1,
-                        MultinomialCoefficients.coef(config),
+                        multinomial_coefficient(config),
                     ),
                 )
             yield config, coefficient

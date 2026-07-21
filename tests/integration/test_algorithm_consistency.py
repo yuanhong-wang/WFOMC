@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from wfomc import AlgoName, parse_input, solve
-from wfomc.engine.features import analyze_features
+from wfomc import AlgoName, parse_problem_file, solve
+from wfomc.engine.features import analyze_problem_features
 
 
 ROOT = Path(__file__).parents[2]
@@ -52,9 +52,9 @@ MODEL_FILES = tuple(
 
 @pytest.mark.parametrize("model_file", MODEL_FILES, ids=lambda path: path.stem)
 def test_model_family_algorithms_agree(model_file: Path):
-    problem = parse_input(str(model_file))
+    problem = parse_problem_file(str(model_file))
     algorithms = MODEL_DIRS_TO_ALGOS[model_file.parent]
-    features = analyze_features(problem)
+    features = analyze_problem_features(problem.problem)
     if (
         not RUN_SLOW
         and AlgoName.INCREMENTAL3 in algorithms

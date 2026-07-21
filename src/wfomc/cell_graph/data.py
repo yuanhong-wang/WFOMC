@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import functools
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -29,7 +28,6 @@ class Cell:
     def __post_init__(self):
         object.__setattr__(self, "_identifier", frozenset(zip(self.preds, self.code)))
 
-    @functools.lru_cache(maxsize=None)
     def get_evidences(self, term: Term) -> frozenset[Literal]:
         """Return the typed signed-literal evidence set for *term*.
 
@@ -42,7 +40,6 @@ class Cell:
             evidences.add(Literal(atom, bool(self.code[i])))
         return frozenset(evidences)
 
-    @functools.lru_cache(maxsize=None)
     def is_positive(self, pred: Predicate) -> bool:
         return self.code[_pred_index(self.preds, pred)]
 

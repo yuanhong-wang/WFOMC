@@ -75,7 +75,7 @@ flowchart LR
 
 | 模块 | 当前职责 | 评审 |
 | --- | --- | --- |
-| `api.py` / `cli.py` | 公共调用入口 | facade 简洁，但与 README、console script 未收敛 |
+| `__init__.py` / `cli.py` | 公共调用入口 | 根包直接组合公共导出，CLI 调用 engine 入口 |
 | `parser/` | WFOMCS/MLN 到 `Problem` | 边界清楚 |
 | `fol/` | typed FOL IR、分析、重写、语义、grounding | 基础域层，但 grounding 反向依赖 `cell_graph` |
 | `normal_form/` | C² 归一化与校验 | 职责合理，单文件复杂度偏高 |
@@ -91,9 +91,12 @@ normal-form normalization 与 cell-graph 构造。
 
 ## 5. 做得好的地方
 
-### 5.1 Engine 不再按算法硬编码分支
+### 5.1 Engine 统一编排，算法只声明最小差异
 
-`AlgoSpec` 把名称、option resolver、reduction 链、materializer 和 solver 组合在一起。新增算法通常只需新增 spec 和实现模块，不必修改编排主流程。动态 import 还避免了启动时导入全部算法实现。
+`AlgoSpec` 只保留名称、option resolver、input-template builder、可选的结构 key、
+reduction policy flags 和 solver。engine 统一执行 reduction、数值编译、domain
+实例化、decoder 和 branch 聚合；新增算法通常只需新增 spec、InputTemplate 和
+solver。动态 import 仍避免了启动时导入全部算法实现。
 
 ### 5.2 Reduction 支持可复用分支与数据化 decoder
 
@@ -160,7 +163,7 @@ normal-form normalization 与 cell-graph 构造。
 
 建议：将 branch-local `ArithmeticContext` 放进所有 `AlgoInput`，并逐算法禁止直接构造数值；完成前应把未支持的 rounded backend 在 option resolution 阶段明确拒绝。
 
-**2026-07-10 实施更新：已解决。** 每个最终 `PreparedBranch` 在逻辑 reduction
+**2026-07-10 实施更新：已解决。** 每个最终 `ExecutionBranch` 在逻辑 reduction
 后根据自己的 solver symbols 创建一个 `ArithmeticContext`；对应的
 `CompiledProblem`、`AlgoInput`、cell graph、solver kernel 和 decoder 共享同一
 实例。不同 branch 和算法可以拥有不同 backend/symbol 集。standard、fast、
@@ -235,7 +238,7 @@ fastv2 明确作为配置变体复用 fast，避免为形式一致新增空 wrap
 - `cell_graph/order_tables.py`
 - `cell_graph/optimized.py`
 - `evidence/data.py` 与 `evidence/profile.py`
-- `reduction/reduce_unary_evidence.py`
+- `reduction/unary_evidence.py`
 - `cell_graph/evidence.py`
 
 拆分前先建立等价性/性质测试，避免在算法迁移和结构拆分同时改变行为。
@@ -258,7 +261,14 @@ grounding 对照。standard 的空域 zero-configuration 路径也已补齐。
 `evidence/data.py`，唯一 reduced profile 表示位于 `evidence/profile.py`，CCS
 构造归 reduction，cell compatibility 与 multinomial DP 归
 `cell_graph/evidence.py`。`EvidencePartition`、`UnaryEvidencePartition` 和
-相互转换函数均已删除；`EvidenceStrategy` 归 `algo/core.py`。
+相互转换函数均已删除；`EvidenceStrategy` 归中立的 `options.py`。
+
+**2026-07-20 分层更新：已解决。** `problem.py` 只保留 `Problem`、`Domain` 和
+`ProblemInstance`；`FeatureSet`、`ReducedProblem`、decoder specs、
+`GroundingProblem` 和 compiled branch 数据归中立 `stages.py`；`CompiledProblem`、
+`ExecutionBranch` 和 `ProblemExecution` 归 engine。algo 与 reduction 均不再
+import engine，也不互相 import，包括 `TYPE_CHECKING` 路径；AST 结构测试固定
+该依赖方向。
 
 ### P1-5：可运行能力、实验扩展点和 CLI 选项没有分级
 
@@ -272,7 +282,7 @@ registry 和 CLI 曾同时暴露尚不可运行的扩展点：
 建议在 `AlgoSpec` 增加 `status`、`requirements`、`capabilities`，CLI 默认只列 stable/beta，实验算法通过 `--include-experimental` 或独立子命令展示。
 
 **2026-07-10 实施更新：本项要求已解决。** `AlgoSpec` 已增加
-`AlgoMaturity` 和 `external_requirements`；CLI choices 由 registry 生成，只显示
+`AlgoMaturity`；CLI choices 由 registry 生成，只显示
 stable/beta。bounded-treewidth 标为 unavailable，Python API 仍保留这个扩展点。
 更完整的 feature capability matrix 仍由 P0-2 跟踪。
 
@@ -343,16 +353,17 @@ stable/beta。bounded-treewidth 标为 unavailable，Python API 仍保留这个�
 flowchart TD
     API["API / CLI"] --> PARSER["Parser"]
     PARSER --> DOMAIN["Domain IR: Formula, Evidence, RawProblem"]
-    DOMAIN --> PLAN["Planner: features + capability validation"]
-    PLAN --> REDUCE["Pure reductions -> ReducedProblem branches"]
-    REDUCE --> MAT["Algorithm-owned materialization"]
+    DOMAIN --> ENGINE["Engine: features + capability validation"]
+    ENGINE --> REDUCE["Explicit reductions -> ReducedProblem"]
+    REDUCE --> COMPILE["Engine numeric compilation"]
+    COMPILE --> MAT["Algorithm-owned InputTemplate"]
     MAT --> MIR["Stable materialized IRs"]
     MIR --> ALG["Solver kernels"]
     ALG --> RESULT["Decode + WFOMCResult"]
 
     ARITH["Branch ArithmeticContext"] --> MAT
     ARITH --> ALG
-    OBS["Runtime trace/cache"] --> PLAN
+    OBS["Runtime trace/cache"] --> ENGINE
     OBS --> MAT
     OBS --> ALG
 ```
@@ -360,8 +371,8 @@ flowchart TD
 依赖规则：
 
 1. `fol`、`evidence`、`weights` 等 domain 层不得 import `cell_graph`、`algo`、`engine`。
-2. `reduction` 可依赖 domain/normal-form，但不得依赖具体算法。
-3. engine 只依赖 `AlgoSpec` 契约，不依赖具体 solver。
+2. `algo` 与 `reduction` 只依赖中立 `problem/options`，不得依赖 engine 或互相依赖；type-only import 也不例外。
+3. engine 依赖 `AlgoSpec` 与 reduction，并拥有全部编译、实例化、decoder 和 branch 聚合编排。
 4. 共享 materialized IR 不 import 具体算法输入；具体算法可依赖共享 IR。
 5. 每个 public feature 必须满足“所有算法明确支持或明确拒绝”。
 

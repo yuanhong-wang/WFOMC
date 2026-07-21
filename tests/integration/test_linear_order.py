@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from wfomc import AlgoName, AlgoOptions, EvidenceStrategy, parse_input, solve
+from wfomc import AlgoName, AlgoOptions, EvidenceStrategy, parse_problem_file, solve
 
 
 ROOT = Path(__file__).parents[2]
@@ -18,7 +18,7 @@ def test_books_arrangement_linear_order_unary_evidence():
         / "unary_evidence"
         / "books-arragement.wfomcs"
     )
-    problem = parse_input(str(model))
+    problem = parse_problem_file(str(model))
     algorithms = (AlgoName.INCREMENTAL3,)
     if RUN_SLOW:
         algorithms = (
@@ -42,7 +42,7 @@ def test_books_arrangement_linear_order_unary_evidence():
 
 
 def test_incremental3_relative_config_basis_without_evidence():
-    problem = parse_input(
+    problem = parse_problem_file(
         str(ROOT / "models" / "linear_order" / "head-middle-tail.wfomcs")
     )
 

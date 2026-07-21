@@ -4,19 +4,12 @@ from __future__ import annotations
 
 import logging
 
-from wfomc.api import (
-    AlgoName,
-    AlgoMaturity,
-    AlgoOptions,
+from wfomc.algo.core import AlgoMaturity, AlgoName, AlgoOptions
+from wfomc.engine import (
     CompiledProblem,
-    Domain,
-    EvidenceStrategy,
-    ExistentialStrategy,
-    LinearOrderEncoding,
+    ProblemExecution,
     RuntimeContext,
     RuntimeOptions,
-    WFOMCResult,
-    WeightOptions,
     compile_problem,
     instantiate_problem,
     solve,
@@ -32,15 +25,17 @@ from wfomc.evidence import (
     GroundUnaryLiteral,
     UnaryEvidence,
 )
+from wfomc.fol.grounding import LinearOrderEncoding
+from wfomc.options import EvidenceStrategy, ExistentialStrategy, WeightOptions
 from wfomc.parser import (
     parse_formula,
-    parse_input,
     parse_mln_problem,
     parse_mln_problem_file,
     parse_problem,
     parse_problem_file,
 )
-from wfomc.problem import Problem, ProblemExecution, ProblemInstance
+from wfomc.problem import Domain, Problem, ProblemInstance
+from wfomc.result import WFOMCResult
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -70,7 +65,6 @@ __all__ = [
     "compile_problem",
     "instantiate_problem",
     "parse_formula",
-    "parse_input",
     "parse_mln_problem",
     "parse_mln_problem_file",
     "parse_problem",

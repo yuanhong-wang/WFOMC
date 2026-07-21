@@ -10,6 +10,7 @@ from .syntax import (
     Eq,
     Iff,
     Implies,
+    ModCount,
     Not,
     Or,
     Quantifier,
@@ -61,7 +62,7 @@ def _format_count(comparator: object, count: object) -> str:
     if comparator == "mod":
         if isinstance(count, tuple) and len(count) == 2:
             return f"{count[0]}mod{count[1]}"
-        if hasattr(count, "remainder") and hasattr(count, "modulus"):
+        if isinstance(count, ModCount):
             return f"{count.remainder}mod{count.modulus}"
     return f"{comparator}{count}"
 

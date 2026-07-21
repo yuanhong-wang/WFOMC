@@ -8,11 +8,7 @@ from .parse import (
     parse_problem_file,
 )
 
-parse_input = parse_problem_file
-
-
 __all__ = [
-    "parse_input",
     "parse_formula",
     "parse_mln_problem",
     "parse_mln_problem_file",

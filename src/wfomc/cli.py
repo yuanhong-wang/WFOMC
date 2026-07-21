@@ -7,20 +7,18 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from wfomc.algo import (
+from wfomc.algo.core import (
     AlgoMaturity,
     AlgoName,
     AlgoOptions,
-    EvidenceStrategy,
-    ExistentialStrategy,
-    LinearOrderEncoding,
     algo_spec,
 )
-from wfomc.api import solve
+from wfomc.engine import solve
 from wfomc.engine.runtime import RuntimeOptions
 from wfomc.errors import WFOMCError
+from wfomc.fol.grounding import LinearOrderEncoding
+from wfomc.options import EvidenceStrategy, ExistentialStrategy, WeightOptions
 from wfomc.result import WFOMCResult
-from wfomc.weights import WeightOptions
 
 
 @dataclass(frozen=True)

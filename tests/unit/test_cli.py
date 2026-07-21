@@ -136,7 +136,8 @@ def test_cli_accepts_propositional_options():
 
 def test_cli_run_maps_propositional_options_to_engine_contracts(monkeypatch):
     import wfomc.parser as parser_module
-    from wfomc.algo import EvidenceStrategy, LinearOrderEncoding
+    from wfomc.fol.grounding import LinearOrderEncoding
+    from wfomc.options import EvidenceStrategy
     from wfomc.result import WFOMCResult
 
     captured = {}

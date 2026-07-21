@@ -2,31 +2,26 @@
 
 from __future__ import annotations
 
-from importlib import import_module
+from .artifacts import CompiledProblem, ExecutionBranch, ProblemExecution
+from .orchestration import (
+    analyze_problem,
+    compile_problem,
+    instantiate_problem,
+    solve,
+)
+from .runtime import RuntimeCache, RuntimeCacheStats, RuntimeContext, RuntimeOptions
 
 
-_EXPORTS = {
-    "FeatureSet": ("wfomc.engine.features", "FeatureSet"),
-    "RuntimeCache": ("wfomc.engine.runtime", "RuntimeCache"),
-    "RuntimeCacheStats": ("wfomc.engine.runtime", "RuntimeCacheStats"),
-    "RuntimeContext": ("wfomc.engine.runtime", "RuntimeContext"),
-    "RuntimeOptions": ("wfomc.engine.runtime", "RuntimeOptions"),
-    "AlgoName": ("wfomc.algo.core", "AlgoName"),
-    "analyze_problem": ("wfomc.engine.orchestration", "analyze_problem"),
-    "analyze_features": ("wfomc.engine.features", "analyze_features"),
-    "compile_problem": ("wfomc.engine.orchestration", "compile_problem"),
-    "instantiate_problem": ("wfomc.engine.orchestration", "instantiate_problem"),
-    "solve": ("wfomc.engine.orchestration", "solve"),
-}
-
-
-def __getattr__(name: str) -> object:
-    if name not in _EXPORTS:
-        raise AttributeError(f"module 'wfomc.engine' has no attribute {name!r}")
-    module_name, attr_name = _EXPORTS[name]
-    value = getattr(import_module(module_name), attr_name)
-    globals()[name] = value
-    return value
-
-
-__all__ = sorted(_EXPORTS)
+__all__ = [
+    "CompiledProblem",
+    "ExecutionBranch",
+    "ProblemExecution",
+    "RuntimeCache",
+    "RuntimeCacheStats",
+    "RuntimeContext",
+    "RuntimeOptions",
+    "analyze_problem",
+    "compile_problem",
+    "instantiate_problem",
+    "solve",
+]

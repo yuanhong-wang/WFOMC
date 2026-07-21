@@ -18,20 +18,18 @@ from wfomc.fol import (
     predicates,
 )
 from wfomc.fol.normal_form import CountSection, ForallCountSection
+from wfomc.options import ExistentialStrategy
 
 if TYPE_CHECKING:
-    from wfomc.algo.core import AlgoOptions
-    from wfomc.reduction.reduced import ReducedProblem
+    from wfomc.stages import ReducedProblem
 
 
-def reduce_existential_quantifiers(
+def reduce_existentials(
     problem: "ReducedProblem",
     *,
-    options: "AlgoOptions",
+    strategy: ExistentialStrategy | None,
 ) -> "ReducedProblem":
-    from wfomc.algo.core import ExistentialStrategy
-
-    strategy = options.existential_strategy or ExistentialStrategy.SKOLEM
+    strategy = strategy or ExistentialStrategy.SKOLEM
     if strategy is ExistentialStrategy.COUNTING:
         return _reduce_existentials_to_counts(problem)
     if strategy is not ExistentialStrategy.SKOLEM:
@@ -46,7 +44,6 @@ def reduce_existential_quantifiers(
     qf_formula, weights = _reduce_skolem_existentials(
         qf_formula,
         (*normal_form.forall_exists, *normal_form.exists),
-        rational_cls=Fraction,
         reserved_predicate_names=frozenset(map(str, problem.weights)),
     )
     merged_weights = dict(problem.weights)
@@ -158,7 +155,6 @@ def _reduce_skolem_existentials(
     formula: Formula,
     existential_formulas: tuple[Formula, ...],
     *,
-    rational_cls: type,
     reserved_predicate_names: frozenset[str] = frozenset(),
 ) -> tuple[Formula, dict[object, tuple[object, object]]]:
     ctx = FOLContext()
@@ -186,8 +182,8 @@ def _reduce_skolem_existentials(
             sp = ctx.predicate(skolem_name, 1 if outer_var is not None else 0)
             sa = ctx.atom(sp, outer_var) if outer_var is not None else ctx.atom(sp)
             qf = conjunction(qf, disjunction(sa, neg(body)))
-            weights[sp] = (rational_cls(1, 1), rational_cls(-1, 1))
+            weights[sp] = (Fraction(1, 1), Fraction(-1, 1))
     return qf, weights
 
 
-__all__ = ["reduce_existential_quantifiers"]
+__all__ = ["reduce_existentials"]

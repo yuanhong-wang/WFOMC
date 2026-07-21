@@ -167,13 +167,6 @@ def parse_worker_output(stdout: str) -> dict[str, object]:
     raise ValueError("worker output did not contain the result sentinel")
 
 
-def truncation_key(row: Mapping[str, object]) -> tuple[object, ...]:
-    return (
-        row["source_kind"], row["family"], row["variant"],
-        row["branch"], row["algorithm"],
-    )
-
-
 def series_key(row: Mapping[str, object]) -> tuple[object, ...]:
     """Identify one increasing-domain problem series across all configurations."""
 

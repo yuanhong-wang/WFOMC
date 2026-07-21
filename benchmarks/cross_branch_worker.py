@@ -15,7 +15,7 @@ SENTINEL = "BENCH_RESULT_JSON="
 
 def _load_api(algorithm: str):
     try:
-        from wfomc import AlgoName, parse_input, solve
+        from wfomc import AlgoName, parse_problem_file, solve
     except ImportError:
         from wfomc import Algo, parse_input, wfomc
         from loguru import logger
@@ -28,7 +28,7 @@ def _load_api(algorithm: str):
         return parse_input, lambda problem: wfomc(problem, algo=selected)
 
     selected = AlgoName(algorithm)
-    return parse_input, lambda problem: solve(problem, algo=selected)
+    return parse_problem_file, lambda problem: solve(problem, algo=selected)
 
 
 def main() -> int:
@@ -42,13 +42,13 @@ def main() -> int:
     try:
         if args.repetitions < 1:
             raise ValueError("repetitions must be at least one")
-        parse_input, solve_problem = _load_api(args.algorithm)
+        parse_problem_file, solve_problem = _load_api(args.algorithm)
         timings: list[float] = []
         parse_timings: list[float] = []
         results: list[str] = []
         for _ in range(args.repetitions):
             parse_started = time.perf_counter()
-            problem = parse_input(args.input)
+            problem = parse_problem_file(args.input)
             parse_timings.append(time.perf_counter() - parse_started)
             started = time.perf_counter()
             result = solve_problem(problem)

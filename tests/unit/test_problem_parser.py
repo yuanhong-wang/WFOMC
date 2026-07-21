@@ -77,7 +77,7 @@ def test_parse_wfomcs_file_records_source_and_unary_evidence():
     assert str(parsed.problem.sentence) == r"\forall X: T(X)"
     assert len(parsed.domain) == 3
     assert _evidence_strings(parsed) == {"P(domain0)"}
-    assert parsed.problem.options["source_path"] == str(path)
+    assert parsed.source_path == str(path)
 
 
 def test_parse_mln_file_preserves_weights_constraints_and_evidence():
@@ -94,7 +94,22 @@ def test_parse_mln_file_preserves_weights_constraints_and_evidence():
         (term.predicate.name, term.coefficient) for term in constraint.terms
     } == {("AuxBond", 1), ("H", -1)}
     assert _evidence_strings(parsed) == {"C(atoms0)"}
-    assert parsed.problem.options["source_path"] == str(path)
+    assert parsed.source_path == str(path)
+
+
+def test_source_path_does_not_change_logical_problem_identity(tmp_path):
+    text = r"\forall X: P(X)"
+    first_path = tmp_path / "first.wfomcs"
+    second_path = tmp_path / "second.wfomcs"
+    first_path.write_text(text)
+    second_path.write_text(text)
+
+    first = parse_problem_file(first_path)
+    second = parse_problem_file(second_path)
+
+    assert first.source_path != second.source_path
+    assert first.problem == second.problem
+    assert first.problem.cache_key_parts() == second.problem.cache_key_parts()
 
 
 def _evidence_strings(instance: ProblemInstance) -> set[str]:

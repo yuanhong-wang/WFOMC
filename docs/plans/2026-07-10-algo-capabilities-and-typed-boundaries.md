@@ -20,7 +20,7 @@
 **Steps:**
 
 1. Add failing registry tests for stable, beta, and unavailable specs.
-2. Add `AlgoMaturity` and `AlgoSpec.external_requirements`.
+2. Add `AlgoMaturity`.
 3. Mark propositional beta with Ganak and treewidth unavailable.
 4. Run registry tests and Ruff.
 

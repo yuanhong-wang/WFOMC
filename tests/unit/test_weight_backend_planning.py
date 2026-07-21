@@ -4,13 +4,14 @@ from fractions import Fraction
 
 import pytest
 from flint import arb, arb_poly, fmpq_mpoly_ctx
-from wfomc.algo import AlgoName, AlgoOptions, EvidenceStrategy, algo_spec
-from wfomc.api import compile_problem, instantiate_problem, solve
+from wfomc.algo import AlgoName, AlgoOptions, algo_spec
 from wfomc.arithmetic import ArithmeticBackend
-from wfomc.engine.features import analyze_features
+from wfomc.engine import compile_problem, instantiate_problem, solve
+from wfomc.engine.features import analyze_problem_features
 from wfomc.errors import ArithmeticBackendError
 from wfomc.evidence import Evidence, GroundUnaryLiteral, UnaryEvidence
-from wfomc.parser import parse_input, parse_problem
+from wfomc.parser import parse_problem_file, parse_problem
+from wfomc.options import EvidenceStrategy
 from wfomc.problem import Domain, Problem, ProblemInstance
 from wfomc.weights import (
     WeightOptions,
@@ -19,8 +20,8 @@ from wfomc.weights import (
 
 
 def test_resolve_options_preserves_rounded_arithmetic():
-    problem = parse_input("models/2-colored-graph.wfomcs")
-    features = analyze_features(problem)
+    problem = parse_problem_file("models/2-colored-graph.wfomcs")
+    features = analyze_problem_features(problem.problem)
     requested = WeightOptions(precision="round", rounded_backend="float")
 
     resolved = algo_spec(AlgoName.STANDARD).resolve_options(
@@ -36,7 +37,7 @@ def test_resolve_options_preserves_rounded_arithmetic():
     (("float", float), ("arb", arb)),
 )
 def test_scalar_rounded_arithmetic_runs_end_to_end(backend, expected_type):
-    problem = parse_input("models/2-colored-graph.wfomcs")
+    problem = parse_problem_file("models/2-colored-graph.wfomcs")
 
     result = solve(
         problem,
@@ -79,7 +80,7 @@ domain = 7
 
 
 def test_rounded_arithmetic_flows_through_lifted_evidence():
-    problem = parse_input("models/unary_evidence/evidence-only.wfomcs")
+    problem = parse_problem_file("models/unary_evidence/evidence-only.wfomcs")
 
     result = solve(
         problem,
@@ -133,7 +134,7 @@ def test_single_symbol_arb_polynomial_runs_end_to_end():
 
 
 def test_rounded_cardinality_is_rejected_before_materialization():
-    problem = parse_input("models/cardinality_constraints_example.wfomcs")
+    problem = parse_problem_file("models/cardinality_constraints_example.wfomcs")
 
     with pytest.raises(
         ArithmeticBackendError,
@@ -152,7 +153,7 @@ def test_rounded_cardinality_is_rejected_before_materialization():
 
 
 def test_propositional_reports_exact_only_external_backend():
-    problem = parse_input("models/2-colored-graph.wfomcs")
+    problem = parse_problem_file("models/2-colored-graph.wfomcs")
 
     with pytest.raises(ArithmeticBackendError, match="Ganak"):
         solve(
@@ -168,12 +169,12 @@ def test_propositional_reports_exact_only_external_backend():
 
 
 def test_cardinality_reduction_injects_internal_weight_symbols():
-    problem = parse_input("models/cardinality_constraints_example.wfomcs")
-    assert collect_symbolic_weight_variables(problem.problem) == ()
+    problem = parse_problem_file("models/cardinality_constraints_example.wfomcs")
+    assert collect_symbolic_weight_variables(problem.problem.weights) == ()
 
     compiled = compile_problem(problem.problem, algo=AlgoName.STANDARD)
     artifacts = instantiate_problem(compiled, problem.domain)
-    branch = artifacts.prepared_branches[0].problem
+    branch = artifacts.branches[0].problem
     arithmetic = artifacts.algo_input.arithmetic
 
     assert not branch.cardinality_constraints
@@ -192,7 +193,7 @@ def test_cardinality_reduction_injects_internal_weight_symbols():
 
 
 def test_cardinality_can_explicitly_use_univariate_fmpq_poly():
-    problem = parse_input("models/cardinality_constraints_example.wfomcs")
+    problem = parse_problem_file("models/cardinality_constraints_example.wfomcs")
     options = AlgoOptions(
         weight_options=WeightOptions(
             exact_symbolic_backend="fmpq_poly",

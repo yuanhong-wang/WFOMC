@@ -7,10 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from wfomc import AlgoName, parse_input, solve
-from wfomc.algo import LinearOrderEncoding, resolve_linear_order_encoding
+from wfomc import AlgoName, parse_problem_file, solve
+from wfomc.fol.grounding import (
+    LinearOrderEncoding,
+    resolve_linear_order_encoding,
+)
 from wfomc.ganak import GanakError, find_ganak
-from wfomc.engine.features import analyze_features
+from wfomc.engine.features import analyze_problem_features
 
 
 RUN_SLOW = os.environ.get("WFOMC_RUN_SLOW", "0") == "1"
@@ -64,7 +67,9 @@ def _require_ganak():
 def _uses_multi_k_pred(problem) -> bool:
     return any(
         order > 1
-        for order, _predicate in analyze_features(problem).predecessor_predicates
+        for order, _predicate in analyze_problem_features(
+            problem.problem
+        ).predecessor_predicates
     )
 
 
@@ -88,7 +93,7 @@ def _uses_general_cardinality(problem) -> bool:
 
 
 def _reference_algo(problem) -> AlgoName:
-    features = analyze_features(problem)
+    features = analyze_problem_features(problem.problem)
     if features.has_predk or features.has_circular_pred:
         return AlgoName.INCREMENTAL
     if features.has_linear_order or features.has_c2_counting:
@@ -103,7 +108,7 @@ def test_propositional_matches_reference(model_file: Path):
         pytest.skip(f"{relative} is slow under FO3 axiomatization")
     if relative in SLOW_DIRECT_GROUNDING and not RUN_SLOW:
         pytest.skip(f"{relative} is slow under direct grounding")
-    problem = parse_input(str(model_file))
+    problem = parse_problem_file(str(model_file))
     if _uses_multi_k_pred(problem):
         pytest.skip("PREDk for k > 1 is outside propositional scope")
     if _uses_general_cardinality(problem):
@@ -129,7 +134,7 @@ def test_propositional_matches_reference(model_file: Path):
     ids=lambda path: path.stem,
 )
 def test_propositional_matches_reference_circular(model_file: Path):
-    problem = parse_input(str(model_file))
+    problem = parse_problem_file(str(model_file))
 
     reference = solve(problem, algo=AlgoName.INCREMENTAL)
     propositional = solve(problem, algo=AlgoName.PROPOSITIONAL)

@@ -9,7 +9,7 @@ from wfomc import (
     AlgoOptions,
     EvidenceStrategy,
     compile_problem,
-    parse_input,
+    parse_problem_file,
     parse_problem,
     solve,
 )
@@ -45,7 +45,7 @@ AUTO_STRATEGIES = {
 )
 @pytest.mark.parametrize("model_file", MODEL_FILES, ids=lambda path: path.stem)
 def test_unary_evidence_algorithm_matrix(model_file: Path, strategy):
-    problem = parse_input(str(model_file))
+    problem = parse_problem_file(str(model_file))
     options = None if strategy is None else AlgoOptions(evidence_strategy=strategy)
 
     results = {algo: solve(problem, algo=algo, options=options) for algo in ALGORITHMS}
@@ -63,7 +63,7 @@ def test_unary_evidence_algorithm_matrix(model_file: Path, strategy):
     ),
 )
 def test_named_unary_evidence_regressions(name: str, expected: int):
-    problem = parse_input(str(MODEL_DIR / name))
+    problem = parse_problem_file(str(MODEL_DIR / name))
 
     assert solve(problem, algo=AlgoName.STANDARD) == expected
     assert solve(
@@ -75,7 +75,7 @@ def test_named_unary_evidence_regressions(name: str, expected: int):
 
 @pytest.mark.parametrize(("algo", "expected"), tuple(AUTO_STRATEGIES.items()))
 def test_auto_resolves_to_algorithm_evidence_default(algo, expected):
-    problem = parse_input(str(MODEL_DIR / "evidence-only.wfomcs"))
+    problem = parse_problem_file(str(MODEL_DIR / "evidence-only.wfomcs"))
 
     artifacts = compile_problem(problem, algo=algo)
 
@@ -84,7 +84,7 @@ def test_auto_resolves_to_algorithm_evidence_default(algo, expected):
 
 @pytest.mark.parametrize("algo", ALGORITHMS)
 def test_explicit_ccs_is_preserved_for_every_algorithm(algo):
-    problem = parse_input(str(MODEL_DIR / "evidence-only.wfomcs"))
+    problem = parse_problem_file(str(MODEL_DIR / "evidence-only.wfomcs"))
 
     artifacts = compile_problem(
         problem,

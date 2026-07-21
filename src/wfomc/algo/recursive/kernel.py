@@ -116,14 +116,12 @@ class NautyContext(object):
         self.graph.set_vertex_coloring(colored_vertices)
         return self.graph
 
-    # @functools.lru_cache(maxsize=None)
     def get_vertex_color(self, weight):
         if str(weight) not in self.vertex_weight_to_color:
             self.vertex_weight_to_color[str(weight)] = self.vertex_color_no
             self.vertex_color_no += 1
         return self.vertex_weight_to_color[str(weight)]
 
-    # @functools.lru_cache(maxsize=None)
     def cellWeight_To_vertexColor(self, cell_weights):
         vertex_colors = []
         for w in cell_weights:
@@ -206,7 +204,6 @@ class IsomorphicGraphCache(object):
         self.cache[level][color_kind][color_count][can_label] = value
 
 
-# @functools.lru_cache(maxsize=None)
 def adjust_vertex_coloring(colored_vertices):
     """
     Adjust the color no. of vertices to make the color no. start from 0 and be continuous.
