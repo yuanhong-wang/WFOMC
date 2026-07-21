@@ -156,6 +156,41 @@ def test_fastv2_groups_equal_local_rows_in_one_convolution_message() -> None:
     assert operations.d_term_cache == {}
 
 
+def test_fast_single_cell_clique_uses_cached_convolution_message() -> None:
+    domain_size = 6
+    interaction = 29
+
+    for modified_cell_symmetry in (False, True):
+        weights = (7,)
+        self_relations = (11,)
+        operations = _ordinary_operations(
+            domain_size=domain_size,
+            weights=weights,
+            self_relations=self_relations,
+            interaction=interaction,
+            modified_cell_symmetry=modified_cell_symmetry,
+        )
+
+        actual = tuple(
+            operations.get_J_term(0, count) for count in range(domain_size + 1)
+        )
+        expected = tuple(
+            _direct_clique_weight(
+                count,
+                weights=weights,
+                self_relations=self_relations,
+                interaction=interaction,
+                include_weights=modified_cell_symmetry,
+                arithmetic=operations.arithmetic,
+            )
+            for count in range(domain_size + 1)
+        )
+
+        assert actual == expected
+        assert list(operations.symmetric_message_cache) == [0]
+        assert operations.d_term_cache == {}
+
+
 def test_evidence_partition_uses_convolution_message() -> None:
     domain_size = 5
     weights = (2, 3, 5, 7)
