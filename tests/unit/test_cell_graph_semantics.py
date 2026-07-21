@@ -24,6 +24,9 @@ def test_standard_matches_grounding_for_cross_element_unary_constraint(
     problem = _problem(ctx, sentence, domain_size)
 
     assert _count(problem, AlgoName.STANDARD) == _count(problem, AlgoName.PROPOSITIONAL)
+    assert _count(problem, AlgoName.BOUNDARY_PROFILE) == _count(
+        problem, AlgoName.STANDARD
+    )
 
 
 @pytest.mark.parametrize("domain_size", [1, 2])
@@ -43,6 +46,9 @@ def test_standard_matches_grounding_when_nullary_branch_removes_predicate(
     )
 
     assert _count(problem, AlgoName.STANDARD) == _count(problem, AlgoName.PROPOSITIONAL)
+    assert _count(problem, AlgoName.BOUNDARY_PROFILE) == _count(
+        problem, AlgoName.STANDARD
+    )
 
 
 @pytest.mark.parametrize("domain_size", [1, 2])
@@ -60,6 +66,9 @@ def test_standard_preserves_binary_vocabulary_across_nullary_branches(
     problem = _problem(ctx, sentence, domain_size)
 
     assert _count(problem, AlgoName.STANDARD) == _count(problem, AlgoName.PROPOSITIONAL)
+    assert _count(problem, AlgoName.BOUNDARY_PROFILE) == _count(
+        problem, AlgoName.STANDARD
+    )
 
 
 def test_nullary_branches_keep_original_non_nullary_predicate_universe():

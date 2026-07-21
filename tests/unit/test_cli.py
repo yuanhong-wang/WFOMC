@@ -34,7 +34,10 @@ def test_cli_help_groups_options_by_algorithm_scope():
     incremental3 = help_text.split("Incremental3-only options:", 1)[1].split(
         "Propositional-only options:", 1
     )[0]
-    propositional = help_text.split("Propositional-only options:", 1)[1]
+    propositional = help_text.split("Propositional-only options:", 1)[1].split(
+        "Boundary-Profile-only options:", 1
+    )[0]
+    boundary_profile = help_text.split("Boundary-Profile-only options:", 1)[1]
 
     assert "--input" in common
     assert "--algo" in common
@@ -45,6 +48,7 @@ def test_cli_help_groups_options_by_algorithm_scope():
     assert "--existential-strategy" in incremental3
     assert "--linear-order-encoding" in propositional
     assert "--ganak-path" in propositional
+    assert "--bp-tree-reference-domain-size" in boundary_profile
 
 
 def test_wfomc_requires_input_for_execution():
@@ -83,6 +87,7 @@ def test_cli_hides_algorithms_that_are_not_directly_runnable():
     parser = build_parser()
     algo_action = next(action for action in parser._actions if action.dest == "algo")
 
+    assert "boundary-profile" in algo_action.choices
     assert "bounded-treewidth" not in algo_action.choices
     assert "propositional" in algo_action.choices
     assert "propositional-reduced" in algo_action.choices
@@ -134,6 +139,21 @@ def test_cli_accepts_propositional_options():
     assert args.ganak_path == "/opt/ganak"
 
 
+def test_cli_accepts_boundary_profile_reference_domain_size():
+    args = build_parser().parse_args(
+        [
+            "--input",
+            "models/2-colored-graph.wfomcs",
+            "--algo",
+            "boundary-profile",
+            "--bp-tree-reference-domain-size",
+            "8",
+        ]
+    )
+
+    assert args.bp_tree_reference_domain_size == 8
+
+
 def test_cli_run_maps_propositional_options_to_engine_contracts(monkeypatch):
     import wfomc.parser as parser_module
     from wfomc.fol.grounding import LinearOrderEncoding
@@ -168,12 +188,50 @@ def test_cli_run_maps_propositional_options_to_engine_contracts(monkeypatch):
     assert captured["runtime"].propositional_ganak_path == "/opt/ganak"
 
 
+def test_cli_run_maps_boundary_profile_options_to_engine_contract(monkeypatch):
+    import wfomc.parser as parser_module
+    from wfomc import BoundaryProfileOptions
+    from wfomc.result import WFOMCResult
+
+    captured = {}
+    problem = object()
+    monkeypatch.setattr(parser_module, "parse_problem_file", lambda _path: problem)
+
+    def capture_solve(actual_problem, **kwargs):
+        captured["problem"] = actual_problem
+        captured.update(kwargs)
+        return WFOMCResult(1)
+
+    monkeypatch.setattr(cli, "solve", capture_solve)
+
+    result = cli.run(
+        "unused.wfomcs",
+        "boundary-profile",
+        bp_tree_reference_domain_size=8,
+    )
+
+    assert result.result == 1
+    assert captured["problem"] is problem
+    assert captured["options"].boundary_profile_options == BoundaryProfileOptions(
+        tree_reference_domain_size=8,
+    )
+
+
 @pytest.mark.parametrize("option", ("linear_order_encoding", "ganak_path"))
 def test_cli_rejects_propositional_only_options_for_other_algorithms(option: str):
     kwargs = {option: "axioms" if option == "linear_order_encoding" else "/opt/ganak"}
 
     with pytest.raises(ValueError, match="only valid for propositional"):
         cli.run("unused.wfomcs", "fastv2", **kwargs)
+
+
+def test_cli_rejects_boundary_profile_option_for_other_algorithms():
+    with pytest.raises(ValueError, match="only valid for boundary-profile"):
+        cli.run(
+            "unused.wfomcs",
+            "fastv2",
+            bp_tree_reference_domain_size=8,
+        )
 
 
 def test_cli_accepts_exact_symbolic_backend_override():

@@ -26,6 +26,8 @@ where
   - `standard`: the standard WFOMC algorithm in Beame et al. (2015)
   - `fast`: the fast WFOMC algorithm in Timothy van Bremen and Ondrej Kuzelka (2021)
   - `fastv2`: the optimized fast WFOMC algorithm
+  - `boundary-profile`: the Boundary-Profile decomposition-tree DP with
+    automatic plan search
   - `incremental`: the incremental WFOMC algorithm for linear order axiom in Toth and Kuzelka (2022)
   - `incremental3`: the incremental WFOMC algorithm with factorized counting-quantifier
     and unary-evidence support (also handles modulo counting quantifiers)
@@ -36,6 +38,18 @@ where
   - `propositional-reduced`: normalize and reduce the problem first, then ground the
     resulting quantifier-free sentence and count it with Ganak. This preserves the
     former propositional implementation for performance and regression comparisons.
+`boundary-profile` is a native beta algorithm available from both the CLI and
+the `AlgoName` Python API.
+
+Boundary-Profile builds one decomposition tree per structural cell-graph
+variant and reuses it across domain sizes. Its default tree search is domain
+independent. To select that one reusable tree with the cost model for a chosen
+reference size, pass `--bp-tree-reference-domain-size N`, or use
+`AlgoOptions(boundary_profile_options=BoundaryProfileOptions(
+tree_reference_domain_size=N))` in the Python API. The actual domain still
+controls local weight tables, state bounds, and execution statistics; it does
+not trigger another tree search.
+
 The CLI defaults to `standard`. Use `-e/--evidence-strategy` to override the
 selected algorithm's unary-evidence preparation, and
 `--exact-symbolic-backend` to choose the exact polynomial backend. Use `-v` for
@@ -59,6 +73,7 @@ is omitted, the current algorithm defaults are:
 | `incremental` | threaded evidence-profile capacities |
 | `incremental3` | evidence-profile configuration coefficients |
 | `recursive` | classic CCS fallback |
+| `boundary-profile` | classic CCS fallback |
 
 The explicit `ccs` strategy is available for the lifted algorithms that support
 unary evidence. Direct propositional grounding uses ground unit clauses.
@@ -116,8 +131,8 @@ to `solve`. Exact FLINT values are an internal representation; public callers
 should prefer integers, fractions, and parsed model weights.
 
 The top-level package also exports the configuration types `AlgoOptions`,
-`EvidenceStrategy`, `ExistentialStrategy`, `LinearOrderEncoding`,
-`WeightOptions`, `RuntimeOptions`, and `RuntimeContext`.
+`BoundaryProfileOptions`, `EvidenceStrategy`, `ExistentialStrategy`,
+`LinearOrderEncoding`, `WeightOptions`, `RuntimeOptions`, and `RuntimeContext`.
 
 ## Input format
 

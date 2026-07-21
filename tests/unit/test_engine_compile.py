@@ -11,6 +11,7 @@ from wfomc.algo import (
     algo_spec,
 )
 from wfomc.algo.fast.input import OptimizedCellGraphInput
+from wfomc.algo.boundary_profile.input import BoundaryProfileInputTemplate
 from wfomc.algo.incremental.input import OrderedCellGraphInput
 from wfomc.algo.propositional.input import GroundCNFInput
 from wfomc.algo.standard.input import StandardInput
@@ -49,6 +50,7 @@ def test_analyze_problem_returns_domain_free_features():
 def test_algorithm_specs_declare_maturity():
     assert algo_spec(AlgoName.STANDARD).maturity is AlgoMaturity.STABLE
     assert algo_spec(AlgoName.PROPOSITIONAL).maturity is AlgoMaturity.BETA
+    assert algo_spec(AlgoName.BOUNDARY_PROFILE).maturity is AlgoMaturity.BETA
     assert algo_spec(AlgoName.BOUNDED_TREEWIDTH).maturity is AlgoMaturity.UNAVAILABLE
 
 
@@ -107,6 +109,90 @@ def test_staged_algorithm_reuses_input_template_across_domains(algo):
         else ReducedInputTemplate
     )
     assert isinstance(template, expected_template_type)
+
+
+def test_boundary_profile_reuses_one_tree_across_domains():
+    instance = parse_problem_file("models/2-colored-graph.wfomcs")
+    runtime = RuntimeContext()
+    compiled = compile_problem(
+        instance.problem,
+        algo=AlgoName.BOUNDARY_PROFILE,
+        runtime=runtime,
+    )
+
+    small = instantiate_problem(compiled, Domain.of_size(2), runtime=runtime)
+    template = next(iter(runtime.cache.algo_input_templates.values()))
+    assert isinstance(template, BoundaryProfileInputTemplate)
+    tree = template.components[0].tree
+
+    large = instantiate_problem(compiled, Domain.of_size(3), runtime=runtime)
+
+    stats = runtime.cache.stats()
+    assert stats.misses["algo_input_templates"] == 1
+    assert stats.hits["algo_input_templates"] == 1
+    assert template.components[0].tree is tree
+    assert small.algo_input.components[0].plan.tree is tree
+    assert large.algo_input.components[0].plan.tree is tree
+    assert small.algo_input.components[0].w_tables != (
+        large.algo_input.components[0].w_tables
+    )
+
+
+def test_boundary_profile_reference_size_is_part_of_compilation_key():
+    from wfomc import BoundaryProfileOptions
+
+    instance = parse_problem_file("models/2-colored-graph.wfomcs")
+    runtime = RuntimeContext()
+    small_reference = compile_problem(
+        instance.problem,
+        algo=AlgoName.BOUNDARY_PROFILE,
+        options=AlgoOptions(
+            boundary_profile_options=BoundaryProfileOptions(
+                tree_reference_domain_size=2,
+            )
+        ),
+        runtime=runtime,
+    )
+    large_reference = compile_problem(
+        instance.problem,
+        algo=AlgoName.BOUNDARY_PROFILE,
+        options=AlgoOptions(
+            boundary_profile_options=BoundaryProfileOptions(
+                tree_reference_domain_size=8,
+            )
+        ),
+        runtime=runtime,
+    )
+
+    assert small_reference is not large_reference
+    assert runtime.cache.stats().misses["compiled_problems"] == 2
+
+
+def test_boundary_profile_reference_size_must_be_non_negative():
+    from wfomc import BoundaryProfileOptions
+
+    with pytest.raises(ValueError, match="non-negative"):
+        BoundaryProfileOptions(tree_reference_domain_size=-1)
+
+
+def test_boundary_profile_options_are_rejected_by_other_algorithms():
+    from wfomc import BoundaryProfileOptions
+
+    instance = parse_problem_file("models/2-colored-graph.wfomcs")
+
+    with pytest.raises(
+        UnsupportedFeatureError,
+        match="only configurable for boundary-profile",
+    ):
+        compile_problem(
+            instance.problem,
+            algo=AlgoName.FASTV2,
+            options=AlgoOptions(
+                boundary_profile_options=BoundaryProfileOptions(
+                    tree_reference_domain_size=8,
+                )
+            ),
+        )
 
 
 def test_incremental3_rebuilds_template_only_when_counting_state_changes():

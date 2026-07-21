@@ -34,7 +34,11 @@ def _load_api(algorithm: str):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True)
-    parser.add_argument("--algorithm", choices=("fastv2", "incremental3"), required=True)
+    parser.add_argument(
+        "--algorithm",
+        choices=("fastv2", "incremental3", "boundary-profile"),
+        required=True,
+    )
     parser.add_argument("--repetitions", type=int, default=1)
     args = parser.parse_args()
 

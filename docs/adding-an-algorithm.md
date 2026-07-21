@@ -117,8 +117,12 @@ domain-dependent work in `instantiate`. In particular:
 
 - do not store a concrete `Domain` or domain size in a reusable reduced
   template;
+- build expensive structural objects such as decomposition trees in the
+  template, then reuse their object identity across concrete domains;
 - rebind cached numeric values through `concrete.arithmetic`, because degree
   limits can differ by domain size;
+- materialize domain-sized tables, bounds, diagnostics, and mutable execution
+  state only in `instantiate`;
 - create fresh mutable solver caches during instantiation rather than sharing
   them between domain sizes;
 - use `ArithmeticContext.zero()`, `one()`, `from_int()`, `coerce()`, and its
@@ -277,6 +281,13 @@ shape.
 
 The engine caches templates by compiled problem, branch index, and this key.
 An unnecessarily broad key silently defeats cross-domain reuse.
+
+An algorithm may expose a reference domain size for selecting one reusable
+structure. Treat that reference as an `AlgoOptions` compilation setting, not as
+the actual `input_template_key`: the selected structure still belongs to the
+domain-free template and must be reused by all concrete domains mapped to the
+same structural variant. Boundary-Profile's cached tree is the reference
+implementation of this pattern.
 
 ## 9. Register the algorithm
 

@@ -38,6 +38,24 @@ class ExistentialStrategy(Enum):
 
 
 @dataclass(frozen=True)
+class BoundaryProfileOptions:
+    """Planning controls for the Boundary-Profile algorithm."""
+
+    # Optional synthetic domain size used only to select one reusable BP tree.
+    tree_reference_domain_size: int | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            self.tree_reference_domain_size is not None
+            and self.tree_reference_domain_size < 0
+        ):
+            raise ValueError(
+                "BoundaryProfileOptions.tree_reference_domain_size must be "
+                "non-negative"
+            )
+
+
+@dataclass(frozen=True)
 class WeightOptions:
     """User-facing weight-precision choices."""
 
@@ -64,4 +82,9 @@ class WeightOptions:
             )
 
 
-__all__ = ["EvidenceStrategy", "ExistentialStrategy", "WeightOptions"]
+__all__ = [
+    "BoundaryProfileOptions",
+    "EvidenceStrategy",
+    "ExistentialStrategy",
+    "WeightOptions",
+]
