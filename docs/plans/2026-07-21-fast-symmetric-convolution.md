@@ -1,6 +1,5 @@
 # Fast Symmetric-Clique Convolution Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Share BP-DP's twisted binomial convolution method with Fast and use repeated squaring for homogeneous symmetric cliques.
 
