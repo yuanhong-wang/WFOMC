@@ -17,6 +17,7 @@ import sys
 import tempfile
 import time
 from dataclasses import asdict, dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -33,9 +34,13 @@ ALGORITHMS = ("fastv2", "incremental3")
 MODEL_DOMAIN_SIZES = (2, 4, 8, 16, 32, 64)
 RESULT_FIELDS = (
     "source_kind", "case", "family", "category", "variant", "domain_size",
-    "source_sha256", "branch", "commit", "algorithm", "status",
-    "solver_time_s", "parse_time_s", "wall_time_s", "peak_rss_bytes", "peak_rss_mib",
-    "result", "matches_consensus", "repetitions", "error", "stderr",
+    "source_sha256", "series_sha256", "comparison_group", "correction_divisor",
+    "branch", "commit", "algorithm", "status", "solver_time_s",
+    "solver_time_min_s", "solver_time_max_s", "solver_time_samples_s",
+    "parse_time_s", "wall_time_s", "peak_rss_bytes", "peak_rss_mib",
+    "result", "matches_consensus", "comparison_status", "equivalence_status",
+    "repetitions", "timeout_s", "memory_bytes",
+    "run_id", "error", "traceback", "stderr",
 )
 _INTEGER_DOMAIN_RE = re.compile(
     r"^(?P<prefix>\s*[A-Za-z][A-Za-z0-9_]*\s*=\s*)(?P<size>\d+)"
@@ -54,10 +59,53 @@ class Workload:
     domain_size: int
     suffix: str
     source: str
+    correction_divisor: int = 1
+    comparison_group: str | None = None
 
     @property
     def source_sha256(self) -> str:
         return hashlib.sha256(self.source.encode()).hexdigest()
+
+    @property
+    def series_sha256(self) -> str:
+        """Hash the logical input after removing only its concrete domain size."""
+
+        return hashlib.sha256(domain_free_source(self.source).encode()).hexdigest()
+
+
+def domain_free_source(source: str) -> str:
+    """Replace one integer domain declaration with a stable placeholder."""
+
+    matches = list(_INTEGER_DOMAIN_RE.finditer(source))
+    if len(matches) != 1:
+        raise ValueError(
+            f"expected exactly one integer domain declaration, found {len(matches)}"
+        )
+    match = matches[0]
+    return (
+        source[: match.start()]
+        + match["prefix"]
+        + "<DOMAIN>"
+        + match["suffix"]
+        + source[match.end() :]
+    )
+
+
+def classify_error(error: str) -> str:
+    """Classify expected capability/input failures separately from solver errors."""
+
+    if "Evidence must be consistent with the domain" in error:
+        return "invalid"
+    unsupported_markers = (
+        "UnsupportedFeatureError:",
+        " is only supported by ",
+        " does not support ",
+        " is not supported by ",
+        "not reducible to UFO2 + cardinality",
+    )
+    if any(marker in error for marker in unsupported_markers):
+        return "unsupported"
+    return "error"
 
 
 def rewrite_integer_domain(source: str, domain_size: int) -> str:
@@ -170,11 +218,21 @@ def parse_worker_output(stdout: str) -> dict[str, object]:
 def series_key(row: Mapping[str, object]) -> tuple[object, ...]:
     """Identify one increasing-domain problem series across all configurations."""
 
+    if row.get("series_sha256"):
+        return row["source_kind"], row["series_sha256"]
     return row["source_kind"], row["family"], row["variant"]
 
 
 def _git(*args: str, cwd: Path = ROOT) -> str:
     return subprocess.check_output(("git", *args), cwd=cwd, text=True).strip()
+
+
+def _git_show(commit: str, relative_path: str) -> str:
+    """Read repository text without normalizing its trailing whitespace."""
+
+    return subprocess.check_output(
+        ("git", "show", f"{commit}:{relative_path}"), cwd=ROOT, text=True
+    )
 
 
 def resolve_commit(ref: str) -> str:
@@ -196,8 +254,13 @@ def prepare_modk_worktree(ref: str, *, sync: bool = True) -> tuple[Path, str]:
             cwd=ROOT, check=True,
         )
     python = path / ".venv" / "bin" / "python"
-    if sync and not python.exists():
-        subprocess.run(("uv", "sync", "--project", str(path)), check=True)
+    if sync:
+        # A pre-existing interpreter does not prove that this commit's locked
+        # dependencies are installed.  Always reconcile the detached worktree
+        # before measuring it so an earlier benchmark cannot leak its venv.
+        subprocess.run(
+            ("uv", "sync", "--frozen", "--project", str(path)), check=True
+        )
     if sync and not python.exists():
         raise RuntimeError(f"uv did not create {python}")
     return path, commit
@@ -216,6 +279,8 @@ def collect_catalog_workloads(suite: str) -> list[Workload]:
                 domain_size=case.domain_size,
                 suffix=".wfomcs",
                 source=serialize_catalog_case(case),
+                correction_divisor=case.correction_divisor,
+                comparison_group=case.comparison_group,
             )
         )
     return rows
@@ -237,8 +302,7 @@ def collect_model_workloads(
     workloads: list[Workload] = []
     exclusions: list[dict[str, str]] = []
     for relative in common:
-        path = ROOT / relative
-        source = path.read_text()
+        source = _git_show(current_commit, relative)
         if len(list(_INTEGER_DOMAIN_RE.finditer(source))) != 1:
             exclusions.append({"model": relative, "reason": "domain is fixed/named or ambiguous"})
             continue
@@ -254,7 +318,7 @@ def collect_model_workloads(
                     category="model",
                     variant="default",
                     domain_size=domain_size,
-                    suffix=path.suffix,
+                    suffix=Path(relative).suffix,
                     source=rewrite_integer_domain(source, domain_size),
                 )
             )
@@ -296,6 +360,7 @@ def run_worker(
         (
             str(python), str(WORKER), "--input", str(workload_path),
             "--algorithm", algorithm, "--repetitions", str(repetitions),
+            "--timeout", str(timeout_s),
         ),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -304,7 +369,7 @@ def run_worker(
     ps_process = psutil.Process(process.pid)
     peak_rss = 0
     forced_status: str | None = None
-    limit = timeout_s * repetitions
+    limit = timeout_s * repetitions + 10.0
     try:
         while process.poll() is None:
             try:
@@ -358,7 +423,10 @@ def run_worker(
             **base, "status": "worker-error", "result": None,
             "solver_time_s": None, "error": f"{type(error).__name__}: {error}",
         }
-    return {**base, **payload}
+    measured = {**base, **payload}
+    if measured.get("status") == "error":
+        measured["status"] = classify_error(str(measured.get("error", "")))
+    return measured
 
 
 def _write_workload(workload: Workload, directory: Path) -> Path:
@@ -375,16 +443,70 @@ def _skipped_row(
     commit: str,
     algorithm: str,
     repetitions: int,
+    *,
+    timeout_s: float | None = None,
+    memory_bytes: int | None = None,
+    run_id: str = "",
 ) -> dict[str, object]:
     return {
         **asdict(workload), "source": None, "source_sha256": workload.source_sha256,
+        "series_sha256": workload.series_sha256,
         "branch": branch, "commit": commit, "algorithm": algorithm,
         "status": "skipped-after-resource", "solver_time_s": None,
         "parse_time_s": None,
         "wall_time_s": None, "peak_rss_bytes": None, "peak_rss_mib": None,
         "result": None, "matches_consensus": None, "repetitions": repetitions,
+        "timeout_s": timeout_s, "memory_bytes": memory_bytes, "run_id": run_id,
         "error": "a smaller domain in this series hit a resource limit", "stderr": "",
     }
+
+
+def benchmark_run_id(
+    workloads: Iterable[Workload],
+    environments: Mapping[str, tuple[Path, str]],
+    *,
+    algorithms: Iterable[str],
+    timeout_s: float,
+    memory_bytes: int,
+    repetitions: int,
+) -> str:
+    """Return a stable identity for every measurement-affecting run input."""
+
+    payload = {
+        "schema": 2,
+        "workloads": sorted(workload.source_sha256 for workload in workloads),
+        "environments": sorted(
+            (branch, commit) for branch, (_python, commit) in environments.items()
+        ),
+        "algorithms": list(algorithms),
+        "timeout_s": timeout_s,
+        "memory_bytes": memory_bytes,
+        "repetitions": repetitions,
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _resume_identity_matches(
+    row: Mapping[str, object],
+    *,
+    commit: str,
+    repetitions: int,
+    timeout_s: float,
+    memory_bytes: int,
+    run_id: str,
+) -> bool:
+    try:
+        return (
+            str(row.get("commit")) == commit
+            and int(row.get("repetitions", 0)) == repetitions
+            and float(row.get("timeout_s", -1)) == timeout_s
+            and int(row.get("memory_bytes", -1)) == memory_bytes
+            and str(row.get("run_id", "")) == run_id
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def execute(
@@ -397,6 +519,7 @@ def execute(
     input_dir: Path,
     checkpoint_path: Path | None = None,
     resume_rows: Iterable[dict[str, object]] = (),
+    run_id: str = "",
 ) -> list[dict[str, object]]:
     ordered = sorted(
         workloads,
@@ -416,8 +539,7 @@ def execute(
     index = 0
     for workload in ordered:
         path = _write_workload(workload, input_dir)
-        workload_key = series_key(asdict(workload))
-        resource_failed = False
+        workload_key = (workload.source_kind, workload.series_sha256)
         for branch, (python, commit) in environments.items():
             for algorithm in ALGORITHMS:
                 index += 1
@@ -426,15 +548,33 @@ def execute(
                     "family": workload.family, "category": workload.category,
                     "variant": workload.variant, "domain_size": workload.domain_size,
                     "source_sha256": workload.source_sha256, "branch": branch,
-                    "commit": commit, "algorithm": algorithm,
+                    "series_sha256": workload.series_sha256,
+                    "comparison_group": workload.comparison_group,
+                    "correction_divisor": workload.correction_divisor,
+                    "commit": commit, "algorithm": algorithm, "run_id": run_id,
+                    "timeout_s": timeout_s, "memory_bytes": memory_bytes,
                 }
-                if workload_key in blocked:
-                    row = _skipped_row(workload, branch, commit, algorithm, repetitions)
+                blocked_key = (*workload_key, branch, algorithm)
+                if blocked_key in blocked:
+                    row = _skipped_row(
+                        workload, branch, commit, algorithm, repetitions,
+                        timeout_s=timeout_s, memory_bytes=memory_bytes, run_id=run_id,
+                    )
                 else:
                     resume_key = (
                         workload.source_sha256, workload.domain_size, branch, algorithm,
                     )
-                    previous = resume_by_key.get(resume_key)
+                    candidate = resume_by_key.get(resume_key)
+                    previous = (
+                        candidate
+                        if candidate is not None
+                        and _resume_identity_matches(
+                            candidate, commit=commit, repetitions=repetitions,
+                            timeout_s=timeout_s, memory_bytes=memory_bytes,
+                            run_id=run_id,
+                        )
+                        else None
+                    )
                     if previous is not None:
                         row = {
                             **previous, **metadata,
@@ -454,10 +594,8 @@ def execute(
                             "repetitions": repetitions,
                         }
                     if row["status"] in RESOURCE_FAILURES:
-                        resource_failed = True
+                        blocked.add(blocked_key)
                 rows.append(row)
-        if resource_failed:
-            blocked.add(workload_key)
         if checkpoint_path is not None:
             mark_consensus(rows)
             write_csv(rows, checkpoint_path)
@@ -466,16 +604,48 @@ def execute(
 
 
 def mark_consensus(rows: list[dict[str, object]]) -> None:
+    """Mark same-input consensus and normalized alternative encodings."""
+
     grouped: dict[tuple[object, ...], list[dict[str, object]]] = {}
     for row in rows:
+        row["matches_consensus"] = None
+        row["comparison_status"] = "not-comparable"
+        row["equivalence_status"] = (
+            "not-comparable" if row.get("comparison_group") else "not-applicable"
+        )
         grouped.setdefault(
             (row["source_sha256"], row["domain_size"]), []
         ).append(row)
     for group in grouped.values():
         successful = [row for row in group if row["status"] == "ok"]
+        if len(successful) < 2:
+            continue
         results = {str(row["result"]) for row in successful}
+        status = "match" if len(results) == 1 else "mismatch"
         for row in successful:
-            row["matches_consensus"] = len(results) == 1
+            row["matches_consensus"] = status == "match"
+            row["comparison_status"] = status
+
+    equivalence: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for row in rows:
+        comparison_group = str(row.get("comparison_group") or "")
+        if comparison_group and row["status"] == "ok":
+            key = (str(row["branch"]), str(row["algorithm"]), comparison_group)
+            equivalence.setdefault(key, []).append(row)
+    for selected in equivalence.values():
+        if len({str(row["case"]) for row in selected}) < 2:
+            continue
+        try:
+            normalized = {
+                Fraction(str(row["result"])) / int(row.get("correction_divisor") or 1)
+                for row in selected
+            }
+        except (ValueError, ZeroDivisionError):
+            status = "unparseable"
+        else:
+            status = "match" if len(normalized) == 1 else "mismatch"
+        for row in selected:
+            row["equivalence_status"] = status
 
 
 def write_csv(rows: list[dict[str, object]], path: Path) -> None:
@@ -567,22 +737,56 @@ def write_summary(
         f"- Limits: {timeout_s:g} seconds and {memory_bytes / (1024**3):g} GiB RSS per measurement",
         f"- Rows: {len(rows)}; excluded model files: {len(exclusions)}", "",
         "## Status totals", "",
-        "| configuration | ok | timeout | memory | error | skipped |", "|---|---:|---:|---:|---:|---:|",
+        "| configuration | ok | timeout | memory | unsupported | invalid | error | skipped |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for branch, algorithm in configs:
         selected = [row for row in rows if row["branch"] == branch and row["algorithm"] == algorithm]
         counts = {status: sum(row["status"] == status for row in selected) for status in ("ok", "timeout", "memory")}
-        errors = sum(row["status"] not in ("ok", "timeout", "memory", "skipped-after-resource") for row in selected)
+        errors = sum(
+            row["status"] not in (
+                "ok", "timeout", "memory", "unsupported", "invalid",
+                "skipped-after-resource",
+            )
+            for row in selected
+        )
         skipped = sum(row["status"] == "skipped-after-resource" for row in selected)
-        lines.append(f"| {branch}/{algorithm} | {counts['ok']} | {counts['timeout']} | {counts['memory']} | {errors} | {skipped} |")
+        unsupported = sum(row["status"] == "unsupported" for row in selected)
+        invalid = sum(row["status"] == "invalid" for row in selected)
+        lines.append(
+            f"| {branch}/{algorithm} | {counts['ok']} | {counts['timeout']} | "
+            f"{counts['memory']} | {unsupported} | {invalid} | {errors} | {skipped} |"
+        )
 
-    mismatches = [row for row in rows if row.get("matches_consensus") is False]
+    mismatches = [row for row in rows if row.get("comparison_status") == "mismatch"]
+    equivalence_mismatches = [
+        row for row in rows if row.get("equivalence_status") == "mismatch"
+    ]
+    comparable_equivalence_groups = {
+        str(row.get("comparison_group"))
+        for row in rows
+        if row.get("equivalence_status") in ("match", "mismatch")
+    }
     lines.extend(["", "## Correctness", ""])
     if mismatches:
         groups = {(row["case"], row["domain_size"]) for row in mismatches}
         lines.append(f"⚠ {len(groups)} workload/domain groups have differing successful results; inspect `results.csv`.")
     else:
         lines.append("All groups with two or more successful configurations returned the same result.")
+    if equivalence_mismatches:
+        groups = {str(row.get("comparison_group")) for row in equivalence_mismatches}
+        lines.append(
+            f"⚠ {len(groups)} alternative-encoding groups disagree after correction."
+        )
+    elif comparable_equivalence_groups:
+        lines.append(
+            f"All {len(comparable_equivalence_groups)} comparable alternative-encoding "
+            "groups agree after correction."
+        )
+    else:
+        lines.append(
+            "No alternative-encoding group had enough successful rows for comparison."
+        )
 
     lines.extend([
         "", "## Aggregate paired branch comparison", "",
@@ -732,23 +936,31 @@ def main() -> int:
     write_exclusions(exclusions, args.out / "excluded.csv")
     checkpoint_path = args.out / "results.csv"
     resume_rows = [] if args.no_resume else read_csv(checkpoint_path)
+    memory_bytes = int(args.memory_gib * 1024**3)
+    environments = {
+        "devel": (current_python, current_commit),
+        "modk": (baseline_python, baseline_commit),
+    }
+    run_id = benchmark_run_id(
+        workloads, environments, algorithms=ALGORITHMS,
+        timeout_s=args.timeout, memory_bytes=memory_bytes,
+        repetitions=args.repetitions,
+    )
     rows = execute(
         workloads,
-        {
-            "devel": (current_python, current_commit),
-            "modk": (baseline_python, baseline_commit),
-        },
+        environments,
         timeout_s=args.timeout,
-        memory_bytes=int(args.memory_gib * 1024**3),
+        memory_bytes=memory_bytes,
         repetitions=args.repetitions,
         input_dir=input_dir,
         checkpoint_path=checkpoint_path,
         resume_rows=resume_rows,
+        run_id=run_id,
     )
     write_csv(rows, args.out / "results.csv")
     write_summary(
         rows, exclusions, args.out / "summary.md", timeout_s=args.timeout,
-        memory_bytes=int(args.memory_gib * 1024**3),
+        memory_bytes=memory_bytes,
     )
     plot_metric(rows, args.out / "runtime.png", "solver_time_s", "solve time (s)")
     plot_metric(rows, args.out / "memory.png", "peak_rss_mib", "peak RSS (MiB)")
