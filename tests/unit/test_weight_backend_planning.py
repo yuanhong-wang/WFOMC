@@ -189,7 +189,7 @@ def test_cardinality_reduction_injects_internal_weight_symbols():
         for symbol, expression in branch.internal_weight_degree_limits
     )
     assert arithmetic.output_symbols == ()
-    assert arithmetic.backend is ArithmeticBackend.FMPQ_MPOLY
+    assert arithmetic.backend is ArithmeticBackend.FMPQ_SERIES
 
 
 def test_cardinality_can_explicitly_use_univariate_fmpq_poly():
@@ -211,6 +211,23 @@ def test_cardinality_can_explicitly_use_univariate_fmpq_poly():
     assert solve(problem, algo=AlgoName.STANDARD, options=options) == solve(
         problem,
         algo=AlgoName.STANDARD,
+    )
+
+
+@pytest.mark.parametrize(
+    "algo",
+    (AlgoName.FAST, AlgoName.INCREMENTAL3, AlgoName.BOUNDARY_PROFILE),
+)
+def test_auto_cardinality_series_matches_explicit_fmpq_mpoly(algo):
+    problem = parse_problem_file("models/cardinality_constraints_example.wfomcs")
+    mpoly_options = AlgoOptions(
+        weight_options=WeightOptions(exact_symbolic_backend="fmpq_mpoly")
+    )
+
+    assert solve(problem, algo=algo) == solve(
+        problem,
+        algo=algo,
+        options=mpoly_options,
     )
 
 

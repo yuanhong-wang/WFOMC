@@ -17,6 +17,7 @@ from enum import Enum
 from fractions import Fraction
 from typing import TYPE_CHECKING, Iterable, TypeAlias
 
+import flint
 from flint import (
     arb,
     arb_poly,
@@ -24,6 +25,7 @@ from flint import (
     fmpq_mpoly,
     fmpq_mpoly_ctx,
     fmpq_poly,
+    fmpq_series,
     fmpz,
 )
 
@@ -40,6 +42,7 @@ ArithmeticValue: TypeAlias = (
     | fmpq
     | arb
     | fmpq_poly
+    | fmpq_series
     | arb_poly
     | fmpq_mpoly
 )
@@ -56,6 +59,8 @@ class ArithmeticBackend(Enum):
     ARB = "arb"
     # Exact univariate polynomials with rational coefficients.
     FMPQ_POLY = "fmpq_poly"
+    # Exact univariate power series truncated at a concrete-domain precision.
+    FMPQ_SERIES = "fmpq_series"
     # Univariate polynomials with arbitrary-precision ball coefficients.
     ARB_POLY = "arb_poly"
     # Exact multivariate polynomials with rational coefficients.
@@ -76,6 +81,12 @@ def choose_arithmetic_backend(
     if options.precision == "exact":
         if symbol_count == 0:
             return ArithmeticBackend.FMPQ
+        if options.exact_symbolic_backend == "auto":
+            return (
+                ArithmeticBackend.FMPQ_POLY
+                if symbol_count == 1
+                else ArithmeticBackend.FMPQ_MPOLY
+            )
         if options.exact_symbolic_backend == "fmpq_poly":
             if symbol_count != 1:
                 raise ArithmeticBackendError(
@@ -115,6 +126,9 @@ class ArithmeticContext:
     symbolic_variables: tuple[str, ...] = ()
     output_symbols: tuple[str, ...] = ()
     degree_limits: tuple[tuple[str, int], ...] = ()
+    # Domain-free auto-selected univariate contexts may become bounded series
+    # only when a concrete domain supplies a finite degree limit.
+    prefer_truncated_series: bool = False
     _direct_fmpq: bool = field(init=False, repr=False, compare=False)
     _cached_zero: ArithmeticValue = field(init=False, repr=False, compare=False)
     _cached_one: ArithmeticValue = field(init=False, repr=False, compare=False)
@@ -125,6 +139,7 @@ class ArithmeticContext:
     _univariate_degree_limit: int | None = field(
         init=False, repr=False, compare=False
     )
+    _series_precision: int | None = field(init=False, repr=False, compare=False)
     _indexed_degree_limits: tuple[tuple[int, int], ...] = field(
         init=False, repr=False, compare=False
     )
@@ -162,6 +177,24 @@ class ArithmeticContext:
                 else None
             ),
         )
+        series_precision = None
+        if self.backend is ArithmeticBackend.FMPQ_SERIES:
+            if len(self.symbolic_variables) != 1:
+                raise ArithmeticBackendError(
+                    "fmpq_series arithmetic requires exactly one symbolic variable"
+                )
+            if self._univariate_degree_limit is None:
+                raise ArithmeticBackendError(
+                    "fmpq_series arithmetic requires a finite degree limit"
+                )
+            series_precision = self._univariate_degree_limit + 1
+            # FLINT caps series operations using its global context even when
+            # the operands were constructed with a larger explicit precision.
+            # Increasing the cap is monotone and lower-precision operands still
+            # retain their own domain-specific precision.
+            if flint.ctx.cap < series_precision:
+                flint.ctx.cap = series_precision
+        object.__setattr__(self, "_series_precision", series_precision)
 
         names = self.symbolic_variables or ("_w",)
         mpoly_context = None
@@ -218,8 +251,24 @@ class ArithmeticContext:
             return self._from_fraction(int(value.p), int(value.q))
         if isinstance(value, arb):
             return self._coerce_arb(value)
+        if isinstance(value, fmpq_series):
+            if self.backend is not ArithmeticBackend.FMPQ_SERIES:
+                raise ArithmeticBackendError(
+                    f"Cannot coerce fmpq_series into backend {self.backend!s}"
+                )
+            precision = self._require_series_precision()
+            if value.prec < precision:
+                raise ArithmeticBackendError(
+                    "Cannot increase the precision of an existing fmpq_series"
+                )
+            if value.prec == precision:
+                return value
+            return fmpq_series(value.coeffs()[:precision], prec=precision)
         if isinstance(value, fmpq_poly) and self.backend is ArithmeticBackend.FMPQ_POLY:
             return self.truncate(value)
+        if isinstance(value, fmpq_poly) and self.backend is ArithmeticBackend.FMPQ_SERIES:
+            precision = self._require_series_precision()
+            return fmpq_series(value.coeffs()[:precision], prec=precision)
         if isinstance(value, arb_poly) and self.backend is ArithmeticBackend.ARB_POLY:
             return value
         if (
@@ -231,7 +280,8 @@ class ArithmeticContext:
             )
         if (
             isinstance(value, fmpq_mpoly)
-            and self.backend is ArithmeticBackend.FMPQ_POLY
+            and self.backend
+            in {ArithmeticBackend.FMPQ_POLY, ArithmeticBackend.FMPQ_SERIES}
         ):
             if value.context().nvars() != 1:
                 raise ArithmeticBackendError(
@@ -240,7 +290,10 @@ class ArithmeticContext:
             coefficients = [fmpq(0)] * (max(value.degrees(), default=0) + 1)
             for monomial, coefficient in value.to_dict().items():
                 coefficients[monomial[0]] += coefficient
-            return self.truncate(fmpq_poly(coefficients))
+            polynomial = fmpq_poly(coefficients)
+            if self.backend is ArithmeticBackend.FMPQ_SERIES:
+                return self.coerce(polynomial)
+            return self.truncate(polynomial)
         raise ArithmeticBackendError(
             f"Cannot coerce {type(value).__name__!s} into backend {self.backend!s}"
         )
@@ -259,6 +312,8 @@ class ArithmeticContext:
             )
         if self.backend is ArithmeticBackend.FMPQ_POLY:
             return self.truncate(fmpq_poly([0, 1]))
+        if self.backend is ArithmeticBackend.FMPQ_SERIES:
+            return fmpq_series([0, 1], prec=self._require_series_precision())
         if self.backend is ArithmeticBackend.ARB_POLY:
             return arb_poly([0, 1])
         raise ArithmeticBackendError(
@@ -272,12 +327,30 @@ class ArithmeticContext:
         which matters in polynomial hot loops.
         """
 
+        if isinstance(value, fmpq_series):
+            return value.length() == 0
         return value == 0
 
     def is_one(self, value) -> bool:
         """Return whether *value* is the multiplicative identity."""
 
+        if isinstance(value, fmpq_series):
+            return value.length() == 1 and value[0] == 1
         return value == 1
+
+    def equal(self, left, right) -> bool:
+        """Compare backend values, including FLINT series with big-O terms."""
+
+        if isinstance(left, fmpq_series) or isinstance(right, fmpq_series):
+            if not isinstance(left, fmpq_series) or not isinstance(
+                right, fmpq_series
+            ):
+                return False
+            return left.prec == right.prec and (left - right).length() == 0
+        try:
+            return bool(left == right)
+        except (TypeError, ValueError):
+            return False
 
     def multiply(self, left, right):
         """Multiply two backend values with exact zero/one fast paths."""
@@ -360,6 +433,15 @@ class ArithmeticContext:
 
         if not self.degree_limits:
             return value
+        if isinstance(value, fmpq_series):
+            precision = self._require_series_precision()
+            if value.prec < precision:
+                raise ArithmeticBackendError(
+                    "Cannot increase the precision of an existing fmpq_series"
+                )
+            if value.prec == precision:
+                return value
+            return fmpq_series(value.coeffs()[:precision], prec=precision)
         if isinstance(value, fmpq_poly):
             limit = self._univariate_degree_limit
             if limit is None or value.degree() <= limit:
@@ -399,6 +481,10 @@ class ArithmeticContext:
         than inside the cardinality decoder.
         """
 
+        if isinstance(value, fmpq_series):
+            if not self.output_symbols and value.length() <= 1:
+                return value[0]
+            return value
         if isinstance(value, fmpq_poly):
             if not self.output_symbols and value.degree() <= 0:
                 return value[0]
@@ -422,6 +508,11 @@ class ArithmeticContext:
             return arb(numerator) / arb(denominator)
         if backend is ArithmeticBackend.FMPQ_POLY:
             return fmpq_poly([fmpq(numerator, denominator)])
+        if backend is ArithmeticBackend.FMPQ_SERIES:
+            return fmpq_series(
+                [fmpq(numerator, denominator)],
+                prec=self._require_series_precision(),
+            )
         if backend is ArithmeticBackend.ARB_POLY:
             return arb_poly([arb(numerator) / arb(denominator)])
         if backend is ArithmeticBackend.FMPQ_MPOLY:
@@ -461,6 +552,14 @@ class ArithmeticContext:
                 return self._cached_mpoly_context
         names = self.symbolic_variables or ("_w",)
         return ctx_factory.get(list(names), "lex")
+
+    def _require_series_precision(self) -> int:
+        precision = self._series_precision
+        if precision is None:
+            raise ArithmeticBackendError(
+                "fmpq_series arithmetic requires a concrete precision"
+            )
+        return precision
 
 
 __all__ = [

@@ -16,6 +16,7 @@ from flint import (
     fmpq_mpoly,
     fmpq_mpoly_ctx,
     fmpq_poly,
+    fmpq_series,
 )
 
 from wfomc.arithmetic import (
@@ -101,6 +102,9 @@ def compile_weight_mapping(
 
 def _compile_weight_value(value: object, context: _ArithmeticContext) -> object:
     backend = context.backend
+    if backend is _ArithmeticBackend.FMPQ_SERIES:
+        compiled = _to_fmpq_series(value, context)
+        return context.truncate(compiled)
     if backend is _ArithmeticBackend.FMPQ_POLY:
         compiled = _to_fmpq_poly(value, context)
         return context.truncate(compiled)
@@ -111,6 +115,11 @@ def _compile_weight_value(value: object, context: _ArithmeticContext) -> object:
         compiled = _to_fmpq_mpoly(value, context)
         return context.truncate(compiled)
     return context.coerce(value)
+
+
+def _to_fmpq_series(value: object, context: _ArithmeticContext) -> fmpq_series:
+    return context.coerce(value)
+
 
 def _to_fmpq_poly(value: object, context: _ArithmeticContext) -> fmpq_poly:
     if isinstance(value, fmpq_poly):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Canonical current-algorithm benchmark for cold and compile-once protocols."""
+"""Run the complete benchmark catalog with the current algorithms."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import csv
 import hashlib
 import json
 import math
+import os
 import platform
 import random
 import signal
@@ -24,36 +25,23 @@ from typing import Iterable, Mapping, Sequence
 import psutil
 
 from benchmarks.cases import BenchmarkCase, benchmark_case, benchmark_cases
-from benchmarks.cross_branch_performance import (
-    MODEL_DOMAIN_SIZES,
-    Workload,
-    _git_show,
-    _kill_process_group,
-    _rss_for_tree,
-    _tree_models,
-    _write_workload,
-    collect_catalog_workloads,
-    parse_worker_output,
-    resolve_commit,
-    rewrite_integer_domain,
-)
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ALGORITHMS = ("boundary-profile", "fastv2", "incremental3")
+ALGORITHMS = ("boundary-profile", "fast", "incremental3")
 RESULT_FIELDS = (
-    "suite", "protocol", "run_id",
+    "protocol", "run_id",
     "series",
-    "source_kind", "case",
+    "case",
     "family",
     "category",
     "variant",
     "domain_size",
-    "source_sha256", "series_sha256", "comparison_group", "correction_divisor",
+    "comparison_group", "correction_divisor",
     "commit",
     "algorithm",
     "status",
-    "compile_time_s", "compile_time_samples_s", "parse_time_s",
+    "compile_time_s", "compile_time_samples_s",
     "solver_time_s",
     "solver_time_min_s", "solver_time_max_s", "solver_time_samples_s",
     "series_total_s",
@@ -73,6 +61,41 @@ RESULT_FIELDS = (
 SENTINEL = "BENCH_RESULT_JSON="
 
 
+def parse_worker_output(stdout: str) -> dict[str, object]:
+    """Extract the structured payload emitted by a benchmark worker."""
+
+    for line in reversed(stdout.splitlines()):
+        if line.startswith(SENTINEL):
+            value = json.loads(line[len(SENTINEL) :])
+            if not isinstance(value, dict):
+                raise ValueError("worker payload is not an object")
+            return value
+    raise ValueError("worker output did not contain the result sentinel")
+
+
+def resolve_commit(ref: str = "HEAD") -> str:
+    return subprocess.check_output(
+        ("git", "rev-parse", ref), cwd=ROOT, text=True
+    ).strip()
+
+
+def _rss_for_tree(process: psutil.Process) -> int:
+    total = 0
+    for item in (process, *process.children(recursive=True)):
+        try:
+            total += item.memory_info().rss
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return total
+
+
+def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        process.kill()
+
+
 @dataclass(frozen=True)
 class CaseGroup:
     """Cases that share one domain-free :class:`wfomc.Problem`."""
@@ -82,17 +105,6 @@ class CaseGroup:
     category: str
     variant: str
     cases: tuple[BenchmarkCase, ...]
-
-
-@dataclass(frozen=True)
-class WorkloadGroup:
-    """Serialized workloads sharing one exact domain-free problem."""
-
-    series: str
-    family: str
-    category: str
-    variant: str
-    workloads: tuple[Workload, ...]
 
 
 def group_cases(cases: Iterable[BenchmarkCase]) -> tuple[CaseGroup, ...]:
@@ -121,51 +133,11 @@ def group_cases(cases: Iterable[BenchmarkCase]) -> tuple[CaseGroup, ...]:
     return tuple(sorted(result, key=lambda item: item.series))
 
 
-def group_workloads(workloads: Iterable[Workload]) -> tuple[WorkloadGroup, ...]:
-    """Group only inputs whose source differs by the integer domain declaration."""
-
-    grouped: dict[tuple[str, str, str, str, str], list[Workload]] = {}
-    for workload in workloads:
-        key = (
-            workload.source_kind,
-            workload.category,
-            workload.family,
-            workload.variant,
-            workload.series_sha256,
-        )
-        grouped.setdefault(key, []).append(workload)
-    result = []
-    for (_source_kind, category, family, variant, digest), selected in grouped.items():
-        metadata = (category, family, variant)
-        collisions = sum(key[1:4] == metadata for key in grouped)
-        suffix = "" if collisions == 1 else f"/{digest[:12]}"
-        display_family = family.removeprefix(f"{category}/")
-        series_name = (
-            f"{family}/{variant}{suffix}"
-            if category == "model"
-            else f"{category}/{display_family}/{variant}{suffix}"
-        )
-        result.append(
-            WorkloadGroup(
-                series=series_name,
-                family=family,
-                category=category,
-                variant=variant,
-                workloads=tuple(
-                    sorted(selected, key=lambda item: (item.domain_size, item.case))
-                ),
-            )
-        )
-    return tuple(sorted(result, key=lambda item: item.series))
-
-
 def build_manifest(
-    workloads: Iterable[Workload],
+    cases: Iterable[BenchmarkCase],
     *,
     protocol: str,
     algorithms: Sequence[str],
-    suite: str,
-    sources: str,
     commit: str,
     timeout_s: float,
     memory_bytes: int,
@@ -181,8 +153,6 @@ def build_manifest(
         "schema_version": 1,
         "protocol": protocol,
         "algorithms": list(algorithms),
-        "suite": suite,
-        "sources": sources,
         "commit": commit,
         "timeout_s": timeout_s,
         "memory_bytes": memory_bytes,
@@ -191,14 +161,15 @@ def build_manifest(
         "dirty_sha256": dirty_sha256,
         "lock_sha256": lock_sha256,
         "order_seed": order_seed,
-        "workloads": [
+        "cases": [
             {
-                "case": workload.case,
-                "source_sha256": workload.source_sha256,
-                "series_sha256": workload.series_sha256,
-                "domain_size": workload.domain_size,
+                "key": case.key,
+                "domain_size": case.domain_size,
+                "problem": hashlib.sha256(
+                    repr(case.build_problem().problem.cache_key_parts()).encode()
+                ).hexdigest(),
             }
-            for workload in sorted(workloads, key=lambda item: item.case)
+            for case in sorted(cases, key=lambda item: item.key)
         ],
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -272,39 +243,6 @@ def working_tree_sha256() -> str:
             digest.update(relative.encode())
             digest.update(path.read_bytes())
     return digest.hexdigest()
-
-
-def collect_current_model_workloads(
-    commit: str,
-    domain_sizes: Sequence[int] = MODEL_DOMAIN_SIZES,
-) -> tuple[list[Workload], list[dict[str, str]]]:
-    """Build the current commit's integer-domain model inventory."""
-
-    workloads: list[Workload] = []
-    exclusions: list[dict[str, str]] = []
-    for relative in sorted(_tree_models(commit)):
-        source = _git_show(commit, relative)
-        try:
-            rewritten = [rewrite_integer_domain(source, size) for size in domain_sizes]
-        except ValueError:
-            exclusions.append(
-                {"model": relative, "reason": "domain is fixed/named or ambiguous"}
-            )
-            continue
-        for size, concrete_source in zip(domain_sizes, rewritten):
-            workloads.append(
-                Workload(
-                    source_kind="model",
-                    case=f"{relative}/n{size}",
-                    family=relative,
-                    category="model",
-                    variant="default",
-                    domain_size=size,
-                    suffix=Path(relative).suffix,
-                    source=concrete_source,
-                )
-            )
-    return workloads, exclusions
 
 
 def paired_stats(
@@ -613,58 +551,12 @@ def _run_worker(
     )
 
 
-@dataclass(frozen=True)
-class _ParsedCase:
-    key: str
-    family: str
-    category: str
-    variant: str
-    domain_size: int
-
-
-def _run_file_worker(
-    paths: Sequence[str],
-    algorithm: str,
-    timeout_s: float,
-    repetitions: int,
-    protocol: str,
-) -> dict[str, object]:
-    from wfomc import parse_problem_file
-
-    parsed = []
-    parse_times = []
-    for path in paths:
-        started = time.perf_counter()
-        parsed.append(parse_problem_file(path))
-        parse_times.append(time.perf_counter() - started)
-    instances = tuple(parsed)
-    cases = tuple(
-        _ParsedCase(
-            key=str(index), family="worker", category="worker", variant="default",
-            domain_size=len(instance.domain),
-        )
-        for index, instance in enumerate(instances)
-    )
-    payload = _measure_instances(
-        cases, instances, algorithm, timeout_s, repetitions, protocol
-    )
-    for row, parse_time in zip(payload["rows"], parse_times):
-        row["parse_time_s"] = parse_time
-    return payload
-
-
 def _worker_main(args: argparse.Namespace) -> int:
     try:
-        if args.input:
-            payload = _run_file_worker(
-                args.input, args.algorithm, args.timeout, args.repetitions,
-                args.protocol,
-            )
-        else:
-            payload = _run_worker(
-                args.case, args.algorithm, args.timeout, args.repetitions,
-                args.protocol,
-            )
+        payload = _run_worker(
+            args.case, args.algorithm, args.timeout, args.repetitions,
+            args.protocol,
+        )
     except BaseException as error:
         status = _exception_status(error)
         payload = {
@@ -675,7 +567,7 @@ def _worker_main(args: argparse.Namespace) -> int:
                     "result": None,
                     "error": f"{type(error).__name__}: {error}",
                 }
-                for _ in (args.input or args.case)
+                for _ in args.case
             ],
             "compile_time_s": None,
             "compile_time_samples_s": [],
@@ -687,44 +579,27 @@ def _worker_main(args: argparse.Namespace) -> int:
     return 0 if "rows" in payload else 1
 
 
-def _row_for_workload(
-    workload: Workload, *, status: str, error: str
-) -> dict[str, object]:
-    return {
-        "case": workload.case,
-        "family": workload.family,
-        "category": workload.category,
-        "variant": workload.variant,
-        "domain_size": workload.domain_size,
-        "status": status,
-        "solver_time_s": None,
-        "result": None,
-        "error": error,
-    }
-
-
 def _fallback_rows(
-    group: WorkloadGroup, status: str, error: str
+    group: CaseGroup, status: str, error: str
 ) -> list[dict[str, object]]:
     return [
-        _row_for_workload(
-            workload,
+        _row_for_case(
+            case,
             status=status if index == 0 else "skipped-after-resource",
             error=error,
         )
-        for index, workload in enumerate(group.workloads)
+        for index, case in enumerate(group.cases)
     ]
 
 
 def run_series_process(
-    group: WorkloadGroup,
+    group: CaseGroup,
     algorithm: str,
     *,
     protocol: str,
     timeout_s: float,
     memory_bytes: int,
     repetitions: int,
-    input_dir: Path,
 ) -> tuple[dict[str, object], float, int]:
     command = [
         sys.executable,
@@ -739,8 +614,8 @@ def run_series_process(
         "--protocol",
         protocol,
     ]
-    for workload in group.workloads:
-        command.extend(("--input", str(_write_workload(workload, input_dir))))
+    for case in group.cases:
+        command.extend(("--case", case.key))
     started = time.perf_counter()
     process = subprocess.Popen(
         command,
@@ -752,7 +627,7 @@ def run_series_process(
     ps_process = psutil.Process(process.pid)
     peak_rss = 0
     forced_status: str | None = None
-    operation_count = len(group.workloads) + (1 if protocol == "compile-once" else 0)
+    operation_count = len(group.cases) + (1 if protocol == "compile-once" else 0)
     maximum_wall = timeout_s * repetitions * operation_count + 10
     while process.poll() is None:
         try:
@@ -886,7 +761,6 @@ def write_summary(
     rows: list[dict[str, object]],
     path: Path,
     *,
-    suite: str,
     commit: str,
     timeout_s: float,
     memory_gib: float,
@@ -898,7 +772,7 @@ def write_summary(
         f"# Current-algorithm {protocol} performance",
         "",
         f"- Commit: `{commit}`",
-        f"- Suite: `{suite}` ({len({row['case'] for row in rows})} workloads)",
+        f"- Cases: {len({row['case'] for row in rows})}",
         f"- Algorithms: {', '.join(f'`{item}`' for item in algorithms)}",
         f"- Protocol: `{protocol}`",
         f"- Repetitions: {repetitions}; median reported",
@@ -1084,14 +958,17 @@ def write_summary(
     path.write_text("\n".join(lines) + "\n")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", default="core-main")
+def parse_args(
+    argv: Sequence[str] | None = None,
+    *,
+    description: str | None = None,
+    default_out: Path | None = None,
+) -> argparse.Namespace:
+    """Parse the shared measurement options for a concrete benchmark catalog."""
+
+    parser = argparse.ArgumentParser(description=description or __doc__)
     parser.add_argument(
         "--protocol", choices=("cold", "compile-once"), default="compile-once"
-    )
-    parser.add_argument(
-        "--sources", choices=("all", "catalog", "models"), default="catalog"
     )
     parser.add_argument(
         "--algorithms", nargs="+", choices=ALGORITHMS, default=list(ALGORITHMS)
@@ -1099,74 +976,48 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--memory-gib", type=float, default=4.0)
     parser.add_argument("--repetitions", type=int, default=3)
-    parser.add_argument("--limit-workloads", type=int, default=None)
     parser.add_argument("--order-seed", type=int, default=0)
     parser.add_argument("--no-resume", action="store_true")
     parser.add_argument(
         "--out", type=Path,
-        default=ROOT / "benchmarks/results/current_algorithms",
+        default=default_out or ROOT / "benchmark-results",
     )
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--algorithm", choices=ALGORITHMS, help=argparse.SUPPRESS)
     parser.add_argument("--case", action="append", default=[], help=argparse.SUPPRESS)
-    parser.add_argument("--input", action="append", default=[], help=argparse.SUPPRESS)
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main() -> int:
-    args = parse_args()
+def run_catalog(
+    cases: Sequence[BenchmarkCase],
+    args: argparse.Namespace,
+) -> int:
+    """Measure one explicit case catalog using the common benchmark protocol."""
+
     if args.timeout <= 0 or args.memory_gib <= 0 or args.repetitions < 1:
         raise SystemExit("timeout, memory, and repetitions must be positive")
-    if args.worker:
-        if args.algorithm is None or not (args.case or args.input):
-            raise SystemExit("worker mode requires --algorithm and --case/--input")
-        return _worker_main(args)
 
     commit = resolve_commit("HEAD")
-    workloads: list[Workload] = []
-    exclusions: list[dict[str, str]] = []
-    if args.sources in ("all", "catalog"):
-        workloads.extend(collect_catalog_workloads(args.suite))
-    if args.sources in ("all", "models"):
-        model_workloads, exclusions = collect_current_model_workloads(commit)
-        workloads.extend(model_workloads)
-    if args.limit_workloads is not None:
-        workloads = workloads[: args.limit_workloads]
-    if not workloads:
-        raise SystemExit("selected benchmark inventory is empty")
     if args.protocol == "compile-once":
-        groups = group_workloads(workloads)
+        groups = group_cases(cases)
     else:
         groups = tuple(
-            WorkloadGroup(
-                series=(
-                    (
-                        f"{workload.family}/{workload.variant}"
-                        if workload.category == "model"
-                        else f"{workload.category}/"
-                        f"{workload.family.removeprefix(f'{workload.category}/')}/"
-                        f"{workload.variant}"
-                    )
-                    + f"/n{workload.domain_size}"
-                ),
-                family=workload.family,
-                category=workload.category,
-                variant=workload.variant,
-                workloads=(workload,),
+            CaseGroup(
+                series=f"{case.category}/{case.family}/{case.variant}/n{case.domain_size}",
+                family=case.family,
+                category=case.category,
+                variant=case.variant,
+                cases=(case,),
             )
-            for workload in workloads
+            for case in cases
         )
     args.out.mkdir(parents=True, exist_ok=True)
-    input_dir = args.out / ".inputs"
-    input_dir.mkdir(exist_ok=True)
     result_path = args.out / "results.csv"
     memory_bytes = int(args.memory_gib * 1024**3)
     manifest = build_manifest(
-        workloads,
+        cases,
         protocol=args.protocol,
         algorithms=tuple(args.algorithms),
-        suite=args.suite,
-        sources=args.sources,
         commit=commit,
         timeout_s=args.timeout,
         memory_bytes=memory_bytes,
@@ -1181,11 +1032,6 @@ def main() -> int:
     except ValueError as error:
         raise SystemExit(str(error)) from error
     write_manifest(manifest, args.out / "manifest.json")
-    if exclusions:
-        with (args.out / "excluded.csv").open("w", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=("model", "reason"))
-            writer.writeheader()
-            writer.writerows(exclusions)
 
     resume_by_key = {
         (str(row["case"]), str(row["algorithm"])): row for row in resume_rows
@@ -1197,8 +1043,8 @@ def main() -> int:
     total = len(tasks)
     for index, (group, algorithm) in enumerate(tasks, 1):
         previous = [
-            resume_by_key.get((workload.case, algorithm))
-            for workload in group.workloads
+            resume_by_key.get((case.key, algorithm))
+            for case in group.cases
         ]
         if all(row is not None for row in previous):
             rows.extend(dict(row) for row in previous if row is not None)
@@ -1211,26 +1057,21 @@ def main() -> int:
                 timeout_s=args.timeout,
                 memory_bytes=memory_bytes,
                 repetitions=args.repetitions,
-                input_dir=input_dir,
             )
-            for workload, measured in zip(group.workloads, payload["rows"]):
+            for case, measured in zip(group.cases, payload["rows"]):
                 rows.append(
                     {
-                        "suite": args.suite,
                         "protocol": args.protocol,
                         "run_id": manifest["run_id"],
                         "series": group.series,
                         **measured,
-                        "source_kind": workload.source_kind,
-                        "case": workload.case,
-                        "family": workload.family,
-                        "category": workload.category,
-                        "variant": workload.variant,
-                        "domain_size": workload.domain_size,
-                        "source_sha256": workload.source_sha256,
-                        "series_sha256": workload.series_sha256,
-                        "comparison_group": workload.comparison_group,
-                        "correction_divisor": workload.correction_divisor,
+                        "case": case.key,
+                        "family": case.family,
+                        "category": case.category,
+                        "variant": case.variant,
+                        "domain_size": case.domain_size,
+                        "comparison_group": case.comparison_group,
+                        "correction_divisor": case.correction_divisor,
                         "commit": commit,
                         "algorithm": algorithm,
                         "compile_time_s": payload.get("compile_time_s"),
@@ -1256,7 +1097,6 @@ def main() -> int:
     write_summary(
         rows,
         args.out / "summary.md",
-        suite=args.suite,
         commit=commit,
         timeout_s=args.timeout,
         memory_gib=args.memory_gib,
@@ -1266,6 +1106,15 @@ def main() -> int:
     )
     print(f"Wrote {len(rows)} rows to {args.out}")
     return 0
+
+
+def main() -> int:
+    args = parse_args()
+    if args.worker:
+        if args.algorithm is None or not args.case:
+            raise SystemExit("worker mode requires --algorithm and --case")
+        return _worker_main(args)
+    return run_catalog(benchmark_cases(), args)
 
 
 if __name__ == "__main__":

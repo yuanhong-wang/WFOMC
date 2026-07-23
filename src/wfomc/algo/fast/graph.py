@@ -131,16 +131,19 @@ class _OptimizedAnalysis(_GraphView):
             return [], [], []
         for left in range(len(self.cells)):
             for right in range(left + 1, len(self.cells)):
-                if (
-                    self.get_two_table_weight((self.cells[left], self.cells[right]))
-                    != self.arithmetic.one()
+                if not self.arithmetic.equal(
+                    self.get_two_table_weight((self.cells[left], self.cells[right])),
+                    self.arithmetic.one(),
                 ):
                     graph.add_edge(left, right)
 
         self_loops = {
             index
             for index, cell in enumerate(self.cells)
-            if self.get_two_table_weight((cell, cell)) != self.arithmetic.one()
+            if not self.arithmetic.equal(
+                self.get_two_table_weight((cell, cell)),
+                self.arithmetic.one(),
+            )
         }
         without_self_loops = set(graph.nodes) - self_loops
         i1 = (
@@ -160,11 +163,11 @@ class _OptimizedAnalysis(_GraphView):
         graph.add_nodes_from(range(len(self.cliques)))
         for left in range(len(self.cliques)):
             for right in range(left + 1, len(self.cliques)):
-                if (
+                if not self.arithmetic.equal(
                     self.get_two_table_weight(
                         (self.cliques[left][0], self.cliques[right][0])
-                    )
-                    != self.arithmetic.one()
+                    ),
+                    self.arithmetic.one(),
                 ):
                     graph.add_edge(left, right)
 
@@ -177,8 +180,10 @@ class _OptimizedAnalysis(_GraphView):
             clique_idx
             for clique_idx, clique in enumerate(self.cliques)
             if len(clique) > 1
-            or self.get_two_table_weight((clique[0], clique[0]))
-            != self.arithmetic.one()
+            or not self.arithmetic.equal(
+                self.get_two_table_weight((clique[0], clique[0])),
+                self.arithmetic.one(),
+            )
         }
         without_self_loops = set(graph.nodes) - self_loops
         independent = (
@@ -194,21 +199,31 @@ class _OptimizedAnalysis(_GraphView):
     def _matches(self, clique: list[Cell], other: Cell) -> bool:
         cell = clique[0]
         if not self.modified_cell_symmetry and (
-            self.get_cell_weight(cell) != self.get_cell_weight(other)
-            or self.get_two_table_weight((cell, cell))
-            != self.get_two_table_weight((other, other))
+            not self.arithmetic.equal(
+                self.get_cell_weight(cell),
+                self.get_cell_weight(other),
+            )
+            or not self.arithmetic.equal(
+                self.get_two_table_weight((cell, cell)),
+                self.get_two_table_weight((other, other)),
+            )
         ):
             return False
         if len(clique) > 1:
             relation = self.get_two_table_weight((cell, clique[1]))
             if any(
-                relation != self.get_two_table_weight((other, third))
+                not self.arithmetic.equal(
+                    relation,
+                    self.get_two_table_weight((other, third)),
+                )
                 for third in clique
             ):
                 return False
         return all(
-            self.get_two_table_weight((cell, third))
-            == self.get_two_table_weight((other, third))
+            self.arithmetic.equal(
+                self.get_two_table_weight((cell, third)),
+                self.get_two_table_weight((other, third)),
+            )
             for third in self.cells
             if other != third and third not in clique
         )
@@ -331,15 +346,18 @@ class _EvidenceOptimizedAnalysis:
         graph.add_nodes_from(range(len(self.cells)))
         for left in range(len(self.cells)):
             for right in range(left + 1, len(self.cells)):
-                if (
-                    self.get_two_table_weight((self.cells[left], self.cells[right]))
-                    != self.arithmetic.one()
+                if not self.arithmetic.equal(
+                    self.get_two_table_weight((self.cells[left], self.cells[right])),
+                    self.arithmetic.one(),
                 ):
                     graph.add_edge(left, right)
         self_loops = {
             idx
             for idx, cell in enumerate(self.cells)
-            if self.get_two_table_weight((cell, cell)) != self.arithmetic.one()
+            if not self.arithmetic.equal(
+                self.get_two_table_weight((cell, cell)),
+                self.arithmetic.one(),
+            )
         }
         candidates = set(graph.nodes) - self_loops
         i1 = (
@@ -359,13 +377,18 @@ class _EvidenceOptimizedAnalysis:
         if len(clique) > 1:
             relation = self.get_two_table_weight((cell, clique[1]))
             if any(
-                relation != self.get_two_table_weight((other, third))
+                not self.arithmetic.equal(
+                    relation,
+                    self.get_two_table_weight((other, third)),
+                )
                 for third in clique
             ):
                 return False
         return all(
-            self.get_two_table_weight((cell, third))
-            == self.get_two_table_weight((other, third))
+            self.arithmetic.equal(
+                self.get_two_table_weight((cell, third)),
+                self.get_two_table_weight((other, third)),
+            )
             for third in self.cells
             if other != third and third not in clique
         )

@@ -1,7 +1,8 @@
 """Canonical benchmark-case catalog.
 
-This module migrates only the problem families and domain-size grids from the
-historical benchmark scripts.  It deliberately contains no runner, baseline
+This module preserves the domain-size grids from the historical benchmark
+scripts while completing abbreviated relation kernels into the mathematical
+problems named by the catalog.  It deliberately contains no runner, baseline
 implementation, timing policy, or result-file handling.  Every case builds the
 current typed :class:`wfomc.ProblemInstance`, so benchmark runners can remain
 small and choose their own algorithms and measurement protocol.
@@ -10,10 +11,8 @@ Public interface:
 
 ``BenchmarkCase``
     Immutable case metadata plus ``build_problem()``.
-``benchmark_suite_names()``
-    Stable names accepted by ``benchmark_cases()``.
-``benchmark_cases(suite)``
-    Deterministic tuple of cases in a suite.
+``BENCHMARK_CASES`` / ``benchmark_cases()``
+    The complete deterministic catalog.  The catalog has no selectors.
 ``benchmark_case(key)``
     Look up one concrete case by its stable key.
 """
@@ -23,7 +22,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from functools import partial
-from math import comb
+from math import comb, factorial
 from typing import Callable, Mapping
 
 from wfomc import (
@@ -43,7 +42,8 @@ Weight = tuple[int, int]
 FormulaDefinition = tuple[str, Mapping[str, Weight]]
 FormulaFactory = Callable[[], FormulaDefinition]
 ProblemBuilder = Callable[[int], ProblemInstance]
-ConstraintSpec = tuple[str, Comparator, int]
+ConstraintLhs = str | tuple[str, ...]
+ConstraintSpec = tuple[ConstraintLhs, Comparator, int]
 UnaryBounds = tuple[tuple[Comparator, int], ...]
 
 
@@ -189,7 +189,7 @@ def _left_total_relation_definition() -> FormulaDefinition:
 
 def _loopless_digraph_without_isolates_definition() -> FormulaDefinition:
     return (
-        "~E(x,x) & (S(x) | E(x,y) | E(y,x))",
+        "~E(x,x) & (S(x) | ~E(x,y)) & (S(x) | ~E(y,x))",
         {"S": (1, -1), "E": (1, 1)},
     )
 
@@ -301,9 +301,12 @@ def _typed_problem(
 
     declared_by_name = {predicate.name: predicate for predicate in predicates(sentence)}
     unknown_weights = set(weights_by_name or ()) - declared_by_name.keys()
-    unknown_constraints = {
-        name for name, _comparator, _rhs in constraint_specs
-    } - declared_by_name.keys()
+    constraint_names = {
+        name
+        for lhs, _comparator, _rhs in constraint_specs
+        for name in ((lhs,) if isinstance(lhs, str) else lhs)
+    }
+    unknown_constraints = constraint_names - declared_by_name.keys()
     if unknown_weights or unknown_constraints:
         unknown = sorted(unknown_weights | unknown_constraints)
         raise ValueError(f"benchmark metadata refers to undeclared predicates: {unknown}")
@@ -319,11 +322,14 @@ def _typed_problem(
     constraints = CardinalityConstraints(
         tuple(
             LinearCardinalityConstraint(
-                terms=(CardinalityTerm(declared_by_name[name]),),
+                terms=tuple(
+                    CardinalityTerm(declared_by_name[name])
+                    for name in ((lhs,) if isinstance(lhs, str) else lhs)
+                ),
                 comparator=comparator,
                 rhs=rhs,
             )
-            for name, comparator, rhs in constraint_specs
+            for lhs, comparator, rhs in constraint_specs
         )
     )
     return ProblemInstance(
@@ -412,7 +418,7 @@ def _directed_three_in_three_out_regular_reduction_problem(
 
 
 def _parser_variables(matrix: str) -> str:
-    """Convert source-suite lowercase variables to the current parser syntax."""
+    """Convert historical lowercase variables to the current parser syntax."""
 
     matrix = re.sub(r"\bx\b", "X", matrix)
     return re.sub(r"\by\b", "Y", matrix)
@@ -500,129 +506,156 @@ _BI_TOTAL_RELATION = _bi_total_relation_definition
 _LOOPLESS_BI_TOTAL_RELATION = _loopless_bi_total_relation_definition
 _LEFT_TOTAL_RELATION = _left_total_relation_definition
 _LOOPLESS_DIGRAPH_WITHOUT_ISOLATES = _loopless_digraph_without_isolates_definition
-_TWO_NEIGHBOUR_SURJECTION_KERNEL = partial(
-    _k_neighbour_surjection_kernel_definition, 2
-)
 _THREE_NEIGHBOUR_SURJECTION_KERNEL = partial(
     _k_neighbour_surjection_kernel_definition, 3
-)
-_FOUR_NEIGHBOUR_SURJECTION_KERNEL = partial(
-    _k_neighbour_surjection_kernel_definition, 4
-)
-_PROPERLY_TWO_COLOURED_GRAPH = partial(_properly_k_coloured_graph_definition, 2)
-_PROPERLY_THREE_COLOURED_GRAPH = partial(
-    _properly_k_coloured_graph_definition, 3
 )
 _PROPERLY_FOUR_COLOURED_GRAPH = partial(
     _properly_k_coloured_graph_definition, 4
 )
-_PROPERLY_FIVE_COLOURED_GRAPH = partial(
-    _properly_k_coloured_graph_definition, 5
-)
-_TWO_EDGE_DISJOINT_EDGE_COVERS = partial(
-    _k_edge_disjoint_edge_covers_definition, 2
-)
-_THREE_EDGE_DISJOINT_EDGE_COVERS = partial(
-    _k_edge_disjoint_edge_covers_definition, 3
-)
-_FOUR_EDGE_DISJOINT_EDGE_COVERS = partial(
-    _k_edge_disjoint_edge_covers_definition, 4
-)
 
 
-def _core_case(family: str, domain_size: int, definition: FormulaFactory) -> BenchmarkCase:
-    return _case(
-        key=f"core/{family}/n{domain_size}",
-        family=family,
-        category="core",
-        domain_size=domain_size,
-        builder=partial(_matrix_problem, definition=definition),
+def _scaled_exact_constraint(
+    predicate: str,
+    multiplier: int = 1,
+) -> Callable[[int], tuple[ConstraintSpec, ...]]:
+    return lambda domain: (
+        (predicate, Comparator.EQ, multiplier * domain),
     )
 
 
-_CORE_SMOKE_ENTRIES: tuple[tuple[str, int, FormulaFactory], ...] = (
-    ("bi-total-relation", 8, _BI_TOTAL_RELATION),
-    ("loopless-bi-total-relation", 8, _LOOPLESS_BI_TOTAL_RELATION),
-    ("properly-2-coloured-graph", 8, _PROPERLY_TWO_COLOURED_GRAPH),
-    (
+def _matching_constraints(k: int) -> Callable[[int], tuple[ConstraintSpec, ...]]:
+    """Use one marker for the sum of all matching-layer cardinalities.
+
+    Weighted Skolemization cancels every interpretation in which an ``E_i``
+    layer is not an edge cover.  Every surviving symmetric edge cover has at
+    least ``domain`` ordered atoms, so a total of ``k * domain`` forces every
+    layer to contain exactly ``domain`` atoms and hence to be a perfect
+    matching.
+    """
+
+    predicates = tuple(f"E{i}" for i in range(1, k + 1))
+    return lambda domain: (
+        (predicates, Comparator.EQ, k * domain),
+    )
+
+
+def _core_case(
+    family: str,
+    domain_size: int,
+    definition: FormulaFactory,
+    *,
+    constraint_factory: Callable[[int], tuple[ConstraintSpec, ...]] | None = None,
+    variant: str = "default",
+    correction_divisor: int = 1,
+    comparison_group: str | None = None,
+) -> BenchmarkCase:
+    key = f"core/{family}/n{domain_size}"
+    if variant != "default":
+        key = f"core/{family}/{variant}/n{domain_size}"
+    return _case(
+        key=key,
+        family=family,
+        category="core",
+        domain_size=domain_size,
+        builder=partial(
+            _matrix_problem,
+            definition=definition,
+            constraint_factory=constraint_factory,
+        ),
+        variant=variant,
+        correction_divisor=correction_divisor,
+        comparison_group=comparison_group,
+    )
+
+
+def _core_permutation_case(domain_size: int) -> BenchmarkCase:
+    return _core_case(
+        "permutations",
+        domain_size,
+        _BI_TOTAL_RELATION,
+        constraint_factory=_scaled_exact_constraint("P"),
+        variant="fo2-cardinality-reduction",
+    )
+
+
+def _core_derangement_case(domain_size: int) -> BenchmarkCase:
+    return _core_case(
+        "derangements",
+        domain_size,
+        _LOOPLESS_BI_TOTAL_RELATION,
+        constraint_factory=_scaled_exact_constraint("F"),
+        variant="fo2-cardinality-reduction",
+    )
+
+
+def _core_endofunction_case(domain_size: int) -> BenchmarkCase:
+    return _core_case(
+        "endofunctions",
+        domain_size,
+        _LEFT_TOTAL_RELATION,
+        constraint_factory=_scaled_exact_constraint("F"),
+        variant="fo2-cardinality-reduction",
+    )
+
+
+def _core_regular_case(k: int, domain_size: int) -> BenchmarkCase:
+    comparison_group = (
+        f"undirected-3-regular/n{domain_size}"
+        if k == 3 and domain_size % 10 == 0
+        else None
+    )
+    return _core_case(
+        f"undirected-{k}-regular",
+        domain_size,
+        partial(_k_neighbour_surjection_kernel_definition, k),
+        constraint_factory=_scaled_exact_constraint("F", k),
+        variant="fo2-cardinality-reduction",
+        correction_divisor=factorial(k) ** domain_size,
+        comparison_group=comparison_group,
+    )
+
+
+def _core_matching_case(k: int, domain_size: int) -> BenchmarkCase:
+    return _core_case(
+        f"{k}-edge-disjoint-perfect-matchings",
+        domain_size,
+        partial(_k_edge_disjoint_edge_covers_definition, k),
+        constraint_factory=_matching_constraints(k),
+        variant="fo2-cardinality-reduction",
+    )
+
+
+def _core_coloured_case(k: int, domain_size: int) -> BenchmarkCase:
+    return _core_case(
+        f"properly-{k}-coloured-graph",
+        domain_size,
+        partial(_properly_k_coloured_graph_definition, k),
+    )
+
+
+def _core_loopless_no_isolates_case(domain_size: int) -> BenchmarkCase:
+    return _core_case(
         "loopless-digraph-without-isolates",
-        8,
+        domain_size,
         _LOOPLESS_DIGRAPH_WITHOUT_ISOLATES,
-    ),
-)
+    )
 
-_CORE_MAIN_ENTRIES: tuple[tuple[str, int, FormulaFactory], ...] = (
-    *(("bi-total-relation", n, _BI_TOTAL_RELATION) for n in (75, 100, 150)),
-    *(
-        ("3-neighbour-surjection-kernel", n, _THREE_NEIGHBOUR_SURJECTION_KERNEL)
-        for n in (30, 60, 100)
-    ),
-    *(
-        ("properly-4-coloured-graph", n, _PROPERLY_FOUR_COLOURED_GRAPH)
-        for n in (100, 200, 300)
-    ),
-    *(
-        ("loopless-bi-total-relation", n, _LOOPLESS_BI_TOTAL_RELATION)
-        for n in (100, 200, 300)
-    ),
-    *(
-        ("3-edge-disjoint-edge-covers", n, _THREE_EDGE_DISJOINT_EDGE_COVERS)
-        for n in (10, 20, 30, 40)
-    ),
-)
 
-_CORE_EXTRA_ENTRIES: tuple[tuple[str, int, FormulaFactory], ...] = (
-    *(("bi-total-relation", n, _BI_TOTAL_RELATION) for n in (50, 125, 200)),
-    *(
-        ("2-neighbour-surjection-kernel", n, _TWO_NEIGHBOUR_SURJECTION_KERNEL)
-        for n in (30, 60, 100)
-    ),
-    *(
-        ("4-neighbour-surjection-kernel", n, _FOUR_NEIGHBOUR_SURJECTION_KERNEL)
-        for n in (20, 40, 60)
-    ),
-    *(
-        ("properly-2-coloured-graph", n, _PROPERLY_TWO_COLOURED_GRAPH)
-        for n in (100, 200, 300)
-    ),
-    *(
-        ("properly-3-coloured-graph", n, _PROPERLY_THREE_COLOURED_GRAPH)
-        for n in (100, 200, 300)
-    ),
-    *(
-        ("properly-5-coloured-graph", n, _PROPERLY_FIVE_COLOURED_GRAPH)
-        for n in (75, 150, 225)
-    ),
-    *(
-        ("loopless-bi-total-relation", n, _LOOPLESS_BI_TOTAL_RELATION)
-        for n in (80, 150, 250)
-    ),
-    *(
-        ("left-total-relation", n, _LEFT_TOTAL_RELATION)
-        for n in (80, 160, 240)
-    ),
-    *(
-        (
-            "loopless-digraph-without-isolates",
-            n,
-            _LOOPLESS_DIGRAPH_WITHOUT_ISOLATES,
-        )
-        for n in (75, 150, 225)
-    ),
-    *(
-        ("2-edge-disjoint-edge-covers", n, _TWO_EDGE_DISJOINT_EDGE_COVERS)
-        for n in (20, 30, 40)
-    ),
-    *(
-        ("4-edge-disjoint-edge-covers", n, _FOUR_EDGE_DISJOINT_EDGE_COVERS)
-        for n in (8, 12, 16)
-    ),
-)
-
-_CORE_SMOKE_CASES = tuple(_core_case(*entry) for entry in _CORE_SMOKE_ENTRIES)
-_CORE_MAIN_CASES = tuple(_core_case(*entry) for entry in _CORE_MAIN_ENTRIES)
-_CORE_EXHAUSTIVE_CASES = tuple(
-    _core_case(*entry) for entry in (*_CORE_MAIN_ENTRIES, *_CORE_EXTRA_ENTRIES)
+_CORE_CASES = (
+    *(_core_permutation_case(n) for n in (8, 50, 75, 100, 125, 150, 200)),
+    *(_core_regular_case(2, n) for n in (30, 60, 100)),
+    *(_core_regular_case(3, n) for n in (30, 60, 100)),
+    *(_core_regular_case(4, n) for n in (20, 40, 60)),
+    *(_core_coloured_case(2, n) for n in (8, 100, 200, 300)),
+    *(_core_coloured_case(3, n) for n in (100, 200, 300)),
+    *(_core_coloured_case(4, n) for n in (100, 200, 300)),
+    *(_core_coloured_case(5, n) for n in (75, 150, 225)),
+    *(_core_derangement_case(n) for n in (8, 80, 100, 150, 200, 250, 300)),
+    *(_core_endofunction_case(n) for n in (80, 160, 240)),
+    *(_core_loopless_no_isolates_case(n) for n in (8, 75, 150, 225)),
+    *(_core_matching_case(2, n) for n in (20, 30, 40)),
+    *(_core_matching_case(3, n) for n in (10, 20, 30, 40)),
+    *(_core_matching_case(4, n) for n in (8, 12, 16)),
 )
 
 
@@ -824,42 +857,21 @@ def _unary_cases() -> tuple[BenchmarkCase, ...]:
 
 _UNARY_CASES = _unary_cases()
 
-_ALL_CASES = (
-    *_CORE_SMOKE_CASES,
-    *_CORE_EXHAUSTIVE_CASES,
+BENCHMARK_CASES = (
+    *_CORE_CASES,
     *_C2_CASES,
     *_CARDINALITY_CASES,
     *_UNARY_CASES,
 )
-_CASE_BY_KEY = {case.key: case for case in _ALL_CASES}
-if len(_CASE_BY_KEY) != len(_ALL_CASES):
+_CASE_BY_KEY = {case.key: case for case in BENCHMARK_CASES}
+if len(_CASE_BY_KEY) != len(BENCHMARK_CASES):
     raise RuntimeError("benchmark case keys must be unique")
 
-_SUITES: dict[str, tuple[BenchmarkCase, ...]] = {
-    "core-smoke": _CORE_SMOKE_CASES,
-    "core-main": _CORE_MAIN_CASES,
-    "core-exhaustive": _CORE_EXHAUSTIVE_CASES,
-    "c2": _C2_CASES,
-    "cardinality": _CARDINALITY_CASES,
-    "unary": _UNARY_CASES,
-    "all": _ALL_CASES,
-}
 
+def benchmark_cases() -> tuple[BenchmarkCase, ...]:
+    """Return the complete concrete catalog without rebuilding it."""
 
-def benchmark_suite_names() -> tuple[str, ...]:
-    """Return suite names in stable display order."""
-
-    return tuple(_SUITES)
-
-
-def benchmark_cases(suite: str = "all") -> tuple[BenchmarkCase, ...]:
-    """Return the concrete cases in ``suite`` without rebuilding the catalog."""
-
-    try:
-        return _SUITES[suite]
-    except KeyError as error:
-        choices = ", ".join(_SUITES)
-        raise ValueError(f"unknown benchmark suite {suite!r}; choose one of: {choices}") from error
+    return BENCHMARK_CASES
 
 
 def benchmark_case(key: str) -> BenchmarkCase:
@@ -872,8 +884,8 @@ def benchmark_case(key: str) -> BenchmarkCase:
 
 
 __all__ = [
+    "BENCHMARK_CASES",
     "BenchmarkCase",
     "benchmark_case",
     "benchmark_cases",
-    "benchmark_suite_names",
 ]

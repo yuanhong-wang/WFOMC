@@ -143,7 +143,7 @@ def test_binary_upper_cardinality_constraint_truncates_pair_weights():
     )
 
 
-def test_joint_upper_cardinality_constraint_uses_truncated_mpoly_backend():
+def test_joint_upper_cardinality_constraint_uses_one_linear_form():
     fol = FOLContext()
     variable = fol.variable("X")
     first = fol.predicate("P", 1)

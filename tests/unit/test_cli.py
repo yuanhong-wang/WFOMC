@@ -247,6 +247,10 @@ def test_cli_accepts_exact_symbolic_backend_override():
     assert args.exact_symbolic_backend == "fmpq_poly"
 
 
+def test_cli_defaults_to_automatic_exact_symbolic_backend():
+    assert build_parser().parse_args([]).exact_symbolic_backend == "auto"
+
+
 def test_cli_supports_repeatable_verbose_flag():
     parser = build_parser()
 

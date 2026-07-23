@@ -63,8 +63,8 @@ class WeightOptions:
     precision: Literal["exact", "round"] = "exact"
     # Scalar/polynomial backend used when precision is rounded.
     rounded_backend: Literal["float", "arb"] = "arb"
-    # Polynomial backend used for exact symbolic weights and marker variables.
-    exact_symbolic_backend: Literal["fmpq_mpoly", "fmpq_poly"] = "fmpq_mpoly"
+    # Policy/backend used for exact symbolic weights and marker variables.
+    exact_symbolic_backend: Literal["auto", "fmpq_mpoly", "fmpq_poly"] = "auto"
 
     def __post_init__(self) -> None:
         if self.precision not in {"exact", "round"}:
@@ -75,10 +75,14 @@ class WeightOptions:
             raise ValueError(
                 "WeightOptions.rounded_backend must be either 'float' or 'arb'"
             )
-        if self.exact_symbolic_backend not in {"fmpq_mpoly", "fmpq_poly"}:
+        if self.exact_symbolic_backend not in {
+            "auto",
+            "fmpq_mpoly",
+            "fmpq_poly",
+        }:
             raise ValueError(
-                "WeightOptions.exact_symbolic_backend must be either "
-                "'fmpq_mpoly' or 'fmpq_poly'"
+                "WeightOptions.exact_symbolic_backend must be 'auto', "
+                "'fmpq_mpoly', or 'fmpq_poly'"
             )
 
 

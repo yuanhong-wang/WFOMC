@@ -10,7 +10,7 @@ not exist) is rejected at planning time rather than silently falling back to
 from __future__ import annotations
 
 import pytest
-from flint import arb, fmpq, fmpq_mpoly_ctx, fmpq_poly
+from flint import arb, fmpq, fmpq_mpoly_ctx, fmpq_poly, fmpq_series
 
 from wfomc.arithmetic import (
     ArithmeticBackend,
@@ -170,6 +170,36 @@ def test_fmpq_poly_operations_truncate_to_declared_degree_limit():
 
     # Non-scalar backends must retain the regular multiply/add truncation path.
     assert ctx.add_product(ctx.one(), marker**2, marker) == ctx.one()
+
+
+def test_fmpq_series_operations_are_truncated_during_arithmetic():
+    ctx = ArithmeticContext(
+        ArithmeticBackend.FMPQ_SERIES,
+        ("marker",),
+        degree_limits=(("marker", 2),),
+    )
+    marker = ctx.symbol("marker")
+
+    value = ctx.power(ctx.add(ctx.one(), marker), 10)
+
+    assert isinstance(value, fmpq_series)
+    assert value.prec == 3
+    assert value.coeffs() == [1, 10, 45]
+    assert ctx.is_zero(ctx.zero())
+    assert ctx.is_one(ctx.one())
+    assert ctx.equal(value, fmpq_series([1, 10, 45], prec=3))
+    assert ctx.add_product(ctx.one(), marker**2, marker).coeffs() == [1]
+
+
+def test_fmpq_series_requires_one_bounded_symbol():
+    with pytest.raises(ArithmeticBackendError, match="exactly one"):
+        ArithmeticContext(
+            ArithmeticBackend.FMPQ_SERIES,
+            ("x", "y"),
+            degree_limits=(("x", 2),),
+        )
+    with pytest.raises(ArithmeticBackendError, match="finite degree limit"):
+        ArithmeticContext(ArithmeticBackend.FMPQ_SERIES, ("x",))
 
 
 def test_bounded_add_and_add_product_avoid_redundant_truncation(monkeypatch):

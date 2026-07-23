@@ -143,4 +143,4 @@ exp/
 .serena/
 .claude/
 .DS_Store
-benchmarks/results/**/.inputs/
+/benchmark-results/

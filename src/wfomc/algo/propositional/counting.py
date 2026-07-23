@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Optional, Union
 
-from flint import fmpq_mpoly, fmpq_mpoly_ctx, fmpq_poly
+from flint import fmpq_mpoly, fmpq_mpoly_ctx, fmpq_poly, fmpq_series
 
 from wfomc.arithmetic import ArithmeticContext, ArithmeticValue
 from wfomc.fol.grounding import (
@@ -47,7 +47,7 @@ def _align_ganak_weights(
         w
         for pos, neg in weights.values()
         for w in (pos, neg)
-        if isinstance(w, (fmpq_poly, fmpq_mpoly))
+        if isinstance(w, (fmpq_poly, fmpq_series, fmpq_mpoly))
     ]
     if not poly_weights:
         return weights, False, 0, None
@@ -62,7 +62,7 @@ def _align_ganak_weights(
         | {
             name
             for polynomial in poly_weights
-            if isinstance(polynomial, fmpq_poly)
+            if isinstance(polynomial, (fmpq_poly, fmpq_series))
             for name in arithmetic.symbolic_variables
         }
     )
@@ -71,10 +71,10 @@ def _align_ganak_weights(
     def align(value: ArithmeticValue) -> ArithmeticValue:
         if isinstance(value, fmpq_mpoly):
             return value.project_to_context(aligned_context)
-        if isinstance(value, fmpq_poly):
+        if isinstance(value, (fmpq_poly, fmpq_series)):
             if aligned_context.nvars() != 1:
                 raise ValueError(
-                    "fmpq_poly Ganak weights require one symbolic variable"
+                    "univariate Ganak weights require one symbolic variable"
                 )
             return aligned_context.from_dict(
                 {
