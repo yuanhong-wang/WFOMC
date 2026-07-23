@@ -8,6 +8,7 @@ import logging
 
 from wfomc.algo.core import AlgoOptions
 from wfomc.arithmetic import (
+    ArithmeticBackend,
     ArithmeticContext,
     choose_arithmetic_backend,
 )
@@ -113,6 +114,10 @@ def compile_reduced_branch(
         backend=backend,
         symbolic_variables=solver_symbols,
         output_symbols=output_symbols,
+        prefer_truncated_series=(
+            backend is ArithmeticBackend.FMPQ_POLY
+            and options.weight_options.exact_symbolic_backend == "auto"
+        ),
     )
     weights = compile_weight_mapping(dict(problem.weights), arithmetic)
     for step in problem.decoder_spec.steps:
@@ -155,11 +160,21 @@ def instantiate_reduced_branch(
         value = expression.evaluate(domain.size)
         if value.denominator == 1 and value >= 0:
             limits.append((symbol, value.numerator))
+    backend = compiled.arithmetic.backend
+    if (
+        compiled.arithmetic.prefer_truncated_series
+        and backend is ArithmeticBackend.FMPQ_POLY
+        and len(compiled.arithmetic.symbolic_variables) == 1
+        and compiled.arithmetic.symbolic_variables[0]
+        in {symbol for symbol, _limit in limits}
+    ):
+        backend = ArithmeticBackend.FMPQ_SERIES
     arithmetic = ArithmeticContext(
-        backend=compiled.arithmetic.backend,
+        backend=backend,
         symbolic_variables=compiled.arithmetic.symbolic_variables,
         output_symbols=compiled.arithmetic.output_symbols,
         degree_limits=tuple(limits),
+        prefer_truncated_series=compiled.arithmetic.prefer_truncated_series,
     )
     weights = compile_weight_mapping(dict(compiled.weights), arithmetic)
     profile = (

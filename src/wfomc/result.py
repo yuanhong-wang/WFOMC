@@ -6,7 +6,7 @@ from collections import defaultdict
 from fractions import Fraction
 from typing import Generator, Iterable
 
-from flint import arb, arb_poly, fmpq, fmpq_mpoly, fmpq_poly
+from flint import arb, arb_poly, fmpq, fmpq_mpoly, fmpq_poly, fmpq_series
 
 
 class WFOMCResult:
@@ -36,16 +36,23 @@ class WFOMCResult:
         return self._value
 
     def is_zero(self) -> bool:
+        if isinstance(self._value, fmpq_series):
+            return self._value.length() == 0
         return self._value == 0
 
     def is_polynomial(self) -> bool:
-        return isinstance(self._value, (fmpq_mpoly, fmpq_poly, arb_poly))
+        return isinstance(
+            self._value,
+            (fmpq_mpoly, fmpq_poly, fmpq_series, arb_poly),
+        )
 
     def is_constant(self) -> bool:
         if isinstance(self._value, (int, float, fmpq, arb)):
             return True
         if isinstance(self._value, fmpq_mpoly):
             return self._value.is_constant()
+        if isinstance(self._value, fmpq_series):
+            return self._value.length() <= 1
         if isinstance(self._value, (fmpq_poly, arb_poly)):
             return self._value.degree() <= 0
         return False
@@ -69,6 +76,9 @@ class WFOMCResult:
         if isinstance(self._value, fmpq_poly) and self._value.degree() <= 0:
             coeff = self._value[0]
             return Fraction(int(coeff.p), int(coeff.q))
+        if isinstance(self._value, fmpq_series) and self._value.length() <= 1:
+            coeff = self._value[0]
+            return Fraction(int(coeff.p), int(coeff.q))
         if isinstance(self._value, arb_poly) and self._value.degree() <= 0:
             return float(self._value[0])
         return None
@@ -76,7 +86,7 @@ class WFOMCResult:
     def variable_names(self) -> tuple[str, ...]:
         if isinstance(self._value, fmpq_mpoly):
             return tuple(self._value.context().names())
-        if isinstance(self._value, (fmpq_poly, arb_poly)):
+        if isinstance(self._value, (fmpq_poly, fmpq_series, arb_poly)):
             return self._variable_names or ("x",)
         return self._variable_names
 
@@ -102,7 +112,7 @@ class WFOMCResult:
             yield (0,) * len(variable_names), value
             return
 
-        if isinstance(self._value, (fmpq_poly, arb_poly)):
+        if isinstance(self._value, (fmpq_poly, fmpq_series, arb_poly)):
             polynomial_names = self.variable_names()
             missing = [name for name in variable_names if name not in polynomial_names]
             if missing:
@@ -158,6 +168,11 @@ class WFOMCResult:
         if isinstance(other, Fraction):
             value = self.constant_value()
             return value == other
+        if isinstance(self._value, fmpq_series) and isinstance(other, fmpq_series):
+            return (
+                self._value.prec == other.prec
+                and (self._value - other).length() == 0
+            )
         return self._value == other
 
     def __int__(self) -> int:

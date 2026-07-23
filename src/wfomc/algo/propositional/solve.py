@@ -19,11 +19,12 @@ def solve(
     if algo_input.arithmetic.backend not in {
         ArithmeticBackend.FMPQ,
         ArithmeticBackend.FMPQ_POLY,
+        ArithmeticBackend.FMPQ_SERIES,
         ArithmeticBackend.FMPQ_MPOLY,
     }:
         raise ArithmeticBackendError(
             "propositional Ganak execution currently supports only exact "
-            "fmpq/fmpq_poly/fmpq_mpoly arithmetic"
+            "fmpq/fmpq_poly/fmpq_series/fmpq_mpoly arithmetic"
         )
 
     ganak_path = context.ganak_path if context is not None else None

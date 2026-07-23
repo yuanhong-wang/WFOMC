@@ -16,6 +16,7 @@ from wfomc.algo.incremental.input import OrderedCellGraphInput
 from wfomc.algo.propositional.input import GroundCNFInput
 from wfomc.algo.standard.input import StandardInput
 from wfomc.algo.core import GroundingInputTemplate, ReducedInputTemplate
+from wfomc.arithmetic import ArithmeticBackend
 from wfomc.engine import (
     analyze_problem,
     compile_problem,
@@ -136,6 +137,38 @@ def test_boundary_profile_reuses_one_tree_across_domains():
     assert small.algo_input.components[0].w_tables != (
         large.algo_input.components[0].w_tables
     )
+
+
+def test_boundary_profile_reuses_tree_across_domain_specific_series_precisions():
+    instance = parse_problem_file(
+        "models/regular_graphs/3-regular-2-colored-graph.wfomcs"
+    )
+    runtime = RuntimeContext()
+    compiled = compile_problem(
+        instance.problem,
+        algo=AlgoName.BOUNDARY_PROFILE,
+        runtime=runtime,
+    )
+    compiled_arithmetic = compiled.branches[0].arithmetic
+
+    assert compiled_arithmetic.backend is ArithmeticBackend.FMPQ_POLY
+    assert compiled_arithmetic.degree_limits == ()
+    assert compiled_arithmetic.prefer_truncated_series
+
+    large = instantiate_problem(compiled, Domain.of_size(6), runtime=runtime)
+    template = next(iter(runtime.cache.algo_input_templates.values()))
+    tree = template.components[0].tree
+    small = instantiate_problem(compiled, Domain.of_size(4), runtime=runtime)
+
+    small_arithmetic = small.algo_input.arithmetic
+    large_arithmetic = large.algo_input.arithmetic
+    assert small_arithmetic.backend is ArithmeticBackend.FMPQ_SERIES
+    assert large_arithmetic.backend is ArithmeticBackend.FMPQ_SERIES
+    assert small_arithmetic.one().prec == 13
+    assert large_arithmetic.one().prec == 19
+    assert template.components[0].tree is tree
+    assert small.algo_input.components[0].plan.tree is tree
+    assert large.algo_input.components[0].plan.tree is tree
 
 
 def test_boundary_profile_reference_size_is_part_of_compilation_key():

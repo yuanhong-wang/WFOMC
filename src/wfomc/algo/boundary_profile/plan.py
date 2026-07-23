@@ -13,12 +13,11 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 from itertools import combinations
-from typing import TYPE_CHECKING, Iterable, Protocol, Sequence
+from typing import Iterable, Protocol, Sequence
+
+from flint import fmpq_series
 
 from wfomc.arithmetic import ArithmeticValue
-
-if TYPE_CHECKING:
-    from .input import BoundaryProfileComponent
 
 
 class BPNodeKind(Enum):
@@ -969,6 +968,12 @@ def _bit_count(mask: int) -> int:
 
 
 def _value_equal(left: object, right: object) -> bool:
+    if isinstance(left, fmpq_series) or isinstance(right, fmpq_series):
+        if not isinstance(left, fmpq_series) or not isinstance(
+            right, fmpq_series
+        ):
+            return False
+        return left.prec == right.prec and (left - right).length() == 0
     try:
         return bool(left == right)
     except (TypeError, ValueError):

@@ -2,35 +2,38 @@ from __future__ import annotations
 
 import pytest
 
-import benchmarks.domain_series_performance as benchmark
-from benchmarks.cases import benchmark_cases
-from benchmarks.cross_branch_performance import Workload
-from benchmarks.domain_series_performance import (
+from benchmarks.cases import benchmark_case
+from benchmarks.run import (
+    ALGORITHMS,
     _run_worker,
     build_manifest,
-    collect_current_model_workloads,
     group_cases,
-    group_workloads,
     mark_correctness,
     paired_stats,
+    parse_args,
     prepare_resume,
     write_manifest,
 )
 
 
-def test_group_cases_reuses_one_problem_per_core_main_series() -> None:
-    groups = group_cases(benchmark_cases("core-main"))
+def test_runner_uses_the_three_paper_algorithms() -> None:
+    assert ALGORITHMS == ("boundary-profile", "fast", "incremental3")
 
-    assert {
-        (group.family, tuple(case.domain_size for case in group.cases))
-        for group in groups
-    } == {
-        ("bi-total-relation", (75, 100, 150)),
-        ("3-neighbour-surjection-kernel", (30, 60, 100)),
-        ("properly-4-coloured-graph", (100, 200, 300)),
-        ("loopless-bi-total-relation", (100, 200, 300)),
-        ("3-edge-disjoint-edge-covers", (10, 20, 30, 40)),
-    }
+
+def test_group_cases_preserves_the_selected_inventory() -> None:
+    cases = tuple(
+        benchmark_case(key)
+        for key in (
+            "core/properly-4-coloured-graph/n100",
+            "core/properly-4-coloured-graph/n200",
+            "core/permutations/fo2-cardinality-reduction/n75",
+        )
+    )
+    groups = group_cases(cases)
+
+    grouped_keys = [case.key for group in groups for case in group.cases]
+    assert sorted(grouped_keys) == sorted(case.key for case in cases)
+    assert len(grouped_keys) == len(set(grouped_keys))
 
 
 def test_paired_stats_reports_comparator_over_boundary_profile() -> None:
@@ -43,16 +46,16 @@ def test_paired_stats_reports_comparator_over_boundary_profile() -> None:
         }
         for case, algorithm, seconds in (
             ("a", "boundary-profile", 1.0),
-            ("a", "fastv2", 4.0),
+            ("a", "fast", 4.0),
             ("b", "boundary-profile", 2.0),
-            ("b", "fastv2", 1.0),
+            ("b", "fast", 1.0),
             ("c", "boundary-profile", 1.0),
-            ("c", "fastv2", None),
+            ("c", "fast", None),
         )
     ]
     rows[-1]["status"] = "timeout"
 
-    assert paired_stats(rows, "fastv2") == {
+    assert paired_stats(rows, "fast") == {
         "pairs": 2,
         "geomean": pytest.approx(2**0.5),
         "median": 2.25,
@@ -62,7 +65,10 @@ def test_paired_stats_reports_comparator_over_boundary_profile() -> None:
 
 def test_worker_reuses_boundary_profile_template_across_domains() -> None:
     payload = _run_worker(
-        ("core/bi-total-relation/n75", "core/bi-total-relation/n100"),
+        (
+            "core/properly-4-coloured-graph/n100",
+            "core/properly-4-coloured-graph/n200",
+        ),
         "boundary-profile",
         timeout_s=30,
         repetitions=1,
@@ -75,7 +81,7 @@ def test_worker_reuses_boundary_profile_template_across_domains() -> None:
 
 def test_cold_worker_does_not_reuse_runtime_between_repetitions() -> None:
     payload = _run_worker(
-        ("core/bi-total-relation/n75",),
+        ("core/permutations/fo2-cardinality-reduction/n75",),
         "boundary-profile",
         timeout_s=30,
         repetitions=2,
@@ -87,81 +93,46 @@ def test_cold_worker_does_not_reuse_runtime_between_repetitions() -> None:
     assert payload["rows"][0]["is_warm_domain"] is False
 
 
-def test_group_workloads_splits_domain_dependent_problem_changes() -> None:
-    stable = [
-        Workload(
-            "model", f"stable/n{n}", "stable", "model", "default", n,
-            ".wfomcs", f"P(X)\nD = {n}\n|P| = 1\n",
-        )
-        for n in (2, 4)
-    ]
-    changing = [
-        Workload(
-            "model", f"changing/n{n}", "changing", "model", "default", n,
-            ".wfomcs", f"Q(X)\nD = {n}\n|Q| = {n // 2}\n",
-        )
-        for n in (2, 4)
-    ]
-
-    groups = group_workloads((*stable, *changing))
-
-    assert sorted(len(group.workloads) for group in groups) == [1, 1, 2]
-
-
-def test_current_model_inventory_reads_selected_commit(monkeypatch) -> None:
-    monkeypatch.setattr(
-        benchmark, "_tree_models", lambda commit: {"models/demo.wfomcs"}
-    )
-    calls = []
-
-    def fake_show(commit, relative):
-        calls.append((commit, relative))
-        return "P(X)\nD = 99\n"
-
-    monkeypatch.setattr(benchmark, "_git_show", fake_show)
-
-    workloads, exclusions = collect_current_model_workloads("abc", (2, 4))
-
-    assert not exclusions
-    assert [workload.source for workload in workloads] == [
-        "P(X)\nD = 2\n", "P(X)\nD = 4\n"
-    ]
-    assert calls == [("abc", "models/demo.wfomcs")]
-
-
 def test_manifest_run_id_is_deterministic_and_covers_measurement_options() -> None:
-    workload = Workload(
-        "model", "demo/n2", "demo", "model", "default", 2,
-        ".wfomcs", "P(X)\nD = 2\n",
-    )
+    case = benchmark_case("core/properly-2-coloured-graph/n8")
     first = build_manifest(
-        [workload], protocol="cold", algorithms=("fastv2",), suite="all",
-        sources="models", commit="abc", timeout_s=30, memory_bytes=1024,
+        [case], protocol="cold", algorithms=("fast",), commit="abc",
+        timeout_s=30, memory_bytes=1024,
         repetitions=3, environment={"python": "3.11"}, dirty_sha256="clean",
         lock_sha256="lock",
     )
     same = build_manifest(
-        [workload], protocol="cold", algorithms=("fastv2",), suite="all",
-        sources="models", commit="abc", timeout_s=30, memory_bytes=1024,
+        [case], protocol="cold", algorithms=("fast",), commit="abc",
+        timeout_s=30, memory_bytes=1024,
         repetitions=3, environment={"python": "3.11"}, dirty_sha256="clean",
         lock_sha256="lock",
     )
     changed = build_manifest(
-        [workload], protocol="compile-once", algorithms=("fastv2",), suite="all",
-        sources="models", commit="abc", timeout_s=30, memory_bytes=1024,
+        [case], protocol="compile-once", algorithms=("fast",), commit="abc",
+        timeout_s=30, memory_bytes=1024,
         repetitions=3, environment={"python": "3.11"}, dirty_sha256="clean",
         lock_sha256="lock",
     )
     changed_order = build_manifest(
-        [workload], protocol="cold", algorithms=("fastv2",), suite="all",
-        sources="models", commit="abc", timeout_s=30, memory_bytes=1024,
+        [case], protocol="cold", algorithms=("fast",), commit="abc",
+        timeout_s=30, memory_bytes=1024,
         repetitions=3, environment={"python": "3.11"}, dirty_sha256="clean",
         lock_sha256="lock", order_seed=1,
     )
 
     assert first == same
+    assert "suite" not in first
+    assert "sources" not in first
     assert first["run_id"] != changed["run_id"]
     assert first["run_id"] != changed_order["run_id"]
+
+
+def test_cli_has_no_inventory_selectors() -> None:
+    args = parse_args([])
+
+    assert not hasattr(args, "suite")
+    assert not hasattr(args, "sources")
+    assert not hasattr(args, "limit_workloads")
 
 
 def test_resume_refuses_missing_or_mismatched_manifest(tmp_path) -> None:
@@ -191,7 +162,7 @@ def test_correctness_requires_overlap_and_normalizes_comparison_groups() -> None
             "result": "9", "comparison_group": "", "correction_divisor": 1,
         },
         {
-            "case": "same", "algorithm": "fastv2", "status": "ok",
+            "case": "same", "algorithm": "fast", "status": "ok",
             "result": "9", "comparison_group": "", "correction_divisor": 1,
         },
         {

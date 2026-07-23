@@ -83,10 +83,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     common.add_argument(
         "--exact-symbolic-backend",
-        choices=("fmpq_mpoly", "fmpq_poly"),
-        default="fmpq_mpoly",
+        choices=("auto", "fmpq_mpoly", "fmpq_poly"),
+        default="auto",
         help=(
-            "Exact symbolic arithmetic backend. fmpq_mpoly is the default; "
+            "Exact symbolic arithmetic backend. auto selects scalar, "
+            "univariate, or multivariate arithmetic from the symbol count; "
             "fmpq_poly requires exactly one symbolic variable."
         ),
     )
@@ -133,7 +134,7 @@ def run(
     existential_strategy: ExistentialStrategy | str | None = None,
     linear_order_encoding: LinearOrderEncoding | str | None = None,
     ganak_path: str | None = None,
-    exact_symbolic_backend: str = "fmpq_mpoly",
+    exact_symbolic_backend: str = "auto",
     bp_tree_reference_domain_size: int | None = None,
 ) -> CliResult:
     selected_algo = algo if isinstance(algo, AlgoName) else AlgoName(algo)

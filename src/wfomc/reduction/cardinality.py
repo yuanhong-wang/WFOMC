@@ -140,11 +140,11 @@ def decode_cardinality_result(
     *,
     marker_encoding: CardinalityMarkerEncoding,
 ) -> object:
-    from flint import fmpq, fmpq_mpoly, fmpq_poly
+    from flint import fmpq, fmpq_mpoly, fmpq_poly, fmpq_series
 
     if isinstance(value, fmpq):
         return value if _valid_degrees(constraints, {}) else arithmetic.zero()
-    if isinstance(value, fmpq_poly):
+    if isinstance(value, (fmpq_poly, fmpq_series)):
         markers = {marker for _predicate, marker, _exponent in predicate_markers}
         if len(markers) != 1:
             raise TypeError(
@@ -162,6 +162,8 @@ def decode_cardinality_result(
                 accepted += coefficient
         # Keep the selected backend until all earlier reduction decoders have
         # applied their factors; the engine projects this constant afterwards.
+        if isinstance(value, fmpq_series):
+            return fmpq_series([accepted], prec=value.prec)
         return fmpq_poly([accepted])
     if not isinstance(value, fmpq_mpoly):
         raise TypeError(f"Unsupported cardinality result type: {type(value)}")
