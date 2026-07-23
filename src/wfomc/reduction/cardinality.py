@@ -28,33 +28,87 @@ def encode_cardinality_constraints(problem: ReducedProblem) -> ReducedProblem:
     constraints = problem.cardinality_constraints
     if not constraints:
         return problem
-    predicates = sorted(
-        {term.predicate for constraint in constraints for term in constraint.terms},
-        key=str,
-    )
     user_symbols = collect_output_weight_variables(
         problem.weights,
         problem.internal_weight_symbols,
     )
     used_symbols = set(user_symbols) | set(problem.internal_weight_symbols)
-    predicate_markers = []
-    for index, predicate in enumerate(predicates):
+
+    def fresh_marker(index: int) -> str:
         marker = f"__wfomc_cardinality_{index}"
         while marker in used_symbols:
             marker += "_"
         used_symbols.add(marker)
-        predicate_markers.append((predicate, marker))
-    predicate_markers_tuple = tuple(predicate_markers)
-    marker_names = tuple(marker for _predicate, marker in predicate_markers)
-    degree_bounds = _safe_predicate_upper_bounds(constraints)
+        return marker
+
+    predicate_markers: list[tuple[object, str, int]] = []
     limits = dict(problem.internal_weight_degree_limits)
-    for predicate, marker in predicate_markers_tuple:
-        bound = degree_bounds.get(predicate)
-        if bound is None:
-            continue
-        limits[marker] = (
-            bound if marker not in limits else DomainExpr.minimum(limits[marker], bound)
+    shared_linear_form_encoding = False
+    coefficients: dict[object, int] = {}
+    if len(constraints) == 1:
+        for term in constraints[0].terms:
+            coefficients[term.predicate] = (
+                coefficients.get(term.predicate, 0) + term.coefficient
+            )
+        shared_linear_form_encoding = (
+            any(coefficient > 0 for coefficient in coefficients.values())
+            and all(coefficient >= 0 for coefficient in coefficients.values())
         )
+    if shared_linear_form_encoding:
+        # Encoding P's positive weight with z**a makes the degree of z equal
+        # the complete linear form sum(a * |P|), so one constraint needs only
+        # one generating-function variable.
+        constraint = constraints[0]
+        marker = fresh_marker(0)
+        predicate_markers.extend(
+            (predicate, marker, coefficient)
+            for predicate, coefficient in sorted(
+                coefficients.items(), key=lambda item: str(item[0])
+            )
+            if coefficient > 0
+        )
+        if (
+            len(predicate_markers) == len(coefficients)
+            and constraint.comparator
+            in (Comparator.EQ, Comparator.LE, Comparator.LT)
+        ):
+            bound = (
+                constraint.rhs - 1
+                if constraint.comparator is Comparator.LT
+                else constraint.rhs
+            )
+            limits[marker] = (
+                bound
+                if marker not in limits
+                else DomainExpr.minimum(limits[marker], bound)
+            )
+    else:
+        predicates = sorted(
+            {
+                term.predicate
+                for constraint in constraints
+                for term in constraint.terms
+            },
+            key=str,
+        )
+        for index, predicate in enumerate(predicates):
+            predicate_markers.append((predicate, fresh_marker(index), 1))
+
+    predicate_markers_tuple = tuple(predicate_markers)
+    marker_names = tuple(
+        sorted({marker for _predicate, marker, _exponent in predicate_markers})
+    )
+    if not shared_linear_form_encoding:
+        degree_bounds = _safe_predicate_upper_bounds(constraints)
+        for predicate, marker, _exponent in predicate_markers_tuple:
+            bound = degree_bounds.get(predicate)
+            if bound is None:
+                continue
+            limits[marker] = (
+                bound
+                if marker not in limits
+                else DomainExpr.minimum(limits[marker], bound)
+            )
     return replace(
         problem,
         cardinality_constraints=(),
@@ -84,7 +138,7 @@ def to_reduced_cardinality_constraint(
 def decode_cardinality_result(
     value: object,
     constraints: CardinalityConstraints,
-    predicate_markers: tuple[tuple[object, str], ...],
+    predicate_markers: tuple[tuple[object, str, int], ...],
     arithmetic: ArithmeticContext,
 ) -> object:
     from flint import fmpq, fmpq_mpoly, fmpq_poly
@@ -92,14 +146,15 @@ def decode_cardinality_result(
     if isinstance(value, fmpq):
         return value if _valid_degrees(constraints, {}) else arithmetic.zero()
     if isinstance(value, fmpq_poly):
-        if len(predicate_markers) != 1:
+        markers = {marker for _predicate, marker, _exponent in predicate_markers}
+        if len(markers) != 1 or len(constraints.constraints) != 1:
             raise TypeError(
-                "univariate cardinality result requires exactly one marker"
+                "univariate cardinality result requires exactly one linear form"
             )
-        predicate, _marker = predicate_markers[0]
+        constraint = constraints.constraints[0]
         accepted = fmpq(0)
         for degree, coefficient in enumerate(value.coeffs()):
-            if _valid_degrees(constraints, {predicate: degree}):
+            if constraint.accepts(degree):
                 accepted += coefficient
         # Keep the selected backend until all earlier reduction decoders have
         # applied their factors; the engine projects this constant afterwards.
@@ -110,24 +165,38 @@ def decode_cardinality_result(
     names = value.context().names()
     marker_indices = {
         marker: names.index(marker)
-        for _predicate, marker in predicate_markers
+        for _predicate, marker, _exponent in predicate_markers
         if marker in names
     }
+    shared_linear_form = (
+        len(marker_indices) == 1
+        and len(constraints.constraints) == 1
+        and len(predicate_markers) > 1
+    )
     valid_terms = {
         monomial: coefficient
         for monomial, coefficient in value.to_dict().items()
-        if _valid_degrees(
-            constraints,
-            {
-                predicate: monomial[marker_indices[marker]]
-                for predicate, marker in predicate_markers
-                if marker in marker_indices
-            },
+        if (
+            constraints.constraints[0].accepts(
+                monomial[next(iter(marker_indices.values()))]
+            )
+            if shared_linear_form
+            else _valid_degrees(
+                constraints,
+                {
+                    predicate: monomial[marker_indices[marker]] // exponent
+                    for predicate, marker, exponent in predicate_markers
+                    if marker in marker_indices
+                },
+            )
         )
     }
     filtered = value.context().from_dict(valid_terms)
     filtered = filtered.subs(
-        {marker: 1 for _predicate, marker in predicate_markers}
+        {
+            marker: 1
+            for _predicate, marker, _exponent in predicate_markers
+        }
     )
     # Keep the expanded arithmetic ring until earlier reduction decoders have
     # applied their correction factors.  The engine projects away marker

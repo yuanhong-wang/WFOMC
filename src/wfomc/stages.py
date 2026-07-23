@@ -237,7 +237,7 @@ class DivideDecoderSpec:
 @dataclass(frozen=True)
 class CardinalityDecoderSpec:
     constraints: tuple[ReducedCardinalityConstraint, ...]
-    predicate_markers: tuple[tuple[object, str], ...]
+    predicate_markers: tuple[tuple[object, str, int], ...]
 
 
 DecoderStep = DivideDecoderSpec | CardinalityDecoderSpec
