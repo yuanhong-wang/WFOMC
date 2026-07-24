@@ -58,12 +58,11 @@ def encode_cardinality_constraints(problem: ReducedProblem) -> ReducedProblem:
                 linear_form_coefficients.items(),
                 key=lambda item: str(item[0]),
             )
-            if coefficient > 0
         )
-        if (
-            len(predicate_markers) == len(linear_form_coefficients)
-            and constraint.comparator
-            in (Comparator.EQ, Comparator.LE, Comparator.LT)
+        if constraint.comparator in (
+            Comparator.EQ,
+            Comparator.LE,
+            Comparator.LT,
         ):
             bound = (
                 constraint.rhs - 1
@@ -202,7 +201,7 @@ def decode_cardinality_result(
 def _shared_linear_form_coefficients(
     constraints: tuple[ReducedCardinalityConstraint, ...],
 ) -> dict[object, int] | None:
-    """Return a nonnegative single linear form that can share one marker."""
+    """Return a strictly positive single linear form that can share one marker."""
 
     if len(constraints) != 1:
         return None
@@ -211,9 +210,13 @@ def _shared_linear_form_coefficients(
         coefficients[term.predicate] = (
             coefficients.get(term.predicate, 0) + term.coefficient
         )
-    if (
-        not any(coefficient > 0 for coefficient in coefficients.values())
-        or any(coefficient < 0 for coefficient in coefficients.values())
+    coefficients = {
+        predicate: coefficient
+        for predicate, coefficient in coefficients.items()
+        if coefficient != 0
+    }
+    if not coefficients or any(
+        coefficient < 0 for coefficient in coefficients.values()
     ):
         return None
     return coefficients

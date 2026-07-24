@@ -222,11 +222,65 @@ def test_joint_upper_cardinality_constraint_uses_one_linear_form_marker():
 
     compiled = compile_problem(problem.problem, algo=AlgoName.FASTV2)
     artifacts = instantiate_problem(compiled, problem.domain)
+    assert len(artifacts.branches) == 1
     branch = artifacts.branches[0].problem
 
-    assert branch.internal_weight_symbols == ("__wfomc_cardinality_0",)
+    cardinality_symbols = tuple(
+        symbol
+        for symbol in branch.internal_weight_symbols
+        if symbol.startswith("__wfomc_cardinality_")
+    )
+    assert cardinality_symbols == ("__wfomc_cardinality_0",)
     assert solve(problem, algo=AlgoName.FASTV2) == sum(
         comb(2 * domain_size, count) for count in range(3)
+    )
+
+
+def test_canceling_terms_keep_shared_marker_degree_bound():
+    fol = FOLContext()
+    variable = fol.variable("X")
+    canceled = fol.predicate("P", 1)
+    counted = fol.predicate("Q", 1)
+    domain_size = 3
+    problem = _problem(
+        sentence=fol.forall(
+            variable,
+            (canceled(variable) | ~canceled(variable))
+            & (counted(variable) | ~counted(variable)),
+        ),
+        domain=frozenset(
+            fol.constant(f"d{index}") for index in range(domain_size)
+        ),
+        cardinality_constraints=CardinalityConstraints(
+            (
+                LinearCardinalityConstraint(
+                    (
+                        CardinalityTerm(canceled, 1),
+                        CardinalityTerm(canceled, -1),
+                        CardinalityTerm(counted, 1),
+                    ),
+                    Comparator.LE,
+                    2,
+                ),
+            )
+        ),
+    )
+
+    compiled = compile_problem(problem.problem, algo=AlgoName.FASTV2)
+    artifacts = instantiate_problem(compiled, problem.domain)
+    assert len(artifacts.branches) == 1
+    branch = artifacts.branches[0].problem
+
+    cardinality_limits = {
+        symbol: limit
+        for symbol, limit in branch.internal_weight_degree_limits
+        if symbol.startswith("__wfomc_cardinality_")
+    }
+    assert set(cardinality_limits) == {"__wfomc_cardinality_0"}
+    assert cardinality_limits["__wfomc_cardinality_0"].evaluate(domain_size) == 2
+    assert solve(problem, algo=AlgoName.FASTV2) == (
+        2**domain_size
+        * sum(comb(domain_size, count) for count in range(3))
     )
 
 
