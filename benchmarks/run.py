@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
+from typing import Callable, Iterable, Mapping, Sequence
 
 import psutil
 
@@ -36,6 +36,7 @@ RESULT_FIELDS = (
     "family",
     "category",
     "variant",
+    "input_variant",
     "domain_size",
     "comparison_group", "correction_divisor",
     "commit",
@@ -98,7 +99,7 @@ def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
 
 @dataclass(frozen=True)
 class CaseGroup:
-    """Cases that share one domain-free :class:`wfomc.Problem`."""
+    """One ordered series measured by a benchmark worker."""
 
     series: str
     family: str
@@ -133,6 +134,27 @@ def group_cases(cases: Iterable[BenchmarkCase]) -> tuple[CaseGroup, ...]:
     return tuple(sorted(result, key=lambda item: item.series))
 
 
+def group_family_cases(cases: Iterable[BenchmarkCase]) -> tuple[CaseGroup, ...]:
+    """Group a pilot catalog by family while preserving increasing domains."""
+
+    grouped: dict[tuple[str, str, str], list[BenchmarkCase]] = {}
+    for case in cases:
+        key = (case.category, case.family, case.variant)
+        grouped.setdefault(key, []).append(case)
+    return tuple(
+        CaseGroup(
+            series=f"{category}/{family}/{variant}",
+            family=family,
+            category=category,
+            variant=variant,
+            cases=tuple(
+                sorted(selected, key=lambda item: (item.domain_size, item.key))
+            ),
+        )
+        for (category, family, variant), selected in sorted(grouped.items())
+    )
+
+
 def build_manifest(
     cases: Iterable[BenchmarkCase],
     *,
@@ -150,7 +172,7 @@ def build_manifest(
     """Build a deterministic, measurement-complete benchmark manifest."""
 
     payload: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "protocol": protocol,
         "algorithms": list(algorithms),
         "commit": commit,
@@ -165,9 +187,22 @@ def build_manifest(
             {
                 "key": case.key,
                 "domain_size": case.domain_size,
-                "problem": hashlib.sha256(
-                    repr(case.build_problem().problem.cache_key_parts()).encode()
-                ).hexdigest(),
+                "inputs": {
+                    algorithm: {
+                        "variant": case.input_variant_for(algorithm),
+                        "correction_divisor": case.correction_divisor_for(
+                            algorithm
+                        ),
+                        "problem": hashlib.sha256(
+                            repr(
+                                case.build_problem_for(
+                                    algorithm
+                                ).problem.cache_key_parts()
+                            ).encode()
+                        ).hexdigest(),
+                    }
+                    for algorithm in algorithms
+                },
             }
             for case in sorted(cases, key=lambda item: item.key)
         ],
@@ -346,11 +381,22 @@ def _measure_instances(
     from wfomc import AlgoName, RuntimeContext, compile_problem, solve
 
     selected = AlgoName(algorithm)
-    if protocol == "cold":
+    if protocol in ("cold", "cold-stop"):
+        stop_after_timeout = protocol == "cold-stop"
         rows: list[dict[str, object]] = []
         totals = [0.0] * repetitions
         first_stats = None
+        blocked_after_timeout = False
         for case, instance in zip(cases, instances):
+            if blocked_after_timeout:
+                rows.append(
+                    _row_for_case(
+                        case,
+                        status="skipped-after-resource",
+                        error="a smaller domain in this series timed out",
+                    )
+                )
+                continue
             timings: list[float] = []
             results: list[str] = []
             try:
@@ -375,6 +421,7 @@ def _measure_instances(
                 )
             except _OperationTimeout as error:
                 rows.append(_row_for_case(case, status="timeout", error=str(error)))
+                blocked_after_timeout = stop_after_timeout
             except BaseException as error:
                 rows.append(
                     _row_for_case(
@@ -539,23 +586,34 @@ def _run_worker(
     timeout_s: float,
     repetitions: int,
     protocol: str = "compile-once",
+    *,
+    case_lookup: Callable[[str], BenchmarkCase] = benchmark_case,
 ) -> dict[str, object]:
     """Run catalog cases directly; used by unit tests and worker compatibility."""
 
     cases = tuple(
-        sorted((benchmark_case(key) for key in case_keys), key=lambda case: case.domain_size)
+        sorted((case_lookup(key) for key in case_keys), key=lambda case: case.domain_size)
     )
-    instances = tuple(case.build_problem() for case in cases)
-    return _measure_instances(
+    instances = tuple(case.build_problem_for(algorithm) for case in cases)
+    payload = _measure_instances(
         cases, instances, algorithm, timeout_s, repetitions, protocol
     )
+    for case, row in zip(cases, payload["rows"]):
+        row["input_variant"] = case.input_variant_for(algorithm)
+        row["correction_divisor"] = case.correction_divisor_for(algorithm)
+    return payload
 
 
-def _worker_main(args: argparse.Namespace) -> int:
+def worker_main(
+    args: argparse.Namespace,
+    *,
+    case_lookup: Callable[[str], BenchmarkCase] = benchmark_case,
+) -> int:
     try:
         payload = _run_worker(
             args.case, args.algorithm, args.timeout, args.repetitions,
             args.protocol,
+            case_lookup=case_lookup,
         )
     except BaseException as error:
         status = _exception_status(error)
@@ -600,10 +658,12 @@ def run_series_process(
     timeout_s: float,
     memory_bytes: int,
     repetitions: int,
+    worker_module: str = "benchmarks.run",
 ) -> tuple[dict[str, object], float, int]:
     command = [
         sys.executable,
-        str(Path(__file__).resolve()),
+        "-m",
+        worker_module,
         "--worker",
         "--algorithm",
         algorithm,
@@ -664,8 +724,77 @@ def run_series_process(
     return payload, wall_time, peak_rss
 
 
+def run_stopping_series_process(
+    group: CaseGroup,
+    algorithm: str,
+    *,
+    timeout_s: float,
+    memory_bytes: int,
+    repetitions: int,
+    worker_module: str = "benchmarks.run",
+) -> tuple[dict[str, object], float, int]:
+    """Run increasing domains cold and stop after the first resource limit."""
+
+    rows: list[dict[str, object]] = []
+    total_wall_time = 0.0
+    peak_rss = 0
+    template_hits = 0
+    template_misses = 0
+    for index, case in enumerate(group.cases):
+        singleton = CaseGroup(
+            series=group.series,
+            family=group.family,
+            category=group.category,
+            variant=group.variant,
+            cases=(case,),
+        )
+        payload, wall_time, case_peak_rss = run_series_process(
+            singleton,
+            algorithm,
+            protocol="cold",
+            timeout_s=timeout_s,
+            memory_bytes=memory_bytes,
+            repetitions=repetitions,
+            worker_module=worker_module,
+        )
+        total_wall_time += wall_time
+        peak_rss = max(peak_rss, case_peak_rss)
+        template_hits += int(payload.get("template_hits") or 0)
+        template_misses += int(payload.get("template_misses") or 0)
+        measured = payload["rows"][0]
+        rows.append(measured)
+        if measured["status"] not in ("timeout", "memory"):
+            continue
+        error = f"a smaller domain in this series hit {measured['status']}"
+        rows.extend(
+            _row_for_case(
+                remaining,
+                status="skipped-after-resource",
+                error=error,
+            )
+            for remaining in group.cases[index + 1 :]
+        )
+        break
+    complete = all(row["status"] == "ok" for row in rows)
+    series_total = None
+    if complete:
+        series_total = sum(float(row["solver_time_s"]) for row in rows)
+    return (
+        {
+            "rows": rows,
+            "compile_time_s": None,
+            "compile_time_samples_s": [],
+            "series_total_s": series_total,
+            "template_hits": template_hits,
+            "template_misses": template_misses,
+        },
+        total_wall_time,
+        peak_rss,
+    )
+
+
 def mark_correctness(rows: list[dict[str, object]]) -> None:
-    """Mark same-input and normalized alternative-encoding correctness."""
+    """Compare normalized mathematical answers across algorithm inputs."""
 
     grouped: dict[str, list[dict[str, object]]] = {}
     for row in rows:
@@ -679,8 +808,16 @@ def mark_correctness(rows: list[dict[str, object]]) -> None:
         successful = [row for row in selected if row["status"] == "ok"]
         if len(successful) < 2:
             continue
-        values = {str(row["result"]) for row in successful}
-        status = "match" if len(values) == 1 else "mismatch"
+        try:
+            values = {
+                Fraction(str(row["result"]))
+                / int(row.get("correction_divisor") or 1)
+                for row in successful
+            }
+        except (ValueError, ZeroDivisionError):
+            status = "unparseable"
+        else:
+            status = "match" if len(values) == 1 else "mismatch"
         for row in successful:
             row["comparison_status"] = status
             row["matches_consensus"] = status == "match"
@@ -963,19 +1100,24 @@ def parse_args(
     *,
     description: str | None = None,
     default_out: Path | None = None,
+    default_protocol: str = "compile-once",
+    default_timeout: float = 30.0,
+    default_repetitions: int = 3,
 ) -> argparse.Namespace:
     """Parse the shared measurement options for a concrete benchmark catalog."""
 
     parser = argparse.ArgumentParser(description=description or __doc__)
     parser.add_argument(
-        "--protocol", choices=("cold", "compile-once"), default="compile-once"
+        "--protocol",
+        choices=("cold", "cold-stop", "compile-once"),
+        default=default_protocol,
     )
     parser.add_argument(
         "--algorithms", nargs="+", choices=ALGORITHMS, default=list(ALGORITHMS)
     )
-    parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument("--timeout", type=float, default=default_timeout)
     parser.add_argument("--memory-gib", type=float, default=4.0)
-    parser.add_argument("--repetitions", type=int, default=3)
+    parser.add_argument("--repetitions", type=int, default=default_repetitions)
     parser.add_argument("--order-seed", type=int, default=0)
     parser.add_argument("--no-resume", action="store_true")
     parser.add_argument(
@@ -991,6 +1133,8 @@ def parse_args(
 def run_catalog(
     cases: Sequence[BenchmarkCase],
     args: argparse.Namespace,
+    *,
+    worker_module: str = "benchmarks.run",
 ) -> int:
     """Measure one explicit case catalog using the common benchmark protocol."""
 
@@ -1000,6 +1144,8 @@ def run_catalog(
     commit = resolve_commit("HEAD")
     if args.protocol == "compile-once":
         groups = group_cases(cases)
+    elif args.protocol == "cold-stop":
+        groups = group_family_cases(cases)
     else:
         groups = tuple(
             CaseGroup(
@@ -1050,14 +1196,25 @@ def run_catalog(
             rows.extend(dict(row) for row in previous if row is not None)
         else:
             print(f"[{index}/{total}] {algorithm} {group.series}", flush=True)
-            payload, wall_time, peak_rss = run_series_process(
-                group,
-                algorithm,
-                protocol=args.protocol,
-                timeout_s=args.timeout,
-                memory_bytes=memory_bytes,
-                repetitions=args.repetitions,
-            )
+            if args.protocol == "cold-stop":
+                payload, wall_time, peak_rss = run_stopping_series_process(
+                    group,
+                    algorithm,
+                    timeout_s=args.timeout,
+                    memory_bytes=memory_bytes,
+                    repetitions=args.repetitions,
+                    worker_module=worker_module,
+                )
+            else:
+                payload, wall_time, peak_rss = run_series_process(
+                    group,
+                    algorithm,
+                    protocol=args.protocol,
+                    timeout_s=args.timeout,
+                    memory_bytes=memory_bytes,
+                    repetitions=args.repetitions,
+                    worker_module=worker_module,
+                )
             for case, measured in zip(group.cases, payload["rows"]):
                 rows.append(
                     {
@@ -1069,9 +1226,12 @@ def run_catalog(
                         "family": case.family,
                         "category": case.category,
                         "variant": case.variant,
+                        "input_variant": case.input_variant_for(algorithm),
                         "domain_size": case.domain_size,
                         "comparison_group": case.comparison_group,
-                        "correction_divisor": case.correction_divisor,
+                        "correction_divisor": case.correction_divisor_for(
+                            algorithm
+                        ),
                         "commit": commit,
                         "algorithm": algorithm,
                         "compile_time_s": payload.get("compile_time_s"),
@@ -1113,7 +1273,7 @@ def main() -> int:
     if args.worker:
         if args.algorithm is None or not args.case:
             raise SystemExit("worker mode requires --algorithm and --case")
-        return _worker_main(args)
+        return worker_main(args)
     return run_catalog(benchmark_cases(), args)
 
 

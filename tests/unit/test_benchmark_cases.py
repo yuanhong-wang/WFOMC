@@ -12,7 +12,8 @@ from wfomc import (
     solve,
 )
 from wfomc.arithmetic import ArithmeticBackend
-from wfomc.fol import predicates
+from wfomc.engine.features import analyze_problem_features
+from wfomc.fol import FormulaKind, predicates, walk
 
 from benchmarks.cases import BENCHMARK_CASES, benchmark_case, benchmark_cases
 
@@ -132,6 +133,74 @@ def test_cardinality_complete_core_cases_have_expected_small_counts(
     raw = solve(case.build_problem(), algo=AlgoName.INCREMENTAL3).raw
 
     assert raw == expected * case.correction_divisor
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        catalog._core_permutation_case(3),
+        catalog._core_regular_case(2, 4),
+        catalog._core_regular_case(3, 4),
+        catalog._core_regular_case(4, 5),
+        catalog._core_derangement_case(3),
+        catalog._core_endofunction_case(3),
+        catalog._core_loopless_no_isolates_case(3),
+        catalog._core_matching_case(2, 4),
+        catalog._core_matching_case(3, 4),
+        catalog._core_matching_case(4, 4),
+    ),
+)
+def test_incremental3_uses_original_c2_for_reduced_core_families(case):
+    reduced = case.build_problem()
+    direct = case.build_problem_for("incremental3")
+
+    assert (
+        reduced.problem.cardinality_constraints.constraints
+        or any(
+            -1 in weights
+            for weights in reduced.problem.weights.values()
+        )
+    )
+    assert not direct.problem.cardinality_constraints.constraints
+    assert (
+        analyze_problem_features(direct.problem).has_c2_counting
+        or any(
+            node.op is FormulaKind.EXISTS
+            for node in walk(direct.problem.sentence)
+        )
+    )
+    assert all(
+        -1 not in weights
+        for weights in direct.problem.weights.values()
+    )
+    assert case.input_variant_for("incremental3") == "original-c2"
+    assert case.correction_divisor_for("incremental3") == 1
+    assert direct.problem.cache_key_parts() != reduced.problem.cache_key_parts()
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        catalog._core_permutation_case(3),
+        catalog._core_regular_case(2, 4),
+        catalog._core_regular_case(3, 4),
+        catalog._core_regular_case(4, 5),
+        catalog._core_derangement_case(3),
+        catalog._core_endofunction_case(3),
+        catalog._core_loopless_no_isolates_case(3),
+        catalog._core_matching_case(2, 4),
+        catalog._core_matching_case(3, 4),
+        catalog._core_matching_case(4, 4),
+    ),
+)
+def test_original_c2_and_reduced_core_inputs_have_same_small_count(case):
+    direct = solve(
+        case.build_problem_for("incremental3"),
+        algo=AlgoName.INCREMENTAL3,
+    ).raw
+    reduced = solve(case.build_problem(), algo=AlgoName.INCREMENTAL3).raw
+
+    assert direct == reduced / case.correction_divisor
 
 
 @pytest.mark.parametrize(("layers", "domain_size"), ((2, 4), (3, 6), (4, 8)))

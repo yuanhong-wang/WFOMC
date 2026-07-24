@@ -15,6 +15,8 @@ Public interface:
     The complete deterministic catalog.  The catalog has no selectors.
 ``benchmark_case(key)``
     Look up one concrete case by its stable key.
+``core_case(family, domain_size)``
+    Build one Core case for a runner-owned domain grid.
 """
 
 from __future__ import annotations
@@ -54,6 +56,8 @@ class BenchmarkCase:
     ``correction_divisor`` records the multiplicity introduced by a hand
     reduction.  A runner comparing mathematical answers should divide the raw
     WFOMC result by it; ``build_problem()`` itself never changes solver output.
+    When ``_original_c2_builder`` is present, Incremental3 should be measured
+    on that original sentence rather than on the hand-reduced FO2 sentence.
     ``comparison_group`` links alternative encodings of the same problem.
     """
 
@@ -66,11 +70,37 @@ class BenchmarkCase:
     correction_divisor: int = 1
     comparison_group: str | None = None
     _builder: ProblemBuilder = field(repr=False, compare=False)
+    _original_c2_builder: ProblemBuilder | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
 
     def build_problem(self) -> ProblemInstance:
-        """Build a fresh typed problem/domain instance for this case."""
+        """Build the default hand-reduced or direct problem for this case."""
 
         return self._builder(self.domain_size)
+
+    def build_problem_for(self, algorithm: str) -> ProblemInstance:
+        """Build the sentence that the selected algorithm is meant to receive."""
+
+        if algorithm == "incremental3" and self._original_c2_builder is not None:
+            return self._original_c2_builder(self.domain_size)
+        return self.build_problem()
+
+    def input_variant_for(self, algorithm: str) -> str:
+        """Describe the actual encoding selected for an algorithm."""
+
+        if algorithm == "incremental3" and self._original_c2_builder is not None:
+            return "original-c2"
+        return self.variant
+
+    def correction_divisor_for(self, algorithm: str) -> int:
+        """Return the raw-result multiplicity for the selected encoding."""
+
+        if algorithm == "incremental3" and self._original_c2_builder is not None:
+            return 1
+        return self.correction_divisor
 
 
 def _pairwise_negative(symbols: list[str], variable: str = "x") -> list[str]:
@@ -357,12 +387,77 @@ def _matrix_problem(
 def _direct_c2_undirected_three_regular_problem(
     domain_size: int,
 ) -> ProblemInstance:
+    return _direct_c2_undirected_regular_problem(
+        domain_size,
+        degree=3,
+    )
+
+
+def _direct_c2_permutation_problem(domain_size: int) -> ProblemInstance:
     sentence = parse_formula(
-        r"(\forall X: (~E(X,X))) & "
-        r"(\forall X: (\forall Y: (E(X,Y) -> E(Y,X)))) & "
-        r"(\forall X: (\exists_=3 Y: E(X,Y)))"
+        r"(\forall X: (\exists_=1 Y: P(X,Y))) & "
+        r"(\forall Y: (\exists_=1 X: P(X,Y)))"
     )
     return _typed_problem(sentence, domain_size)
+
+
+def _direct_c2_derangement_problem(domain_size: int) -> ProblemInstance:
+    sentence = parse_formula(
+        r"(\forall X: (\exists_=1 Y: F(X,Y))) & "
+        r"(\forall Y: (\exists_=1 X: F(X,Y))) & "
+        r"(\forall X: (~F(X,X)))"
+    )
+    return _typed_problem(sentence, domain_size)
+
+
+def _direct_c2_endofunction_problem(domain_size: int) -> ProblemInstance:
+    sentence = parse_formula(r"\forall X: (\exists_=1 Y: F(X,Y))")
+    return _typed_problem(sentence, domain_size)
+
+
+def _direct_c2_loopless_digraph_without_isolates_problem(
+    domain_size: int,
+) -> ProblemInstance:
+    sentence = parse_formula(
+        r"(\forall X: (~E(X,X))) & "
+        r"(\forall X: (\exists Y: (E(X,Y) | E(Y,X))))"
+    )
+    return _typed_problem(sentence, domain_size)
+
+
+def _direct_c2_undirected_regular_problem(
+    domain_size: int,
+    *,
+    degree: int,
+) -> ProblemInstance:
+    sentence = parse_formula(
+        rf"(\forall X: (~E(X,X))) & "
+        rf"(\forall X: (\forall Y: (E(X,Y) -> E(Y,X)))) & "
+        rf"(\forall X: (\exists_={degree} Y: E(X,Y)))"
+    )
+    return _typed_problem(sentence, domain_size)
+
+
+def _direct_c2_edge_disjoint_perfect_matchings_problem(
+    domain_size: int,
+    *,
+    layers: int,
+) -> ProblemInstance:
+    edges = tuple(f"E{index}" for index in range(1, layers + 1))
+    clauses = [
+        *(
+            rf"(\forall X: (~{edge}(X,X))) & "
+            rf"(\forall X: (\forall Y: ({edge}(X,Y) -> {edge}(Y,X)))) & "
+            rf"(\forall X: (\exists_=1 Y: {edge}(X,Y)))"
+            for edge in edges
+        ),
+        *(
+            rf"(\forall X: (\forall Y: (~({left}(X,Y) & {right}(X,Y)))))"
+            for index, left in enumerate(edges)
+            for right in edges[index + 1 :]
+        ),
+    ]
+    return _typed_problem(parse_formula(" & ".join(clauses)), domain_size)
 
 
 def _direct_c2_properly_three_coloured_undirected_three_regular_problem(
@@ -488,6 +583,7 @@ def _case(
     purposes: frozenset[str] = frozenset(),
     correction_divisor: int = 1,
     comparison_group: str | None = None,
+    original_c2_builder: ProblemBuilder | None = None,
 ) -> BenchmarkCase:
     return BenchmarkCase(
         key=key,
@@ -499,6 +595,7 @@ def _case(
         correction_divisor=correction_divisor,
         comparison_group=comparison_group,
         _builder=builder,
+        _original_c2_builder=original_c2_builder,
     )
 
 
@@ -548,6 +645,7 @@ def _core_case(
     variant: str = "default",
     correction_divisor: int = 1,
     comparison_group: str | None = None,
+    original_c2_builder: ProblemBuilder | None = None,
 ) -> BenchmarkCase:
     key = f"core/{family}/n{domain_size}"
     if variant != "default":
@@ -565,6 +663,7 @@ def _core_case(
         variant=variant,
         correction_divisor=correction_divisor,
         comparison_group=comparison_group,
+        original_c2_builder=original_c2_builder,
     )
 
 
@@ -575,6 +674,7 @@ def _core_permutation_case(domain_size: int) -> BenchmarkCase:
         _BI_TOTAL_RELATION,
         constraint_factory=_scaled_exact_constraint("P"),
         variant="fo2-cardinality-reduction",
+        original_c2_builder=_direct_c2_permutation_problem,
     )
 
 
@@ -585,6 +685,7 @@ def _core_derangement_case(domain_size: int) -> BenchmarkCase:
         _LOOPLESS_BI_TOTAL_RELATION,
         constraint_factory=_scaled_exact_constraint("F"),
         variant="fo2-cardinality-reduction",
+        original_c2_builder=_direct_c2_derangement_problem,
     )
 
 
@@ -595,6 +696,7 @@ def _core_endofunction_case(domain_size: int) -> BenchmarkCase:
         _LEFT_TOTAL_RELATION,
         constraint_factory=_scaled_exact_constraint("F"),
         variant="fo2-cardinality-reduction",
+        original_c2_builder=_direct_c2_endofunction_problem,
     )
 
 
@@ -612,6 +714,10 @@ def _core_regular_case(k: int, domain_size: int) -> BenchmarkCase:
         variant="fo2-cardinality-reduction",
         correction_divisor=factorial(k) ** domain_size,
         comparison_group=comparison_group,
+        original_c2_builder=partial(
+            _direct_c2_undirected_regular_problem,
+            degree=k,
+        ),
     )
 
 
@@ -622,6 +728,10 @@ def _core_matching_case(k: int, domain_size: int) -> BenchmarkCase:
         partial(_k_edge_disjoint_edge_covers_definition, k),
         constraint_factory=_matching_constraints(k),
         variant="fo2-cardinality-reduction",
+        original_c2_builder=partial(
+            _direct_c2_edge_disjoint_perfect_matchings_problem,
+            layers=k,
+        ),
     )
 
 
@@ -638,7 +748,38 @@ def _core_loopless_no_isolates_case(domain_size: int) -> BenchmarkCase:
         "loopless-digraph-without-isolates",
         domain_size,
         _LOOPLESS_DIGRAPH_WITHOUT_ISOLATES,
+        original_c2_builder=(
+            _direct_c2_loopless_digraph_without_isolates_problem
+        ),
     )
+
+
+_CORE_CASE_FACTORIES: Mapping[str, Callable[[int], BenchmarkCase]] = {
+    "permutations": _core_permutation_case,
+    "undirected-2-regular": partial(_core_regular_case, 2),
+    "undirected-3-regular": partial(_core_regular_case, 3),
+    "undirected-4-regular": partial(_core_regular_case, 4),
+    "properly-2-coloured-graph": partial(_core_coloured_case, 2),
+    "properly-3-coloured-graph": partial(_core_coloured_case, 3),
+    "properly-4-coloured-graph": partial(_core_coloured_case, 4),
+    "properly-5-coloured-graph": partial(_core_coloured_case, 5),
+    "derangements": _core_derangement_case,
+    "endofunctions": _core_endofunction_case,
+    "loopless-digraph-without-isolates": _core_loopless_no_isolates_case,
+    "2-edge-disjoint-perfect-matchings": partial(_core_matching_case, 2),
+    "3-edge-disjoint-perfect-matchings": partial(_core_matching_case, 3),
+    "4-edge-disjoint-perfect-matchings": partial(_core_matching_case, 4),
+}
+
+
+def core_case(family: str, domain_size: int) -> BenchmarkCase:
+    """Build one Core case independently of a concrete catalog grid."""
+
+    try:
+        factory = _CORE_CASE_FACTORIES[family]
+    except KeyError as error:
+        raise KeyError(f"unknown Core benchmark family: {family}") from error
+    return factory(domain_size)
 
 
 _CORE_CASES = (
@@ -888,4 +1029,5 @@ __all__ = [
     "BenchmarkCase",
     "benchmark_case",
     "benchmark_cases",
+    "core_case",
 ]

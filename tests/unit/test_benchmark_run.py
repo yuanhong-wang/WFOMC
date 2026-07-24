@@ -5,6 +5,7 @@ import pytest
 from benchmarks.cases import benchmark_case
 from benchmarks.run import (
     ALGORITHMS,
+    CaseGroup,
     _run_worker,
     build_manifest,
     group_cases,
@@ -12,6 +13,7 @@ from benchmarks.run import (
     paired_stats,
     parse_args,
     prepare_resume,
+    run_stopping_series_process,
     write_manifest,
 )
 
@@ -79,6 +81,62 @@ def test_worker_reuses_boundary_profile_template_across_domains() -> None:
     assert payload["template_hits"] == 1
 
 
+def test_cold_stop_series_skips_larger_domains_after_timeout(monkeypatch) -> None:
+    cases = tuple(
+        benchmark_case(key)
+        for key in (
+            "core/3-edge-disjoint-perfect-matchings/"
+            "fo2-cardinality-reduction/n10",
+            "core/3-edge-disjoint-perfect-matchings/"
+            "fo2-cardinality-reduction/n20",
+            "core/3-edge-disjoint-perfect-matchings/"
+            "fo2-cardinality-reduction/n30",
+        )
+    )
+    statuses = iter(("ok", "timeout"))
+    calls = []
+
+    def fake_run(singleton, algorithm, **kwargs):
+        calls.append(singleton.cases[0].domain_size)
+        status = next(statuses)
+        return (
+            {
+                "rows": [
+                    {
+                        "status": status,
+                        "solver_time_s": 1.0 if status == "ok" else None,
+                    }
+                ],
+                "template_hits": 0,
+                "template_misses": 1,
+            },
+            1.0,
+            1024,
+        )
+
+    monkeypatch.setattr("benchmarks.run.run_series_process", fake_run)
+    payload, _wall_time, _peak_rss = run_stopping_series_process(
+        CaseGroup(
+            series="core/3-edge-disjoint-perfect-matchings/pilot",
+            family="3-edge-disjoint-perfect-matchings",
+            category="core",
+            variant="fo2-cardinality-reduction",
+            cases=cases,
+        ),
+        "fast",
+        timeout_s=300,
+        memory_bytes=1024**3,
+        repetitions=1,
+    )
+
+    assert calls == [10, 20]
+    assert [row["status"] for row in payload["rows"]] == [
+        "ok",
+        "timeout",
+        "skipped-after-resource",
+    ]
+
+
 def test_cold_worker_does_not_reuse_runtime_between_repetitions() -> None:
     payload = _run_worker(
         ("core/permutations/fo2-cardinality-reduction/n75",),
@@ -91,6 +149,22 @@ def test_cold_worker_does_not_reuse_runtime_between_repetitions() -> None:
     assert payload["rows"][0]["status"] == "ok"
     assert len(payload["rows"][0]["solver_time_samples_s"]) == 2
     assert payload["rows"][0]["is_warm_domain"] is False
+
+
+def test_incremental3_worker_runs_the_original_c2_sentence() -> None:
+    payload = _run_worker(
+        ("core/permutations/fo2-cardinality-reduction/n8",),
+        "incremental3",
+        timeout_s=30,
+        repetitions=1,
+        protocol="cold",
+    )
+    row = payload["rows"][0]
+
+    assert row["status"] == "ok"
+    assert row["result"] == "40320"
+    assert row["input_variant"] == "original-c2"
+    assert row["correction_divisor"] == 1
 
 
 def test_manifest_run_id_is_deterministic_and_covers_measurement_options() -> None:
@@ -125,6 +199,34 @@ def test_manifest_run_id_is_deterministic_and_covers_measurement_options() -> No
     assert "sources" not in first
     assert first["run_id"] != changed["run_id"]
     assert first["run_id"] != changed_order["run_id"]
+
+
+def test_manifest_records_algorithm_specific_core_inputs() -> None:
+    case = benchmark_case(
+        "core/undirected-3-regular/fo2-cardinality-reduction/n30"
+    )
+    manifest = build_manifest(
+        [case],
+        protocol="cold",
+        algorithms=("boundary-profile", "incremental3"),
+        commit="abc",
+        timeout_s=30,
+        memory_bytes=1024,
+        repetitions=1,
+        environment={"python": "3.11"},
+        dirty_sha256="clean",
+        lock_sha256="lock",
+    )
+    inputs = manifest["cases"][0]["inputs"]
+
+    assert inputs["boundary-profile"]["variant"] == "fo2-cardinality-reduction"
+    assert inputs["boundary-profile"]["correction_divisor"] == 6**30
+    assert inputs["incremental3"]["variant"] == "original-c2"
+    assert inputs["incremental3"]["correction_divisor"] == 1
+    assert (
+        inputs["boundary-profile"]["problem"]
+        != inputs["incremental3"]["problem"]
+    )
 
 
 def test_cli_has_no_inventory_selectors() -> None:
@@ -166,6 +268,14 @@ def test_correctness_requires_overlap_and_normalizes_comparison_groups() -> None
             "result": "9", "comparison_group": "", "correction_divisor": 1,
         },
         {
+            "case": "normalized", "algorithm": "boundary-profile", "status": "ok",
+            "result": "30", "comparison_group": "", "correction_divisor": 6,
+        },
+        {
+            "case": "normalized", "algorithm": "incremental3", "status": "ok",
+            "result": "5", "comparison_group": "", "correction_divisor": 1,
+        },
+        {
             "case": "direct", "algorithm": "boundary-profile", "status": "ok",
             "result": "5", "comparison_group": "equivalent", "correction_divisor": 1,
         },
@@ -180,5 +290,6 @@ def test_correctness_requires_overlap_and_normalizes_comparison_groups() -> None
     by_case = {row["case"]: row for row in rows}
     assert by_case["singleton"]["comparison_status"] == "not-comparable"
     assert by_case["same"]["comparison_status"] == "match"
+    assert by_case["normalized"]["comparison_status"] == "match"
     assert by_case["direct"]["equivalence_status"] == "match"
     assert by_case["reduced"]["equivalence_status"] == "match"
