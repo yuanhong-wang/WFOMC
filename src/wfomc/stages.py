@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from fractions import Fraction
 import math
 from typing import TYPE_CHECKING
@@ -234,10 +235,18 @@ class DivideDecoderSpec:
     coefficient: DomainExpr
 
 
+class CardinalityMarkerEncoding(Enum):
+    """Meaning of cardinality-marker polynomial degrees."""
+
+    PER_PREDICATE = "per-predicate"
+    SHARED_LINEAR_FORM = "shared-linear-form"
+
+
 @dataclass(frozen=True)
 class CardinalityDecoderSpec:
     constraints: tuple[ReducedCardinalityConstraint, ...]
     predicate_markers: tuple[tuple[object, str, int], ...]
+    marker_encoding: CardinalityMarkerEncoding
 
 
 DecoderStep = DivideDecoderSpec | CardinalityDecoderSpec
@@ -340,6 +349,7 @@ def _exact_int(value: Fraction, label: str) -> int:
 
 __all__ = [
     "CardinalityDecoderSpec",
+    "CardinalityMarkerEncoding",
     "CompiledBranchInstance",
     "CompiledReducedBranch",
     "DecoderSpec",

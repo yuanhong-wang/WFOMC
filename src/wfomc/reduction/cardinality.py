@@ -12,6 +12,7 @@ from wfomc.cardinality_constraints import (
 )
 from wfomc.stages import (
     CardinalityDecoderSpec,
+    CardinalityMarkerEncoding,
     DomainExpr,
     ReducedCardinalityConstraint,
     ReducedProblem,
@@ -43,18 +44,9 @@ def encode_cardinality_constraints(problem: ReducedProblem) -> ReducedProblem:
 
     predicate_markers: list[tuple[object, str, int]] = []
     limits = dict(problem.internal_weight_degree_limits)
-    shared_linear_form_encoding = False
-    coefficients: dict[object, int] = {}
-    if len(constraints) == 1:
-        for term in constraints[0].terms:
-            coefficients[term.predicate] = (
-                coefficients.get(term.predicate, 0) + term.coefficient
-            )
-        shared_linear_form_encoding = (
-            any(coefficient > 0 for coefficient in coefficients.values())
-            and all(coefficient >= 0 for coefficient in coefficients.values())
-        )
-    if shared_linear_form_encoding:
+    linear_form_coefficients = _shared_linear_form_coefficients(constraints)
+    if linear_form_coefficients is not None:
+        marker_encoding = CardinalityMarkerEncoding.SHARED_LINEAR_FORM
         # Encoding P's positive weight with z**a makes the degree of z equal
         # the complete linear form sum(a * |P|), so one constraint needs only
         # one generating-function variable.
@@ -63,12 +55,13 @@ def encode_cardinality_constraints(problem: ReducedProblem) -> ReducedProblem:
         predicate_markers.extend(
             (predicate, marker, coefficient)
             for predicate, coefficient in sorted(
-                coefficients.items(), key=lambda item: str(item[0])
+                linear_form_coefficients.items(),
+                key=lambda item: str(item[0]),
             )
             if coefficient > 0
         )
         if (
-            len(predicate_markers) == len(coefficients)
+            len(predicate_markers) == len(linear_form_coefficients)
             and constraint.comparator
             in (Comparator.EQ, Comparator.LE, Comparator.LT)
         ):
@@ -83,6 +76,7 @@ def encode_cardinality_constraints(problem: ReducedProblem) -> ReducedProblem:
                 else DomainExpr.minimum(limits[marker], bound)
             )
     else:
+        marker_encoding = CardinalityMarkerEncoding.PER_PREDICATE
         predicates = sorted(
             {
                 term.predicate
@@ -98,7 +92,7 @@ def encode_cardinality_constraints(problem: ReducedProblem) -> ReducedProblem:
     marker_names = tuple(
         sorted({marker for _predicate, marker, _exponent in predicate_markers})
     )
-    if not shared_linear_form_encoding:
+    if marker_encoding is CardinalityMarkerEncoding.PER_PREDICATE:
         degree_bounds = _safe_predicate_upper_bounds(constraints)
         for predicate, marker, _exponent in predicate_markers_tuple:
             bound = degree_bounds.get(predicate)
@@ -117,7 +111,11 @@ def encode_cardinality_constraints(problem: ReducedProblem) -> ReducedProblem:
         ),
         internal_weight_degree_limits=tuple(sorted(limits.items())),
         decoder_spec=problem.decoder_spec.append(
-            CardinalityDecoderSpec(constraints, predicate_markers_tuple)
+            CardinalityDecoderSpec(
+                constraints,
+                predicate_markers_tuple,
+                marker_encoding,
+            )
         ),
     )
 
@@ -140,6 +138,8 @@ def decode_cardinality_result(
     constraints: CardinalityConstraints,
     predicate_markers: tuple[tuple[object, str, int], ...],
     arithmetic: ArithmeticContext,
+    *,
+    marker_encoding: CardinalityMarkerEncoding,
 ) -> object:
     from flint import fmpq, fmpq_mpoly, fmpq_poly
 
@@ -147,14 +147,19 @@ def decode_cardinality_result(
         return value if _valid_degrees(constraints, {}) else arithmetic.zero()
     if isinstance(value, fmpq_poly):
         markers = {marker for _predicate, marker, _exponent in predicate_markers}
-        if len(markers) != 1 or len(constraints.constraints) != 1:
+        if len(markers) != 1:
             raise TypeError(
-                "univariate cardinality result requires exactly one linear form"
+                "univariate cardinality result requires exactly one marker"
             )
-        constraint = constraints.constraints[0]
+        marker = next(iter(markers))
         accepted = fmpq(0)
         for degree, coefficient in enumerate(value.coeffs()):
-            if constraint.accepts(degree):
+            if _valid_marker_degrees(
+                constraints,
+                predicate_markers,
+                {marker: degree},
+                marker_encoding,
+            ):
                 accepted += coefficient
         # Keep the selected backend until all earlier reduction decoders have
         # applied their factors; the engine projects this constant afterwards.
@@ -168,27 +173,17 @@ def decode_cardinality_result(
         for _predicate, marker, _exponent in predicate_markers
         if marker in names
     }
-    shared_linear_form = (
-        len(marker_indices) == 1
-        and len(constraints.constraints) == 1
-        and len(predicate_markers) > 1
-    )
     valid_terms = {
         monomial: coefficient
         for monomial, coefficient in value.to_dict().items()
-        if (
-            constraints.constraints[0].accepts(
-                monomial[next(iter(marker_indices.values()))]
-            )
-            if shared_linear_form
-            else _valid_degrees(
-                constraints,
-                {
-                    predicate: monomial[marker_indices[marker]] // exponent
-                    for predicate, marker, exponent in predicate_markers
-                    if marker in marker_indices
-                },
-            )
+        if _valid_marker_degrees(
+            constraints,
+            predicate_markers,
+            {
+                marker: monomial[index]
+                for marker, index in marker_indices.items()
+            },
+            marker_encoding,
         )
     }
     filtered = value.context().from_dict(valid_terms)
@@ -202,6 +197,57 @@ def decode_cardinality_result(
     # applied their correction factors.  The engine projects away marker
     # symbols once the complete decoder chain has finished.
     return filtered
+
+
+def _shared_linear_form_coefficients(
+    constraints: tuple[ReducedCardinalityConstraint, ...],
+) -> dict[object, int] | None:
+    """Return a nonnegative single linear form that can share one marker."""
+
+    if len(constraints) != 1:
+        return None
+    coefficients: dict[object, int] = {}
+    for term in constraints[0].terms:
+        coefficients[term.predicate] = (
+            coefficients.get(term.predicate, 0) + term.coefficient
+        )
+    if (
+        not any(coefficient > 0 for coefficient in coefficients.values())
+        or any(coefficient < 0 for coefficient in coefficients.values())
+    ):
+        return None
+    return coefficients
+
+
+def _valid_marker_degrees(
+    constraints: CardinalityConstraints,
+    predicate_markers: tuple[tuple[object, str, int], ...],
+    marker_degrees: Mapping[str, int],
+    marker_encoding: CardinalityMarkerEncoding,
+) -> bool:
+    if marker_encoding is CardinalityMarkerEncoding.SHARED_LINEAR_FORM:
+        markers = {marker for _predicate, marker, _exponent in predicate_markers}
+        if len(markers) != 1 or len(constraints.constraints) != 1:
+            raise TypeError(
+                "shared linear-form encoding requires one marker and one constraint"
+            )
+        return constraints.constraints[0].accepts(
+            marker_degrees.get(next(iter(markers)), 0)
+        )
+    if marker_encoding is not CardinalityMarkerEncoding.PER_PREDICATE:
+        raise TypeError(
+            f"Unsupported cardinality marker encoding: {marker_encoding}"
+        )
+
+    degrees: dict[object, int] = {}
+    for predicate, marker, exponent in predicate_markers:
+        if exponent <= 0:
+            raise ValueError("cardinality marker exponents must be positive")
+        marker_degree = marker_degrees.get(marker, 0)
+        if marker_degree % exponent != 0:
+            return False
+        degrees[predicate] = marker_degree // exponent
+    return _valid_degrees(constraints, degrees)
 
 
 def _valid_degrees(

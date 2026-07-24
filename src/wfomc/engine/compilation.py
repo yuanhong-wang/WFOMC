@@ -200,6 +200,7 @@ def _instantiate_decoder(
                         )
                     ),
                     step.predicate_markers,
+                    step.marker_encoding,
                 )
             )
         else:
@@ -230,6 +231,7 @@ def _instantiate_decoder(
                     concrete[1],
                     concrete[2],
                     arithmetic,
+                    marker_encoding=concrete[3],
                 )
         return value
 

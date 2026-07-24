@@ -109,6 +109,61 @@ def test_upper_cardinality_constraint_uses_truncated_polynomial_backend(algo):
     assert solve(problem, algo=algo) == 176
 
 
+def test_multiple_constraints_on_one_predicate_use_one_marker():
+    fol = FOLContext()
+    variable = fol.variable("X")
+    predicate = fol.predicate("P", 1)
+    domain_size = 5
+    problem = _problem(
+        sentence=fol.forall(variable, predicate(variable) | ~predicate(variable)),
+        domain=frozenset(
+            fol.constant(f"d{index}") for index in range(domain_size)
+        ),
+        cardinality_constraints=CardinalityConstraints(
+            (
+                LinearCardinalityConstraint(
+                    (CardinalityTerm(predicate),),
+                    Comparator.GE,
+                    1,
+                ),
+                LinearCardinalityConstraint(
+                    (CardinalityTerm(predicate),),
+                    Comparator.LE,
+                    2,
+                ),
+            )
+        ),
+    )
+
+    assert solve(problem, algo=AlgoName.FASTV2) == (
+        comb(domain_size, 1) + comb(domain_size, 2)
+    )
+
+
+def test_negative_coefficient_uses_predicate_count_marker():
+    fol = FOLContext()
+    variable = fol.variable("X")
+    predicate = fol.predicate("P", 1)
+    domain_size = 3
+    problem = _problem(
+        sentence=fol.forall(variable, predicate(variable) | ~predicate(variable)),
+        domain=frozenset(
+            fol.constant(f"d{index}") for index in range(domain_size)
+        ),
+        cardinality_constraints=CardinalityConstraints(
+            (
+                LinearCardinalityConstraint(
+                    (CardinalityTerm(predicate, -1),),
+                    Comparator.LE,
+                    -1,
+                ),
+            )
+        ),
+    )
+
+    assert solve(problem, algo=AlgoName.FASTV2) == 2**domain_size - 1
+
+
 def test_binary_upper_cardinality_constraint_truncates_pair_weights():
     fol = FOLContext()
     left = fol.variable("X")
