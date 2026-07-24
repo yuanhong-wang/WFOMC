@@ -118,13 +118,16 @@ def compile_reduced_branch(
     for step in problem.decoder_spec.steps:
         if not isinstance(step, CardinalityDecoderSpec):
             continue
-        for predicate, marker in step.predicate_markers:
+        for predicate, marker, exponent in step.predicate_markers:
             positive, negative = weights.get(
                 predicate,
                 (arithmetic.one(), arithmetic.one()),
             )
             weights[predicate] = (
-                arithmetic.multiply(positive, arithmetic.symbol(marker)),
+                arithmetic.multiply(
+                    positive,
+                    arithmetic.power(arithmetic.symbol(marker), exponent),
+                ),
                 negative,
             )
     from wfomc.engine.features import analyze_reduced_features
@@ -197,6 +200,7 @@ def _instantiate_decoder(
                         )
                     ),
                     step.predicate_markers,
+                    step.marker_encoding,
                 )
             )
         else:
@@ -227,6 +231,7 @@ def _instantiate_decoder(
                     concrete[1],
                     concrete[2],
                     arithmetic,
+                    marker_encoding=concrete[3],
                 )
         return value
 
