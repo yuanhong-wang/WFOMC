@@ -111,6 +111,68 @@ def test_plan_accepts_unhashable_polynomial_interactions():
     assert plan.candidate_estimates
 
 
+def test_plan_can_compare_heuristic_only_with_exact_subset_candidate():
+    arithmetic = ArithmeticContext(ArithmeticBackend.FMPQ)
+    cell_count = 8
+    component = _component(
+        tuple(range(2, 2 + cell_count)),
+        tuple(
+            tuple(
+                2 if abs(left - right) == 1 else 1
+                for right in range(cell_count)
+            )
+            for left in range(cell_count)
+        ),
+        20,
+    )
+
+    heuristic = build_boundary_profile_plan(
+        component,
+        20,
+        arithmetic,
+        planner_strategy="heuristic-only",
+    )
+    exact = build_boundary_profile_plan(
+        component,
+        20,
+        arithmetic,
+        planner_strategy="exact-subset-cost",
+    )
+
+    assert heuristic.strategy != "exact-subset-cost"
+    assert exact.strategy == "exact-subset-cost"
+    assert heuristic.candidate_estimates == exact.candidate_estimates
+
+
+def test_forced_strategy_survives_cross_strategy_topology_deduplication():
+    arithmetic = ArithmeticContext(ArithmeticBackend.FMPQ)
+    component = _component(
+        (2, 3),
+        (
+            (1, 1),
+            (1, 1),
+        ),
+        20,
+    )
+
+    exact = build_boundary_profile_plan(
+        component,
+        20,
+        arithmetic,
+        planner_strategy="exact-subset-cost",
+    )
+    greedy = build_boundary_profile_plan(
+        component,
+        20,
+        arithmetic,
+        planner_strategy="greedy-agglomerative",
+    )
+
+    assert exact.strategy == "exact-subset-cost"
+    assert greedy.strategy == "greedy-agglomerative"
+    assert exact.root == greedy.root
+
+
 def test_structural_planning_does_not_infer_symmetry_from_small_domain_prefix():
     arithmetic = ArithmeticContext(ArithmeticBackend.FMPQ)
     component = BoundaryProfileComponent(

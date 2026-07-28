@@ -140,6 +140,7 @@ def build_input_template(
                     r_matrix,
                     compiled.arithmetic,
                     reference_domain_size=options.tree_reference_domain_size,
+                    planner_strategy=options.planner_strategy,
                 ),
             )
         )

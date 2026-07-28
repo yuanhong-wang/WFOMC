@@ -7,6 +7,24 @@ from enum import Enum
 from typing import Literal
 
 
+BoundaryProfilePlannerStrategy = Literal[
+    "auto",
+    "heuristic-only",
+    "tail-caterpillar",
+    "greedy-agglomerative",
+    "exact-subset-cost",
+]
+BOUNDARY_PROFILE_PLANNER_STRATEGIES: tuple[
+    BoundaryProfilePlannerStrategy, ...
+] = (
+    "auto",
+    "heuristic-only",
+    "tail-caterpillar",
+    "greedy-agglomerative",
+    "exact-subset-cost",
+)
+
+
 class EvidenceStrategy(Enum):
     """Strategy for consuming unary evidence."""
 
@@ -43,6 +61,9 @@ class BoundaryProfileOptions:
 
     # Optional synthetic domain size used only to select one reusable BP tree.
     tree_reference_domain_size: int | None = None
+    # Candidate-selection policy. Named strategies are primarily useful for
+    # controlled decomposition experiments; auto is the production default.
+    planner_strategy: BoundaryProfilePlannerStrategy = "auto"
 
     def __post_init__(self) -> None:
         if (
@@ -52,6 +73,11 @@ class BoundaryProfileOptions:
             raise ValueError(
                 "BoundaryProfileOptions.tree_reference_domain_size must be "
                 "non-negative"
+            )
+        if self.planner_strategy not in BOUNDARY_PROFILE_PLANNER_STRATEGIES:
+            raise ValueError(
+                "BoundaryProfileOptions.planner_strategy must be one of "
+                f"{BOUNDARY_PROFILE_PLANNER_STRATEGIES}"
             )
 
 
@@ -87,6 +113,8 @@ class WeightOptions:
 
 
 __all__ = [
+    "BOUNDARY_PROFILE_PLANNER_STRATEGIES",
+    "BoundaryProfilePlannerStrategy",
     "BoundaryProfileOptions",
     "EvidenceStrategy",
     "ExistentialStrategy",

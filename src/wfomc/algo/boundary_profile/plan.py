@@ -133,6 +133,7 @@ def build_boundary_profile_plan(
     arithmetic,
     *,
     tree_reference_domain_size: int | None = None,
+    planner_strategy: str = "auto",
 ) -> BoundaryProfilePlan:
     """Convenience wrapper that builds and materializes one BP tree."""
 
@@ -141,6 +142,7 @@ def build_boundary_profile_plan(
         component.r_matrix,
         arithmetic,
         reference_domain_size=tree_reference_domain_size,
+        planner_strategy=planner_strategy,
     )
     return materialize_boundary_profile_plan(
         tree,
@@ -156,6 +158,7 @@ def build_boundary_profile_tree(
     arithmetic,
     *,
     reference_domain_size: int | None = None,
+    planner_strategy: str = "auto",
 ) -> BoundaryProfileTree:
     """Search once for a domain-free decomposition topology."""
 
@@ -217,10 +220,17 @@ def build_boundary_profile_tree(
     unique: dict[tuple[object, ...], tuple[str, _Tree]] = {}
     for strategy, tree in candidates:
         unique.setdefault(_tree_key(tree), (strategy, tree))
-
     unique_candidates = tuple(unique.values())
+
+    eligible_by_tree: dict[tuple[object, ...], tuple[str, _Tree]] = {}
+    for strategy, tree in _eligible_candidates(
+        tuple(candidates),
+        planner_strategy=planner_strategy,
+    ):
+        eligible_by_tree.setdefault(_tree_key(tree), (strategy, tree))
+    eligible_candidates = tuple(eligible_by_tree.values())
     strategy, selected = min(
-        unique_candidates,
+        eligible_candidates,
         key=lambda candidate: context.selection_key(candidate[1])
         + (candidate[0],),
     )
@@ -228,6 +238,36 @@ def build_boundary_profile_tree(
         selected,
         strategy,
         candidates=unique_candidates,
+    )
+
+
+def _eligible_candidates(
+    candidates: tuple[tuple[str, _Tree], ...],
+    *,
+    planner_strategy: str,
+) -> tuple[tuple[str, _Tree], ...]:
+    """Select candidates for production, heuristic-only, or forced planning."""
+
+    if planner_strategy == "auto":
+        return candidates
+    if planner_strategy == "heuristic-only":
+        eligible = tuple(
+            candidate
+            for candidate in candidates
+            if candidate[0] != "exact-subset-cost"
+        )
+    else:
+        eligible = tuple(
+            candidate
+            for candidate in candidates
+            if candidate[0] == planner_strategy
+        )
+    if eligible:
+        return eligible
+    available = ", ".join(sorted(strategy for strategy, _tree in candidates))
+    raise ValueError(
+        f"boundary-profile planner strategy {planner_strategy!r} is unavailable; "
+        f"available candidates: {available}"
     )
 
 

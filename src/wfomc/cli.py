@@ -18,6 +18,7 @@ from wfomc.engine.runtime import RuntimeOptions
 from wfomc.errors import WFOMCError
 from wfomc.fol.grounding import LinearOrderEncoding
 from wfomc.options import (
+    BOUNDARY_PROFILE_PLANNER_STRATEGIES,
     BoundaryProfileOptions,
     EvidenceStrategy,
     ExistentialStrategy,
@@ -123,6 +124,16 @@ def build_parser() -> argparse.ArgumentParser:
             "domain size; omit it for domain-independent structural planning."
         ),
     )
+    boundary_profile.add_argument(
+        "--bp-planner-strategy",
+        choices=BOUNDARY_PROFILE_PLANNER_STRATEGIES,
+        default="auto",
+        help=(
+            "Boundary-Profile decomposition candidate policy. auto is the "
+            "production default; the other choices support controlled "
+            "planner experiments."
+        ),
+    )
     return parser
 
 
@@ -136,6 +147,7 @@ def run(
     ganak_path: str | None = None,
     exact_symbolic_backend: str = "auto",
     bp_tree_reference_domain_size: int | None = None,
+    bp_planner_strategy: str = "auto",
 ) -> CliResult:
     selected_algo = algo if isinstance(algo, AlgoName) else AlgoName(algo)
     if (
@@ -153,10 +165,10 @@ def run(
         )
     if (
         bp_tree_reference_domain_size is not None
-        and selected_algo is not AlgoName.BOUNDARY_PROFILE
-    ):
+        or bp_planner_strategy != "auto"
+    ) and selected_algo is not AlgoName.BOUNDARY_PROFILE:
         raise ValueError(
-            "--bp-tree-reference-domain-size is only valid for "
+            "Boundary-Profile planning options are only valid for "
             "boundary-profile"
         )
 
@@ -196,6 +208,7 @@ def run(
             ),
             boundary_profile_options=BoundaryProfileOptions(
                 tree_reference_domain_size=bp_tree_reference_domain_size,
+                planner_strategy=bp_planner_strategy,
             ),
         ),
         runtime=RuntimeOptions(propositional_ganak_path=ganak_path),
@@ -220,6 +233,7 @@ def main(argv: list[str] | None = None) -> int:
             ganak_path=args.ganak_path,
             exact_symbolic_backend=args.exact_symbolic_backend,
             bp_tree_reference_domain_size=args.bp_tree_reference_domain_size,
+            bp_planner_strategy=args.bp_planner_strategy,
         )
     except (WFOMCError, OSError, ValueError) as exc:
         parser.exit(2, f"wfomc: error: {type(exc).__name__}: {exc}\n")

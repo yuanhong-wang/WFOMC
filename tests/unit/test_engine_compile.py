@@ -208,6 +208,13 @@ def test_boundary_profile_reference_size_must_be_non_negative():
         BoundaryProfileOptions(tree_reference_domain_size=-1)
 
 
+def test_boundary_profile_planner_strategy_must_be_known():
+    from wfomc import BoundaryProfileOptions
+
+    with pytest.raises(ValueError, match="planner_strategy"):
+        BoundaryProfileOptions(planner_strategy="unknown")  # type: ignore[arg-type]
+
+
 def test_boundary_profile_options_are_rejected_by_other_algorithms():
     from wfomc import BoundaryProfileOptions
 

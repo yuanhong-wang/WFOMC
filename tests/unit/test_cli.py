@@ -208,12 +208,14 @@ def test_cli_run_maps_boundary_profile_options_to_engine_contract(monkeypatch):
         "unused.wfomcs",
         "boundary-profile",
         bp_tree_reference_domain_size=8,
+        bp_planner_strategy="heuristic-only",
     )
 
     assert result.result == 1
     assert captured["problem"] is problem
     assert captured["options"].boundary_profile_options == BoundaryProfileOptions(
         tree_reference_domain_size=8,
+        planner_strategy="heuristic-only",
     )
 
 
