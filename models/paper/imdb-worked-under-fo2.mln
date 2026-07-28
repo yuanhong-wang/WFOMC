@@ -1,0 +1,17 @@
+# The two-variable fragment of the example IMDB MLN in Figure 1 of:
+#
+#   Mihalkova, Huynh, and Mooney, "Mapping and Revising Markov Logic
+#   Networks for Transfer Learning", AAAI 2007.
+#
+# These are the first three published clauses with their published weights.
+# The paper's fourth clause is omitted because it uses three variables.
+# WorkedFor is renamed to the benchmark's usual WorkedUnder spelling, and
+# independent rule variables are alpha-renamed to the two symbols X and Y.
+# The paper uses typed person/movie domains; this file flattens them into the
+# single finite domain supported by the current WFOMC problem representation.
+
+1.5 Director(X) | Actor(X)
+0.1 MovieMember(Y,X) | ~Director(X)
+1.3 ~WorkedUnder(X,Y) | ~Director(X)
+
+entity = 4

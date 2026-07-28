@@ -3,7 +3,10 @@ from __future__ import annotations
 import pytest
 
 from scripts.plot_benchmark_results import (
+    GROUPED_SCALING_CLASSES,
     observed_pair_outcomes,
+    plot_grouped_scaling_results,
+    plot_scaling_results,
     select_scaling_rows,
     summarize,
     validate_results,
@@ -109,3 +112,92 @@ def test_partial_validation_and_observed_pair_outcomes() -> None:
 
     with pytest.raises(ValueError, match="expected 9 rows"):
         validate_results(rows, expected_cases=3)
+
+
+def test_grouped_scaling_layout_covers_every_paper_family_once() -> None:
+    families = [
+        family
+        for _class_name, specifications in GROUPED_SCALING_CLASSES
+        for _title, _category, family, _variant in specifications
+    ]
+
+    assert len(GROUPED_SCALING_CLASSES) == 8
+    assert len(families) == 28
+    assert len(families) == len(set(families))
+    assert {
+        "undirected-2-regular",
+        "undirected-3-regular",
+        "undirected-4-regular",
+        "properly-2-coloured-graph",
+        "properly-3-coloured-graph",
+        "properly-4-coloured-graph",
+        "properly-5-coloured-graph",
+        "2-edge-disjoint-perfect-matchings",
+        "3-edge-disjoint-perfect-matchings",
+        "4-edge-disjoint-perfect-matchings",
+        "permutations",
+        "derangements",
+        "endofunctions",
+        "loopless-digraph-without-isolates",
+        "typed-path-relation-k8",
+        "typed-tree-relation-k8",
+        "typed-cycle-relation-k8",
+        "typed-asymmetric-relation-k8",
+        "properly-3-coloured-undirected-3-regular",
+        "properly-4-coloured-undirected-3-regular",
+        "properly-5-coloured-undirected-3-regular",
+        "properly-4-coloured-undirected-2-regular",
+        "properly-4-coloured-undirected-4-regular",
+        "friends-smokers",
+        "academic-advising",
+        "id2-gene-regulation",
+        "imdb-worked-under-fo2",
+        "webkb-link-classification",
+    } == set(families)
+
+
+def test_grouped_scaling_plot_writes_nonempty_figure(tmp_path) -> None:
+    rows = [
+        {
+            **_row(f"case-{algorithm}", "core", algorithm, seconds),
+            "family": "undirected-2-regular",
+            "variant": "fo2-cardinality-reduction",
+            "domain_size": "20",
+        }
+        for algorithm, seconds in (
+            ("boundary-profile", 1),
+            ("fast", 2),
+            ("incremental3", 0.5),
+        )
+    ]
+    output = tmp_path / "grouped.png"
+
+    plot_grouped_scaling_results(rows, output, timeout_s=300)
+
+    assert output.stat().st_size > 0
+
+
+def test_scaling_plot_can_select_algorithms(tmp_path) -> None:
+    rows = [
+        {
+            **_row(f"case-{algorithm}", "core", algorithm, seconds),
+            "family": "undirected-3-regular",
+            "variant": "fo2-cardinality-reduction",
+            "domain_size": "20",
+        }
+        for algorithm, seconds in (
+            ("boundary-profile", 1),
+            ("fast", 2),
+            ("incremental3", 0.5),
+        )
+    ]
+    output = tmp_path / "selected-algorithms.png"
+
+    plot_scaling_results(
+        rows,
+        output,
+        timeout_s=300,
+        algorithms=("boundary-profile", "fast"),
+    )
+
+    assert output.stat().st_size > 0

@@ -8,6 +8,7 @@ import csv
 import json
 import math
 import statistics
+import string
 from collections import Counter
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
@@ -45,7 +46,7 @@ CATEGORY_LABELS = {
 SCALING_FAMILIES = (
     (
         "3-regular",
-        "c2",
+        "core",
         "undirected-3-regular",
         "fo2-cardinality-reduction",
     ),
@@ -56,6 +57,179 @@ SCALING_FAMILIES = (
         "core",
         "3-edge-disjoint-perfect-matchings",
         "fo2-cardinality-reduction",
+    ),
+)
+GROUPED_SCALING_CLASSES = (
+    (
+        "Regular graphs",
+        (
+            (
+                "2-regular",
+                "core",
+                "undirected-2-regular",
+                "fo2-cardinality-reduction",
+            ),
+            (
+                "3-regular",
+                "core",
+                "undirected-3-regular",
+                "fo2-cardinality-reduction",
+            ),
+            (
+                "4-regular",
+                "core",
+                "undirected-4-regular",
+                "fo2-cardinality-reduction",
+            ),
+        ),
+    ),
+    (
+        "Proper colourings",
+        tuple(
+            (
+                f"{colours}-coloured",
+                "core",
+                f"properly-{colours}-coloured-graph",
+                "default",
+            )
+            for colours in range(2, 6)
+        ),
+    ),
+    (
+        "Edge-disjoint perfect matchings",
+        tuple(
+            (
+                f"{matchings}-matchings",
+                "core",
+                f"{matchings}-edge-disjoint-perfect-matchings",
+                "fo2-cardinality-reduction",
+            )
+            for matchings in range(2, 5)
+        ),
+    ),
+    (
+        "Functions and relations",
+        (
+            (
+                "Permutations",
+                "core",
+                "permutations",
+                "fo2-cardinality-reduction",
+            ),
+            (
+                "Derangements",
+                "core",
+                "derangements",
+                "fo2-cardinality-reduction",
+            ),
+            (
+                "Endofunctions",
+                "core",
+                "endofunctions",
+                "fo2-cardinality-reduction",
+            ),
+            (
+                "Loopless digraphs",
+                "core",
+                "loopless-digraph-without-isolates",
+                "default",
+            ),
+        ),
+    ),
+    (
+        "Typed interaction graphs",
+        tuple(
+            (
+                title,
+                "core",
+                family,
+                "default",
+            )
+            for title, family in (
+                ("Typed path", "typed-path-relation-k8"),
+                ("Typed tree", "typed-tree-relation-k8"),
+                ("Typed cycle", "typed-cycle-relation-k8"),
+                (
+                    "Typed asymmetric",
+                    "typed-asymmetric-relation-k8",
+                ),
+            )
+        ),
+    ),
+    (
+        "Coloured 3-regular graphs",
+        (
+            (
+                "3 colours",
+                "core",
+                "properly-3-coloured-undirected-3-regular",
+                "fo2-cardinality-reduction",
+            ),
+            (
+                "4 colours",
+                "core",
+                "properly-4-coloured-undirected-3-regular",
+                "fo2-cardinality-reduction",
+            ),
+            (
+                "5 colours",
+                "core",
+                "properly-5-coloured-undirected-3-regular",
+                "fo2-cardinality-reduction",
+            ),
+        ),
+    ),
+    (
+        "Additional structured models",
+        (
+            (
+                "4-coloured 2-regular",
+                "core",
+                "properly-4-coloured-undirected-2-regular",
+                "fo2-cardinality-reduction",
+            ),
+            (
+                "4-coloured 4-regular",
+                "core",
+                "properly-4-coloured-undirected-4-regular",
+                "fo2-cardinality-reduction",
+            ),
+            (
+                "Friends & Smokers",
+                "core",
+                "friends-smokers",
+                "default",
+            ),
+        ),
+    ),
+    (
+        "Relational MLNs",
+        (
+            (
+                "Academic advising",
+                "core",
+                "academic-advising",
+                "default",
+            ),
+            (
+                "ID2 gene regulation",
+                "core",
+                "id2-gene-regulation",
+                "default",
+            ),
+            (
+                "IMDB WorkedUnder",
+                "core",
+                "imdb-worked-under-fo2",
+                "default",
+            ),
+            (
+                "WebKB links",
+                "core",
+                "webkb-link-classification",
+                "default",
+            ),
+        ),
     ),
 )
 
@@ -464,8 +638,181 @@ def plot_results(
         axis.spines["right"].set_visible(False)
     figure.tight_layout(w_pad=2.1)
     output.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(output, bbox_inches="tight", pad_inches=0.025)
+    figure.savefig(output, bbox_inches="tight", pad_inches=0.025, dpi=300)
     plt.close(figure)
+
+
+def _plot_scaling_panel(
+    axis: plt.Axes,
+    rows: Sequence[Mapping[str, str]],
+    *,
+    specification: tuple[str, str, str, str],
+    panel_name: str,
+    timeout_s: float,
+    algorithms: Sequence[str] = ALGORITHMS,
+    lower_limit: float | None = None,
+    show_ylabel: bool = False,
+    partial: bool = False,
+    complete_statuses: bool = False,
+) -> None:
+    """Plot one runtime-by-domain family on an existing axis."""
+
+    title, category, family, variant = specification
+    selected = select_scaling_rows(
+        rows,
+        category=category,
+        family=family,
+        variant=variant,
+    )
+    successful = [
+        float(row["solver_time_s"])
+        for row in selected
+        if row["status"] == "ok"
+    ]
+    if lower_limit is None:
+        lower_limit = max(min(successful, default=timeout_s) / 1.8, 1e-4)
+    domains = sorted({int(row["domain_size"]) for row in selected})
+    domain_span = max(domains, default=1) - min(domains, default=0)
+    offset_step = max(domain_span * 0.008, 0.12)
+    x_offsets = {
+        "boundary-profile": -offset_step,
+        "fast": 0.0,
+        "incremental3": offset_step,
+    }
+    axis.axhline(
+        timeout_s,
+        color="#777777",
+        linestyle=(0, (3, 2)),
+        linewidth=0.7,
+        zorder=1,
+    )
+    failure_styles = {
+        "timeout": ("v", "none", 18),
+        "memory": ("X", "algorithm", 18),
+        "error": ("P", "none", 20),
+        "skipped-after-resource": ("d", "none", 14),
+    }
+    visible_statuses = (
+        tuple(failure_styles)
+        if complete_statuses
+        else ("timeout", "memory")
+    )
+    for algorithm in algorithms:
+        algorithm_rows = [
+            row for row in selected if row["algorithm"] == algorithm
+        ]
+        solved = [row for row in algorithm_rows if row["status"] == "ok"]
+        if solved:
+            axis.plot(
+                [
+                    int(row["domain_size"]) + x_offsets[algorithm]
+                    for row in solved
+                ],
+                [float(row["solver_time_s"]) for row in solved],
+                color=COLORS[algorithm],
+                marker=MARKERS[algorithm],
+                markersize=3.1,
+                linewidth=1.25,
+                markeredgewidth=0.5,
+                label=LABELS[algorithm],
+                zorder=3,
+            )
+        for status in visible_statuses:
+            marker, fill, size = failure_styles[status]
+            failures = [
+                row for row in algorithm_rows if row["status"] == status
+            ]
+            if failures:
+                axis.scatter(
+                    [
+                        int(row["domain_size"]) + x_offsets[algorithm]
+                        for row in failures
+                    ],
+                    [timeout_s] * len(failures),
+                    marker=marker,
+                    s=size,
+                    facecolors=(
+                        COLORS[algorithm] if fill == "algorithm" else "none"
+                    ),
+                    edgecolors=COLORS[algorithm],
+                    linewidths=0.8,
+                    zorder=4,
+                )
+        if partial:
+            observed_domains = {
+                int(row["domain_size"]) for row in algorithm_rows
+            }
+            missing_domains = [
+                domain for domain in domains if domain not in observed_domains
+            ]
+            if missing_domains:
+                axis.scatter(
+                    [
+                        domain + x_offsets[algorithm]
+                        for domain in missing_domains
+                    ],
+                    [lower_limit * 1.12] * len(missing_domains),
+                    marker="d",
+                    s=14,
+                    facecolors="none",
+                    edgecolors=COLORS[algorithm],
+                    linewidths=0.7,
+                    zorder=4,
+                )
+    if not selected:
+        axis.text(
+            0.5,
+            0.5,
+            "No matching cases",
+            transform=axis.transAxes,
+            ha="center",
+            va="center",
+            color="#666666",
+        )
+    axis.set_yscale("log")
+    axis.set_ylim(lower_limit, timeout_s * 1.65)
+    axis.set_xlabel("Domain size $n$")
+    if show_ylabel:
+        axis.set_ylabel("Runtime (s)")
+    axis.set_title(
+        f"({panel_name}) {title}",
+        loc="left",
+        fontweight="bold",
+        fontsize=8.2,
+    )
+    axis.grid(True, which="major", axis="y", color="#D9D9D9", linewidth=0.5)
+    axis.grid(True, which="minor", axis="y", color="#EEEEEE", linewidth=0.35)
+    axis.spines["top"].set_visible(False)
+    axis.spines["right"].set_visible(False)
+    axis.xaxis.set_major_locator(plt.MaxNLocator(4, integer=True))
+
+
+def _algorithm_legend_handles(
+    algorithms: Sequence[str] = ALGORITHMS,
+) -> list[Line2D]:
+    return [
+        Line2D(
+            [0],
+            [0],
+            color=COLORS[algorithm],
+            marker=MARKERS[algorithm],
+            linewidth=1.5,
+            markersize=4,
+            label=LABELS[algorithm],
+        )
+        for algorithm in algorithms
+    ]
+
+
+def _panel_label(index: int) -> str:
+    """Return spreadsheet-style lowercase panel labels: a, ..., z, aa, ..."""
+
+    label = ""
+    value = index + 1
+    while value:
+        value, remainder = divmod(value - 1, len(string.ascii_lowercase))
+        label = string.ascii_lowercase[remainder] + label
+    return label
 
 
 def plot_scaling_results(
@@ -474,133 +821,28 @@ def plot_scaling_results(
     *,
     timeout_s: float = 30,
     partial: bool = False,
+    algorithms: Sequence[str] = ALGORITHMS,
 ) -> None:
     """Plot the four runtime-by-domain comparisons used by FastWFOMC."""
 
     _style()
     figure, axes = plt.subplots(1, 4, figsize=(7.05, 2.45))
-    panel_names = "abcd"
-    for panel_index, (title, category, family, variant) in enumerate(
-        SCALING_FAMILIES
-    ):
-        axis = axes[panel_index]
-        selected = select_scaling_rows(
+    for panel_index, specification in enumerate(SCALING_FAMILIES):
+        _plot_scaling_panel(
+            axes[panel_index],
             rows,
-            category=category,
-            family=family,
-            variant=variant,
+            specification=specification,
+            panel_name=_panel_label(panel_index),
+            timeout_s=timeout_s,
+            algorithms=algorithms,
+            show_ylabel=panel_index == 0,
+            partial=partial,
         )
-        successful = [
-            float(row["solver_time_s"])
-            for row in selected
-            if row["status"] == "ok"
-        ]
-        minimum = min(successful, default=timeout_s)
-        lower_limit = max(minimum / 1.8, 1e-4)
-        domains = sorted({int(row["domain_size"]) for row in selected})
-        domain_span = max(domains, default=1) - min(domains, default=0)
-        offset_step = max(domain_span * 0.008, 0.12)
-        x_offsets = {
-            "boundary-profile": -offset_step,
-            "fast": 0.0,
-            "incremental3": offset_step,
-        }
-        axis.axhline(
-            timeout_s,
-            color="#777777",
-            linestyle=(0, (3, 2)),
-            linewidth=0.7,
-            zorder=1,
-        )
-        for algorithm in ALGORITHMS:
-            algorithm_rows = [
-                row for row in selected if row["algorithm"] == algorithm
-            ]
-            solved = [row for row in algorithm_rows if row["status"] == "ok"]
-            if solved:
-                axis.plot(
-                    [
-                        int(row["domain_size"]) + x_offsets[algorithm]
-                        for row in solved
-                    ],
-                    [float(row["solver_time_s"]) for row in solved],
-                    color=COLORS[algorithm],
-                    marker=MARKERS[algorithm],
-                    markersize=3.4,
-                    linewidth=1.35,
-                    markeredgewidth=0.5,
-                    label=LABELS[algorithm],
-                    zorder=3,
-                )
-            for status, marker in (("timeout", "v"), ("memory", "X")):
-                failures = [row for row in algorithm_rows if row["status"] == status]
-                if failures:
-                    axis.scatter(
-                        [
-                            int(row["domain_size"]) + x_offsets[algorithm]
-                            for row in failures
-                        ],
-                        [timeout_s] * len(failures),
-                        marker=marker,
-                        s=18,
-                        facecolors=("none" if status == "timeout" else COLORS[algorithm]),
-                        edgecolors=COLORS[algorithm],
-                        linewidths=0.8,
-                        zorder=4,
-                    )
-            if partial:
-                observed_domains = {
-                    int(row["domain_size"]) for row in algorithm_rows
-                }
-                missing_domains = [
-                    domain for domain in domains if domain not in observed_domains
-                ]
-                if missing_domains:
-                    axis.scatter(
-                        [
-                            domain + x_offsets[algorithm]
-                            for domain in missing_domains
-                        ],
-                        [lower_limit * 1.12] * len(missing_domains),
-                        marker="d",
-                        s=14,
-                        facecolors="none",
-                        edgecolors=COLORS[algorithm],
-                        linewidths=0.7,
-                        zorder=4,
-                    )
-        axis.set_yscale("log")
-        axis.set_ylim(lower_limit, timeout_s * 1.65)
-        axis.set_xlabel("Domain size $n$")
-        if panel_index == 0:
-            axis.set_ylabel("Median runtime (s)")
-        axis.set_title(
-            f"({panel_names[panel_index]}) {title}",
-            loc="left",
-            fontweight="bold",
-            fontsize=8.2,
-        )
-        axis.grid(True, which="major", axis="y", color="#D9D9D9", linewidth=0.5)
-        axis.grid(True, which="minor", axis="y", color="#EEEEEE", linewidth=0.35)
-        axis.spines["top"].set_visible(False)
-        axis.spines["right"].set_visible(False)
-        axis.xaxis.set_major_locator(plt.MaxNLocator(4, integer=True))
     figure.legend(
-        handles=[
-            Line2D(
-                [0],
-                [0],
-                color=COLORS[algorithm],
-                marker=MARKERS[algorithm],
-                linewidth=1.5,
-                markersize=4,
-                label=LABELS[algorithm],
-            )
-            for algorithm in ALGORITHMS
-        ],
+        handles=_algorithm_legend_handles(algorithms),
         loc="upper center",
         bbox_to_anchor=(0.5, 1.015),
-        ncol=3,
+        ncol=len(algorithms),
         frameon=False,
         handlelength=2.1,
         columnspacing=1.4,
@@ -647,7 +889,104 @@ def plot_scaling_results(
         w_pad=0.75,
     )
     output.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(output, bbox_inches="tight", pad_inches=0.025)
+    figure.savefig(output, bbox_inches="tight", pad_inches=0.025, dpi=300)
+    plt.close(figure)
+
+
+def plot_grouped_scaling_results(
+    rows: Sequence[Mapping[str, str]],
+    output: Path,
+    *,
+    timeout_s: float = 30,
+) -> None:
+    """Plot every paper family, grouped into problem classes."""
+
+    _style()
+    columns = 4
+    figure, axes = plt.subplots(
+        len(GROUPED_SCALING_CLASSES),
+        columns,
+        figsize=(7.05, 2.0 * len(GROUPED_SCALING_CLASSES) + 0.4),
+        squeeze=False,
+    )
+    successful = [
+        float(row["solver_time_s"])
+        for row in rows
+        if row["status"] == "ok"
+    ]
+    lower_limit = max(min(successful, default=timeout_s) / 1.8, 1e-4)
+    panel_index = 0
+    for row_index, (_class_name, specifications) in enumerate(
+        GROUPED_SCALING_CLASSES
+    ):
+        for column_index in range(columns):
+            axis = axes[row_index, column_index]
+            if column_index >= len(specifications):
+                axis.set_visible(False)
+                continue
+            _plot_scaling_panel(
+                axis,
+                rows,
+                specification=specifications[column_index],
+                panel_name=_panel_label(panel_index),
+                timeout_s=timeout_s,
+                lower_limit=lower_limit,
+                show_ylabel=column_index == 0,
+                complete_statuses=True,
+            )
+            panel_index += 1
+
+    figure.legend(
+        handles=_algorithm_legend_handles(),
+        loc="upper center",
+        bbox_to_anchor=(0.52, 0.997),
+        ncol=3,
+        frameon=False,
+        handlelength=2.1,
+        columnspacing=1.5,
+    )
+    figure.legend(
+        handles=[
+            Line2D(
+                [0],
+                [0],
+                color="#666666",
+                marker=marker,
+                markerfacecolor=("none" if fill == "none" else "#666666"),
+                linestyle="none",
+                label=label,
+            )
+            for marker, fill, label in (
+                ("v", "none", "Timeout"),
+                ("X", "filled", "Memory limit"),
+                ("P", "none", "Error"),
+                ("d", "none", "Skipped after limit"),
+            )
+        ],
+        loc="lower center",
+        bbox_to_anchor=(0.52, 0.006),
+        ncol=4,
+        frameon=False,
+        handletextpad=0.35,
+        columnspacing=1.1,
+    )
+    figure.tight_layout(rect=(0.055, 0.045, 1, 0.965), h_pad=1.8, w_pad=0.7)
+    for row_index, (class_name, _specifications) in enumerate(
+        GROUPED_SCALING_CLASSES
+    ):
+        bounds = axes[row_index, 0].get_position()
+        figure.text(
+            0.012,
+            (bounds.y0 + bounds.y1) / 2,
+            class_name,
+            rotation=90,
+            ha="center",
+            va="center",
+            fontweight="bold",
+            fontsize=8.2,
+        )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output, bbox_inches="tight", pad_inches=0.025, dpi=300)
     plt.close(figure)
 
 
@@ -656,6 +995,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("results", type=Path)
     parser.add_argument("--figure", type=Path, required=True)
     parser.add_argument("--scaling-figure", type=Path)
+    parser.add_argument(
+        "--grouped-scaling-figure",
+        type=Path,
+        help="plot all paper families in class-grouped rows",
+    )
     parser.add_argument("--summary", type=Path, required=True)
     parser.add_argument("--expected-cases", type=int, default=165)
     parser.add_argument("--timeout", type=float, default=30)
@@ -698,6 +1042,12 @@ def main() -> int:
             args.scaling_figure,
             timeout_s=args.timeout,
             partial=not is_complete,
+        )
+    if args.grouped_scaling_figure is not None:
+        plot_grouped_scaling_results(
+            rows,
+            args.grouped_scaling_figure,
+            timeout_s=args.timeout,
         )
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0

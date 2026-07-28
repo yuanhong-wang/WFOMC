@@ -1,0 +1,57 @@
+# A two-variable WebKB-style collective link-classification model.
+#
+# Each web page has exactly one of the eight common semantic page types.
+# Directed hyperlinks provide relational evidence through weighted class
+# transition formulas.  Different class priors model the unequal frequencies
+# learned from a corpus.
+
+Student(X) | Faculty(X) | Staff(X) | Department(X) | Course(X) | Project(X) | Publication(X) | Other(X).
+~Student(X) | ~Faculty(X).
+~Student(X) | ~Staff(X).
+~Student(X) | ~Department(X).
+~Student(X) | ~Course(X).
+~Student(X) | ~Project(X).
+~Student(X) | ~Publication(X).
+~Student(X) | ~Other(X).
+~Faculty(X) | ~Staff(X).
+~Faculty(X) | ~Department(X).
+~Faculty(X) | ~Course(X).
+~Faculty(X) | ~Project(X).
+~Faculty(X) | ~Publication(X).
+~Faculty(X) | ~Other(X).
+~Staff(X) | ~Department(X).
+~Staff(X) | ~Course(X).
+~Staff(X) | ~Project(X).
+~Staff(X) | ~Publication(X).
+~Staff(X) | ~Other(X).
+~Department(X) | ~Course(X).
+~Department(X) | ~Project(X).
+~Department(X) | ~Publication(X).
+~Department(X) | ~Other(X).
+~Course(X) | ~Project(X).
+~Course(X) | ~Publication(X).
+~Course(X) | ~Other(X).
+~Project(X) | ~Publication(X).
+~Project(X) | ~Other(X).
+~Publication(X) | ~Other(X).
+
+~Links(X,X).
+
+-0.30 Links(X,Y)
+1.15 Department(X) & Links(X,Y) -> Faculty(Y)
+0.80 Department(X) & Links(X,Y) -> Staff(Y)
+1.20 Department(X) & Links(X,Y) -> Course(Y)
+1.35 Student(X) & Links(X,Y) -> Course(Y)
+1.05 Faculty(X) & Links(X,Y) -> Publication(Y)
+0.95 Project(X) & Links(X,Y) -> Publication(Y)
+
+0.13 Student(X)
+0.17 Faculty(X)
+-0.03 Staff(X)
+0.06 Department(X)
+0.21 Course(X)
+0.02 Project(X)
+-0.08 Publication(X)
+-0.16 Other(X)
+
+page = 4

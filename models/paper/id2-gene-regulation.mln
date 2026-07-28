@@ -1,0 +1,18 @@
+# A two-variable fragment of the ID2 gene-regulatory MLN from:
+#
+#   Brouard et al., "Learning a Markov Logic network for
+#   supervised gene regulatory network inference", BMC Bioinformatics 2013.
+#
+# The two relational formulas below are displayed among the paper's learned
+# high-weight rules.  Attribute values that do not occur in the fragment are
+# collapsed into SiID2Other.  The paper does not publish numerical weights for
+# these individual rules in its main text, so both displayed rules are
+# normalized to unit weight.  No additional unary or relation priors are used.
+
+SiID2Level3(X) | SiID2Other(X).
+~SiID2Level3(X) | ~SiID2Other(X).
+
+1.00 PlasmaMembrane(Y) & SiID2Level3(Y) & SiID2Level3(X) -> Regulates(X,Y)
+1.00 CellProliferation(Y) & NegativeRegulationCellProliferation(X) -> Regulates(X,Y)
+
+gene = 4

@@ -1,0 +1,36 @@
+# A two-variable UW-CSE-style academic advising model.
+#
+# Every person has exactly one academic role and one research area.  Advice
+# edges are directed from faculty to students, and the soft formulas reward
+# matching research areas.  The four unary priors deliberately differ, as they
+# would in a learned MLN, so equal cell weights cannot be used to merge areas.
+
+Faculty(X) | Student(X).
+~Faculty(X) | ~Student(X).
+
+AI(X) | Systems(X) | Theory(X) | Graphics(X).
+~AI(X) | ~Systems(X).
+~AI(X) | ~Theory(X).
+~AI(X) | ~Graphics(X).
+~Systems(X) | ~Theory(X).
+~Systems(X) | ~Graphics(X).
+~Theory(X) | ~Graphics(X).
+
+~Advises(X,X).
+Advises(X,Y) -> Faculty(X).
+Advises(X,Y) -> Student(Y).
+
+-0.40 Advises(X,Y)
+1.45 Advises(X,Y) & AI(X) -> AI(Y)
+1.10 Advises(X,Y) & Systems(X) -> Systems(Y)
+0.85 Advises(X,Y) & Theory(X) -> Theory(Y)
+0.65 Advises(X,Y) & Graphics(X) -> Graphics(Y)
+
+0.18 Faculty(X)
+-0.12 Student(X)
+0.16 AI(X)
+0.07 Systems(X)
+-0.04 Theory(X)
+-0.11 Graphics(X)
+
+person = 4

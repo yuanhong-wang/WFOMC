@@ -224,12 +224,21 @@ def _loopless_digraph_without_isolates_definition() -> FormulaDefinition:
     )
 
 
-def _properly_four_coloured_undirected_three_regular_reduction_definition(
+def _properly_coloured_undirected_regular_reduction_definition(
+    colour_count: int,
+    degree: int,
 ) -> FormulaDefinition:
-    colours = [f"Col{i}" for i in range(1, 5)]
-    skolem = [f"S{i}" for i in range(1, 4)]
-    canonical = [f"T{j}" for j in range(4)]
-    partitions = [f"F{i}" for i in range(1, 4)]
+    """Reduce a properly coloured undirected regular graph to FO2 + CC."""
+
+    if colour_count < 2:
+        raise ValueError("colour_count must be at least 2")
+    if degree < 1:
+        raise ValueError("degree must be positive")
+
+    colours = [f"Col{i}" for i in range(1, colour_count + 1)]
+    skolem = [f"S{i}" for i in range(1, degree + 1)]
+    canonical = [f"T{j}" for j in range(degree + 1)]
+    partitions = [f"F{i}" for i in range(1, degree + 1)]
 
     colour_clauses = [f"({' | '.join(f'{name}(x)' for name in colours)})"]
     colour_clauses.extend(_pairwise_negative(colours))
@@ -261,9 +270,18 @@ def _properly_four_coloured_undirected_three_regular_reduction_definition(
     ]
     weights = {name: (1, 1) for name in colours}
     weights.update({name: (1, -1) for name in skolem})
-    weights.update({name: (comb(3, j), 1) for j, name in enumerate(canonical)})
+    weights.update(
+        {name: (comb(degree, j), 1) for j, name in enumerate(canonical)}
+    )
     weights.update({name: (1, 1) for name in ("E", "F", *partitions)})
     return " & ".join(f"({clause})" for clause in clauses), weights
+
+
+def _properly_four_coloured_undirected_three_regular_reduction_definition(
+) -> FormulaDefinition:
+    """Compatibility wrapper for the original fixed benchmark case."""
+
+    return _properly_coloured_undirected_regular_reduction_definition(4, 3)
 
 
 def _directed_three_in_three_out_regular_reduction_definition(
@@ -460,10 +478,18 @@ def _direct_c2_edge_disjoint_perfect_matchings_problem(
     return _typed_problem(parse_formula(" & ".join(clauses)), domain_size)
 
 
-def _direct_c2_properly_three_coloured_undirected_three_regular_problem(
+def _direct_c2_properly_coloured_undirected_regular_problem(
     domain_size: int,
+    *,
+    colour_count: int,
+    degree: int,
 ) -> ProblemInstance:
-    colours = ["C1", "C2", "C3"]
+    if colour_count < 2:
+        raise ValueError("colour_count must be at least 2")
+    if degree < 1:
+        raise ValueError("degree must be positive")
+
+    colours = [f"C{index}" for index in range(1, colour_count + 1)]
     clauses = [
         "~E(x,x)",
         "(E(x,y) -> E(y,x))",
@@ -474,10 +500,22 @@ def _direct_c2_properly_three_coloured_undirected_three_regular_problem(
     universal_matrix = " & ".join(f"({clause})" for clause in clauses)
     universal_matrix = _parser_variables(universal_matrix)
     universal = rf"\forall X: (\forall Y: ({universal_matrix}))"
-    count = r"\forall X: (\exists_=3 Y: E(X,Y))"
+    count = rf"\forall X: (\exists_={degree} Y: E(X,Y))"
     return _typed_problem(
         parse_formula(f"({universal}) & ({count})"),
         domain_size,
+    )
+
+
+def _direct_c2_properly_three_coloured_undirected_three_regular_problem(
+    domain_size: int,
+) -> ProblemInstance:
+    """Compatibility wrapper for the original direct C2 catalog cases."""
+
+    return _direct_c2_properly_coloured_undirected_regular_problem(
+        domain_size,
+        colour_count=3,
+        degree=3,
     )
 
 
@@ -492,13 +530,32 @@ def _direct_c2_directed_three_in_three_out_regular_problem(
     return _typed_problem(sentence, domain_size)
 
 
-def _properly_four_coloured_undirected_three_regular_reduction_problem(
+def _properly_coloured_undirected_regular_reduction_problem(
     domain_size: int,
+    *,
+    colour_count: int,
+    degree: int,
 ) -> ProblemInstance:
     return _matrix_problem(
         domain_size,
-        _properly_four_coloured_undirected_three_regular_reduction_definition,
-        lambda n: (("F", Comparator.EQ, 3 * n),),
+        partial(
+            _properly_coloured_undirected_regular_reduction_definition,
+            colour_count,
+            degree,
+        ),
+        lambda n: (("F", Comparator.EQ, degree * n),),
+    )
+
+
+def _properly_four_coloured_undirected_three_regular_reduction_problem(
+    domain_size: int,
+) -> ProblemInstance:
+    """Compatibility wrapper for the original cardinality catalog cases."""
+
+    return _properly_coloured_undirected_regular_reduction_problem(
+        domain_size,
+        colour_count=4,
+        degree=3,
     )
 
 
