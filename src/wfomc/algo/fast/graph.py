@@ -24,6 +24,26 @@ if TYPE_CHECKING:
     from wfomc.evidence.profile import ProfileCapacityConstraint
 
 
+def _greedy_maximal_independent_set(
+    graph: nx.Graph,
+    candidates: set[int],
+    seed: set[int] | None = None,
+) -> set[int]:
+    """Deterministically extend an independent seed over candidate nodes."""
+
+    selected = set() if seed is None else set(seed)
+    blocked = set(selected)
+    for node in selected:
+        blocked.update(graph.neighbors(node))
+    for node in sorted(candidates):
+        if node in blocked:
+            continue
+        selected.add(node)
+        blocked.add(node)
+        blocked.update(graph.neighbors(node))
+    return selected
+
+
 class _GraphView:
     """Indexed weight view used only while preparing a fast input."""
 
@@ -342,13 +362,30 @@ class _EvidenceOptimizedAnalysis:
             if self.get_two_table_weight((cell, cell)) != self.arithmetic.one()
         }
         candidates = set(graph.nodes) - self_loops
-        i1 = (
-            set()
-            if not candidates
-            else set(nx.maximal_independent_set(graph.subgraph(candidates)))
+        if not candidates:
+            i1 = set()
+        else:
+            largest_profile_size = max(self.evidence_profile_sizes)
+            preferred = {
+                idx
+                for idx in candidates
+                if self.evidence_profile_sizes[
+                    self.cells[idx].evidence_profile_index
+                ]
+                == largest_profile_size
+            }
+            i1 = _greedy_maximal_independent_set(graph, preferred)
+            i1 = _greedy_maximal_independent_set(graph, candidates, i1)
+        independent = _greedy_maximal_independent_set(
+            graph,
+            set(graph.nodes),
+            i1,
         )
-        independent = set(nx.maximal_independent_set(graph, nodes=i1))
-        return list(i1), list(independent - i1), list(set(graph.nodes) - independent)
+        return (
+            sorted(i1),
+            sorted(independent - i1),
+            sorted(set(graph.nodes) - independent),
+        )
 
     def _matches(
         self,
